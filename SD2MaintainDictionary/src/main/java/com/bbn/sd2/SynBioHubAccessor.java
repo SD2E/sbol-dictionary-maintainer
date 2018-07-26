@@ -121,11 +121,7 @@ public final class SynBioHubAccessor {
 
     // Map from the SD2 namespace to our local namespace
     public static URI translateURI(URI uri) {
-        System.out.println("old URI: "+uri);
-        // TODO Auto-generated method stub
-        URI newURI = URI.create(uri.toString().replace(collectionPrefix, localNamespace));
-        System.out.println("new URI: "+newURI);
-        return newURI;
+        return URI.create(uri.toString().replace(collectionPrefix, localNamespace));
     }
 
 }
