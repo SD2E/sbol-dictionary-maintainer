@@ -42,9 +42,11 @@ public class DictionaryEntry {
                     DictionaryAccessor.writeEntryURI(row_number,uri);
                 }
             } catch (SynBioHubException e) {
+                valid = false;
                 e.printStackTrace();
                 log.warning("SynBioHub connection failed in trying to resolve URI to name");
             } catch (IOException e) {
+                valid = false;
                 e.printStackTrace();
                 log.warning("Google Sheets connection failed in trying to report resolved URI");
             }

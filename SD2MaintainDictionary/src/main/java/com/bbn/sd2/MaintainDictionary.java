@@ -72,7 +72,7 @@ public final class MaintainDictionary {
     
     public static SBOLDocument createEntity(String name, String type) throws SBOLValidationException, SynBioHubException {
         SBOLDocument document = SynBioHubAccessor.newBlankDocument();
-        String displayId = sanitizeNameToDisplayID(name)+"__1";
+        String displayId = sanitizeNameToDisplayID(name);
         if(componentTypes.containsKey(type)) {
             log.info("Creating dummy Component for "+name);
             ComponentDefinition cd = document.createComponentDefinition(displayId, "1", componentTypes.get(type));
