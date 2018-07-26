@@ -16,6 +16,7 @@ public class DictionaryEntry {
     public String name = null;
     public String type = null;
     public URI uri = null;
+    public URI local_uri = null;
     public Map<String,String> labUIDs = new HashMap<>();
     
     private boolean fullbox(List<Object> row,int i) {
@@ -47,6 +48,9 @@ public class DictionaryEntry {
                 e.printStackTrace();
                 log.warning("Google Sheets connection failed in trying to report resolved URI");
             }
+        }
+        if(uri!=null) {
+            local_uri = SynBioHubAccessor.translateURI(uri);
         }
     }
 }

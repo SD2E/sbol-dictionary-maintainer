@@ -134,21 +134,7 @@ public final class MaintainDictionary {
             URI removeURI = null;
             // if the entry has lab entries, check if they match and (re)annotate if different
             if(!e.labUIDs.isEmpty()) {
-                TopLevel entity = document.getTopLevel(e.uri);
-                if(!newdocument) {
-                    removeURI = e.uri;
-                    document = SynBioHubAccessor.newBlankDocument();
-                    String newDisplayId;
-                    try {
-                        int lastbreak = entity.getDisplayId().lastIndexOf('_');
-                        String oldVersion = entity.getDisplayId().substring(lastbreak+1);
-                        newDisplayId = entity.getDisplayId().substring(0,lastbreak+1)+(Integer.parseInt(oldVersion)+1);
-                    } catch(Exception nfe) {
-                        newDisplayId = entity.getDisplayId()+"__1";
-                    }
-                    entity = document.createCopy(entity, newDisplayId);
-                    entity.removeAnnotation(entity.getAnnotation(new QName("http://wiki.synbiohub.org/wiki/Terms/synbiohub#","topLevel")));
-                }
+                TopLevel entity = document.getTopLevel(e.local_uri);
                 log.info("Checking lab UIDs for "+e.name);
                 for(String labKey : e.labUIDs.keySet()) {
                     String labValue = e.labUIDs.get(labKey);
@@ -160,13 +146,13 @@ public final class MaintainDictionary {
                         entity.createAnnotation(labQKey, labValue);
                         if(changed) report+=",";
                         changed = true;
-                        report += " "+labKey+" for "+e.name+" is '"+labKey+"'";
+                        report += " "+labKey+" for "+e.name+" is '"+labValue+"'";
                     }
                 }
             }
             if(changed) {
                 document.write(System.out);
-                SynBioHubAccessor.update(removeURI, document);
+                SynBioHubAccessor.update(document);
                 e.uri = SynBioHubAccessor.nameToURI(e.name);
                 DictionaryAccessor.writeEntryURI(e.row_index, e.uri);
                 DictionaryAccessor.writeEntryNotes(e.row_index, report);

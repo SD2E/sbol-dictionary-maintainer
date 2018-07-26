@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.logging.Logger;
 
 import org.sbolstandard.core2.SBOLDocument;
+import org.sbolstandard.core2.SBOLValidationException;
 import org.synbiohub.frontend.IdentifiedMetadata;
 import org.synbiohub.frontend.SearchCriteria;
 import org.synbiohub.frontend.SearchQuery;
@@ -64,10 +65,20 @@ public final class SynBioHubAccessor {
         }
     }
     
-    public static SBOLDocument retrieve(URI uri) throws SynBioHubException {
+    private static final String localNamespace = "http://localhost/";
+    /**
+     * Get an object from SynBioHub, translating into a local namespace
+     * @param uri
+     * @return Document containing our object, in our local namespace
+     * @throws SynBioHubException
+     * @throws SBOLValidationException
+     */
+    public static SBOLDocument retrieve(URI uri) throws SynBioHubException, SBOLValidationException {
         ensureSynBioHubConnection();
         
-        return repository.getSBOL(uri);
+        SBOLDocument document = repository.getSBOL(uri);
+        // convert to our own namespace:
+        return document.changeURIPrefixVersion(localNamespace, null, "1");
     }
 
     static final String collectionPrefix = "https://hub.sd2e.org/user/sd2e/scratch_test_collection/";
@@ -81,19 +92,12 @@ public final class SynBioHubAccessor {
         }
     }
         
-    public static void update(URI removeURI, SBOLDocument document) throws SynBioHubException {
+    public static void update(SBOLDocument document) throws SynBioHubException {
         ensureSynBioHubConnection();
         
         ensureScratchCollectionExists();
 
-        if(removeURI!=null) {
-            try {
-                repository.removeSBOL(removeURI);
-            } catch(Exception e) {
-                // ignore
-            }
-        }
-        repository.addToCollection(collectionID, false, document);
+        repository.addToCollection(collectionID, true, document);
     }
     
     
@@ -111,8 +115,17 @@ public final class SynBioHubAccessor {
 
     public static SBOLDocument newBlankDocument() {
         SBOLDocument document = new SBOLDocument();
-        document.setDefaultURIprefix("http://dummyprefix.org");
+        document.setDefaultURIprefix(localNamespace);
         return document;
+    }
+
+    // Map from the SD2 namespace to our local namespace
+    public static URI translateURI(URI uri) {
+        System.out.println("old URI: "+uri);
+        // TODO Auto-generated method stub
+        URI newURI = URI.create(uri.toString().replace(collectionPrefix, localNamespace));
+        System.out.println("new URI: "+newURI);
+        return newURI;
     }
 
 }
