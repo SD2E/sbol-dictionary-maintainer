@@ -25,8 +25,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.logging.Logger;
 
+import org.apache.commons.cli.CommandLine;
+
 public class DictionaryAccessor {
     private static Logger log = Logger.getGlobal();
+    // GSheets Variables:
     private static final String APPLICATION_NAME = "SD2 Maintain Dictionary";
     private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
     private static final String TOKENS_DIRECTORY_PATH = "tokens";
@@ -128,5 +131,16 @@ public class DictionaryAccessor {
                 System.out.printf("%s, %s\n", e.name, e.uri==null?"no URI":e.uri.toString());
             }
         }
+    }
+
+    public static void configure(CommandLine cmd) {
+        // TODO Auto-generated method stub
+        
+    }
+
+    /** Make a clean boot, tearing down old instance if needed */
+    public static void restart() {
+        // TODO Auto-generated method stub
+        
     }
 }

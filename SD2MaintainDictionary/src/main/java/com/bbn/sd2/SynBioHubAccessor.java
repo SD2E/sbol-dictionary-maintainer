@@ -5,6 +5,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.logging.Logger;
 
+import org.apache.commons.cli.CommandLine;
 import org.sbolstandard.core2.SBOLDocument;
 import org.sbolstandard.core2.SBOLValidationException;
 import org.synbiohub.frontend.IdentifiedMetadata;
@@ -19,10 +20,35 @@ import org.synbiohub.frontend.SynBioHubFrontend;
 public final class SynBioHubAccessor {
     private static Logger log = Logger.getGlobal();
     
-    private SynBioHubAccessor() {} // static-only class
+    private static final String localNamespace = "http://localhost/";
+    private static String collectionPrefix;
+    private static URI collectionID;
+    private static String login = null;
+    private static String password = null;
     
     private static SynBioHubFrontend repository = null;
     
+    private SynBioHubAccessor() {} // static-only class
+    
+    /** Configure from command-line arguments */
+    public static void configure(CommandLine cmd) {
+        collectionPrefix = cmd.getOptionValue("collectionPrefix","https://hub.sd2e.org/user/sd2e/scratch_test_collection/");
+        if(!collectionPrefix.endsWith("/")) collectionPrefix = collectionPrefix+"/";
+        String collectionName = collectionPrefix.substring(collectionPrefix.substring(0, collectionPrefix.length()-1).lastIndexOf('/') + 1,collectionPrefix.length()-1);
+        // TODO: is there ever a case on SBH where our collection version is not 1 or collection name is not derivable?
+        collectionID = URI.create(collectionPrefix+collectionName+"_collection/1");
+        System.out.println("Collection ID is: "+collectionID);
+        
+        login = cmd.getOptionValue("login","sd2_service@sd2e.org");
+        password = cmd.getOptionValue("password");
+    }
+
+    /** Make a clean boot, tearing down old instance if needed */
+    public static void restart() {
+        repository = null;
+        ensureSynBioHubConnection();
+    }
+
     /** Boot up link with SynBioHub repository, if possible 
      * @throws SynBioHubException */
     private static void ensureSynBioHubConnection() {
@@ -30,7 +56,7 @@ public final class SynBioHubAccessor {
         
         try {
             SynBioHubFrontend sbh = new SynBioHubFrontend("https://hub.sd2e.org/");
-            sbh.login("sd2_service@sd2e.org", "password");
+            sbh.login(login, password);
             repository = sbh;
             log.info("Successfully logged into SD2 SynBioHub");
         } catch(Exception e) {
@@ -39,6 +65,15 @@ public final class SynBioHubAccessor {
         }
     }
     
+    private static void ensureScratchCollectionExists() {
+        try {
+            repository.createCollection("scratch_test_collection", "1", "scratch collection", "Collection for experiments in safe space", "", false);
+        } catch(SynBioHubException e) {
+            // Ignore: it exists.
+            //e.printStackTrace();
+        }
+    }
+
     /**
      * 
      * @param name
@@ -65,7 +100,6 @@ public final class SynBioHubAccessor {
         }
     }
     
-    private static final String localNamespace = "http://localhost/";
     /**
      * Get an object from SynBioHub, translating into a local namespace
      * @param uri
@@ -81,17 +115,6 @@ public final class SynBioHubAccessor {
         return document.changeURIPrefixVersion(localNamespace, null, "1");
     }
 
-    static final String collectionPrefix = "https://hub.sd2e.org/user/sd2e/scratch_test_collection/";
-    static final URI collectionID = URI.create("https://hub.sd2e.org/user/sd2e/scratch_test_collection/scratch_test_collection_collection/1");
-    private static void ensureScratchCollectionExists() {
-        try {
-            repository.createCollection("scratch_test_collection", "1", "scratch collection", "Collection for experiments in safe space", "", false);
-        } catch(SynBioHubException e) {
-            // Ignore: it exists.
-            //e.printStackTrace();
-        }
-    }
-        
     public static void update(SBOLDocument document) throws SynBioHubException {
         ensureSynBioHubConnection();
         
@@ -101,18 +124,6 @@ public final class SynBioHubAccessor {
     }
     
     
-    public static void main(String... args) {
-        try {
-            // Show a hit and a miss on name resolution:
-            URI uri = nameToURI("L-Tryptophan");
-            System.out.println("L-Tryptophan has URI: "+uri);
-            uri = nameToURI("Owl-Gryptophan");
-            System.out.println("Owl-Gryptophan has URI: "+uri);
-        } catch(Exception e) {
-            e.printStackTrace();
-        }
-    }
-
     public static SBOLDocument newBlankDocument() {
         SBOLDocument document = new SBOLDocument();
         document.setDefaultURIprefix(localNamespace);
@@ -124,4 +135,16 @@ public final class SynBioHubAccessor {
         return URI.create(uri.toString().replace(collectionPrefix, localNamespace));
     }
 
+    // Scratch test:
+//    public static void main(String... args) {
+//        try {
+//            // Show a hit and a miss on name resolution:
+//            URI uri = nameToURI("L-Tryptophan");
+//            System.out.println("L-Tryptophan has URI: "+uri);
+//            uri = nameToURI("Owl-Gryptophan");
+//            System.out.println("Owl-Gryptophan has URI: "+uri);
+//        } catch(Exception e) {
+//            e.printStackTrace();
+//        }
+//    }
 }
