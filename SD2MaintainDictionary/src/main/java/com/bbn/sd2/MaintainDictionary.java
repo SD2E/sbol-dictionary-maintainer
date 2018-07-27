@@ -160,15 +160,4 @@ public final class MaintainDictionary {
         }
         log.info("Completed certification of dictionary");
     }
-    
-    public static void main(String... args) {
-        try {
-            while(true) {
-                maintain_dictionary();
-                Thread.currentThread().sleep(15000);
-            }
-        } catch(Exception e) {
-            e.printStackTrace();
-        }
-    }
 }
