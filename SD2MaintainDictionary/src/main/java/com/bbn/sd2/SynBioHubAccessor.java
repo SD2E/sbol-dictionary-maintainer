@@ -35,6 +35,7 @@ public final class SynBioHubAccessor {
     private static String collectionToCollectionName(String collectionPrefix) {
         return collectionPrefix.substring(collectionPrefix.substring(0, collectionPrefix.length()-1).lastIndexOf('/') + 1,collectionPrefix.length()-1);
     }
+    
     /** Configure from command-line arguments */
     public static void configure(CommandLine cmd) {
         collectionPrefix = cmd.getOptionValue("collectionPrefix","https://hub.sd2e.org/user/sd2e/scratch_test_collection/");
@@ -42,7 +43,6 @@ public final class SynBioHubAccessor {
         String collectionName = collectionToCollectionName(collectionPrefix);
         // TODO: is there ever a case on SBH where our collection version is not 1 or collection name is not derivable?
         collectionID = URI.create(collectionPrefix+collectionName+"_collection/1");
-        System.out.println("Collection ID is: "+collectionID);
         
         login = cmd.getOptionValue("login","sd2_service@sd2e.org");
         password = cmd.getOptionValue("password");

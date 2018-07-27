@@ -17,10 +17,10 @@ public class DictionaryMaintainerApp {
 
         // Run as an eternal loop, reporting errors but not crashing out
         while(true) {
+            DictionaryAccessor.restart();
+            SynBioHubAccessor.restart();
+            
             while(true) {
-                DictionaryAccessor.restart();
-                SynBioHubAccessor.restart();
-                
                 try {
                     MaintainDictionary.maintain_dictionary();
                     Thread.sleep(sleepMillis);
@@ -43,6 +43,7 @@ public class DictionaryMaintainerApp {
         options.addOption("l", "login", false, "login email account for SynBioHub maintainer account");
         options.addOption("p", "password", true, "login password for SynBioHub maintainer account");
         options.addOption("c", "collection", false, "URL for SynBioHub collection to be synchronized");
+        options.addOption("g", "gsheet_id", false, "Google Sheets ID of spreadsheet");
         
         // Parse arguments
         CommandLine cmd = null;

@@ -29,6 +29,25 @@ import org.apache.commons.cli.CommandLine;
 
 public class DictionaryAccessor {
     private static Logger log = Logger.getGlobal();
+    
+    private static String spreadsheetId = null;
+    
+    private static Sheets service = null;
+
+    private DictionaryAccessor() {} // static-only class
+    
+    /** Configure from command-line arguments */
+    public static void configure(CommandLine cmd) {
+        spreadsheetId = cmd.getOptionValue("gsheet_id","1oLJTTydL_5YPyk-wY-dspjIw_bPZ3oCiWiK0xtG8t3g");
+
+    }
+
+    /** Make a clean boot, tearing down old instance if needed */
+    public static void restart() {
+        service = null;
+        ensureSheetsService();
+    }
+
     // GSheets Variables:
     private static final String APPLICATION_NAME = "SD2 Maintain Dictionary";
     private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
@@ -61,7 +80,6 @@ public class DictionaryAccessor {
         return new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("user");
     }
     
-    private static Sheets service = null;
     private static void ensureSheetsService() {
         if(service!=null) return;
         
@@ -71,19 +89,15 @@ public class DictionaryAccessor {
             service = new Sheets.Builder(HTTP_TRANSPORT, JSON_FACTORY, getCredentials(HTTP_TRANSPORT))
                     .setApplicationName(APPLICATION_NAME)
                     .build();
+            log.info("Successfully logged into Google Sheets");
         } catch(Exception e) {
             e.printStackTrace();
             log.severe("Google Sheets connection failed");
         }
     }
 
-    // TODO:
-    // - flexible number of columns (explore sheet range dynamically)
-    // - report status and errors: missing info, bad link, warnings, "still dummy", pass 
-    // - use colors on the sheet as well
-    // - date stamp of last update
-    private final static String spreadsheetId = "1oLJTTydL_5YPyk-wY-dspjIw_bPZ3oCiWiK0xtG8t3g";
-    private final static int row_offset = 2;
+    // TODO: generalize the readRange
+    private final static int row_offset = 2; // number of header rows
     private final static String readRange = "Dictionary!A"+(row_offset+1)+":F";
     public static List<DictionaryEntry> snapshotCurrentDictionary() throws IOException, GeneralSecurityException {
         ensureSheetsService();
@@ -97,50 +111,51 @@ public class DictionaryAccessor {
         return entries;
     }
     
-    public static void writeEntryURI(int i, URI uri) throws IOException {
+    /**
+     * Write text to an arbitrary single cell
+     * @param writeRange location of cell
+     * @param value Text to be written
+     * @throws IOException
+     */
+    private static void writeLocationText(String writeRange, String value) throws IOException {
         ensureSheetsService();
-        String writeRange = "Dictionary!C"+i;
         List<List<Object>> values = new ArrayList<>();
         List<Object> row = new ArrayList<>();
-        row.add(uri.toString()); values.add(row);
-        ValueRange content = new ValueRange().setRange(writeRange).setValues(values);
-        service.spreadsheets().values().update(spreadsheetId, writeRange, content).setValueInputOption("RAW").execute();
-    }
-    
-    public static void writeEntryNotes(int i, String notes) throws IOException {
-        ensureSheetsService();
-        String writeRange = "Dictionary!G"+i;
-        List<List<Object>> values = new ArrayList<>();
-        List<Object> row = new ArrayList<>();
-        row.add(notes); values.add(row);
+        row.add(value); values.add(row);
         ValueRange content = new ValueRange().setRange(writeRange).setValues(values);
         service.spreadsheets().values().update(spreadsheetId, writeRange, content).setValueInputOption("RAW").execute();
     }
     
     /**
-     * Prints the names and majors of students in a sample spreadsheet:
-     * https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
+     * Write the URI of the entry in row i
+     * @param i  absolute index of row (including header rows)
+     * @param uri definitive location for dictionary entry definition
+     * @throws IOException
      */
-    public static void main(String... args) throws IOException, GeneralSecurityException {
-        List<DictionaryEntry> entries = snapshotCurrentDictionary();
-        if (entries.isEmpty()) {
-            System.out.println("No data found.");
-        } else {
-            System.out.println("Name, URI");
-            for (DictionaryEntry e : entries) {
-                System.out.printf("%s, %s\n", e.name, e.uri==null?"no URI":e.uri.toString());
-            }
-        }
+    public static void writeEntryURI(int i, URI uri) throws IOException {
+        writeLocationText("Dictionary!C"+i, uri.toString());
     }
+    
+    /**
+     * Write the URI of the entry in row i
+     * @param i  absolute index of row (including header rows)
+     * @param notes string to be written
+     * @throws IOException
+     */
+    public static void writeEntryNotes(int i, String notes) throws IOException {
+        writeLocationText("Dictionary!G"+i, notes);
+    }
+    
+//    public static void main(String... args) throws IOException, GeneralSecurityException {
+//        List<DictionaryEntry> entries = snapshotCurrentDictionary();
+//        if (entries.isEmpty()) {
+//            System.out.println("No data found.");
+//        } else {
+//            System.out.println("Name, URI");
+//            for (DictionaryEntry e : entries) {
+//                System.out.printf("%s, %s\n", e.name, e.uri==null?"no URI":e.uri.toString());
+//            }
+//        }
+//    }
 
-    public static void configure(CommandLine cmd) {
-        // TODO Auto-generated method stub
-        
-    }
-
-    /** Make a clean boot, tearing down old instance if needed */
-    public static void restart() {
-        // TODO Auto-generated method stub
-        
-    }
 }
