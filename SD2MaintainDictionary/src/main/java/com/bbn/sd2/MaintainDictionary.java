@@ -158,15 +158,14 @@ public final class MaintainDictionary {
                 }
             }
             log.info("Completed certification of dictionary");
-            report.subsection("Inventory: ");
-            report.success(entries.size()+" entries");
-            report.success(mod_count+" modified");
-            if(bad_count>0) report.failure(bad_count+" invalid");
+            report.success(entries.size()+" entries",true);
+            report.success(mod_count+" modified",true);
+            if(bad_count>0) report.failure(bad_count+" invalid",true);
         } catch(Exception e) {
             e.printStackTrace();
             report.failure("Dictionary update failed with exception of type "+e.getClass().getName(), true);
         }
-        DictionaryAccessor.writeStatusUpdate(report.toString());
+        DictionaryAccessor.writeStatusUpdate("SD2 Dictionary ("+DictionaryMaintainerApp.VERSION+") "+report.toString());
         // TODO: report this on sheet, including N valid & invalid items, # just updated
     }
 }
