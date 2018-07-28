@@ -145,6 +145,15 @@ public class DictionaryAccessor {
     public static void writeEntryNotes(int i, String notes) throws IOException {
         writeLocationText("Dictionary!G"+i, notes);
     }
+
+    /**
+     * Write the status at the end of each round
+     * @param status string to be written
+     * @throws IOException
+     */
+    public static void writeStatusUpdate(String status) throws IOException {
+        writeLocationText("Dictionary!I1", status);
+    }
     
 //    public static void main(String... args) throws IOException, GeneralSecurityException {
 //        List<DictionaryEntry> entries = snapshotCurrentDictionary();

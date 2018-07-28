@@ -87,63 +87,86 @@ public final class MaintainDictionary {
         return document;
     }
     
-    public static void maintain_dictionary() throws IOException, GeneralSecurityException, SBOLValidationException, SynBioHubException, SBOLConversionException {
-        List<DictionaryEntry> entries = DictionaryAccessor.snapshotCurrentDictionary();
-        log.info("Beginning dictionary update");
-        for(DictionaryEntry e : entries) {
-            UpdateReport report = new UpdateReport();
-            // if the entry is not valid, ignore it
-            if(!e.valid) {
-                log.info("Invalid entry for name "+e.name+", skipping");
-                report.subsection("Cannot update");
-                if(e.name==null) report.failure("Common name is missing");
-                if(e.type==null) { report.failure("Type is missing");
-                } else if(!validType(e.type)) {
-                    report.failure("Type must be one of "+allTypes());
+    private static boolean update_entry(DictionaryEntry e) throws SBOLConversionException, IOException, SBOLValidationException, SynBioHubException {
+        UpdateReport report = new UpdateReport();
+        // This is never called unless the entry is known valid
+        SBOLDocument document = null;
+        boolean changed = false;
+        // if the entry has no URI, create per type
+        if(e.uri==null) {
+            document = createDummyOfType(e.name, e.type);
+            // pull out the first (and only) element to get the URI
+            e.local_uri = document.getTopLevels().iterator().next().getIdentity();
+            e.uri = SynBioHubAccessor.translateLocalURI(e.local_uri);
+            report.success("Created stub in SynBioHub",true);
+            DictionaryAccessor.writeEntryURI(e.row_index, e.uri);
+            changed = true;
+        } else { // otherwise get a copy from SynBioHub
+            document = SynBioHubAccessor.retrieve(e.uri);
+        }
+        
+        // if the entry has lab entries, check if they match and (re)annotate if different
+        if(!e.labUIDs.isEmpty()) {
+            TopLevel entity = document.getTopLevel(e.local_uri);
+            log.info("Checking lab UIDs for "+e.name);
+            for(String labKey : e.labUIDs.keySet()) {
+                String labValue = e.labUIDs.get(labKey);
+                QName labQKey = new QName("http://sd2e.org#",labKey,"sd2");
+                Annotation annotation = entity.getAnnotation(labQKey);
+                if(annotation==null || !labValue.equals(annotation.getStringValue())) {
+                    log.info("Lab parameters updated for "+e.name+": "+labKey+"="+labValue);
+                    if(annotation!=null) { entity.removeAnnotation(annotation); }
+                    entity.createAnnotation(labQKey, labValue);
+                    changed = true;
+                    report.success(labKey+" for "+e.name+" is '"+labValue+"'",true);
                 }
-                DictionaryAccessor.writeEntryNotes(e.row_index, report.toString());
-                continue;
-            }
-            
-            SBOLDocument document = null;
-            boolean changed = false;
-            // if the entry has no URI, create per type
-            if(e.uri==null) {
-                document = createDummyOfType(e.name, e.type);
-                // pull out the first (and only) element to get the URI
-                e.local_uri = document.getTopLevels().iterator().next().getIdentity();
-                e.uri = SynBioHubAccessor.translateLocalURI(e.local_uri);
-                report.success("Created stub in SynBioHub",true);
-                DictionaryAccessor.writeEntryURI(e.row_index, e.uri);
-                changed = true;
-            } else {
-                document = SynBioHubAccessor.retrieve(e.uri);
-            }
-            
-            // if the entry has lab entries, check if they match and (re)annotate if different
-            if(!e.labUIDs.isEmpty()) {
-                TopLevel entity = document.getTopLevel(e.local_uri);
-                log.info("Checking lab UIDs for "+e.name);
-                for(String labKey : e.labUIDs.keySet()) {
-                    String labValue = e.labUIDs.get(labKey);
-                    QName labQKey = new QName("http://sd2e.org#",labKey,"sd2");
-                    Annotation annotation = entity.getAnnotation(labQKey);
-                    if(annotation==null || !labValue.equals(annotation.getStringValue())) {
-                        log.info("Lab parameters updated for "+e.name+": "+labKey+"="+labValue);
-                        if(annotation!=null) { entity.removeAnnotation(annotation); }
-                        entity.createAnnotation(labQKey, labValue);
-                        changed = true;
-                        report.success(labKey+" for "+e.name+" is '"+labValue+"'",true);
-                    }
-                }
-            }
-            if(changed) {
-                document.write(System.out);
-                SynBioHubAccessor.update(document);
-                DictionaryAccessor.writeEntryNotes(e.row_index, report.toString());
             }
         }
-        log.info("Completed certification of dictionary");
+        if(changed) {
+            document.write(System.out);
+            SynBioHubAccessor.update(document);
+            DictionaryAccessor.writeEntryNotes(e.row_index, report.toString());
+        }
+        
+        return changed;
+    }
+    
+    public static void maintain_dictionary() throws IOException, GeneralSecurityException, SBOLValidationException, SynBioHubException, SBOLConversionException {
+        UpdateReport report = new UpdateReport();
+        try {
+            List<DictionaryEntry> entries = DictionaryAccessor.snapshotCurrentDictionary();
+            log.info("Beginning dictionary update");
+            int mod_count = 0, bad_count = 0;
+            for(DictionaryEntry e : entries) {
+                if(e.valid) {
+                    boolean modified = update_entry(e);
+                    mod_count += modified?1:0;
+                } else {
+                    // if the entry is not valid, ignore it
+                    if(!e.valid) {
+                        UpdateReport invalidReport = new UpdateReport();
+                        log.info("Invalid entry for name "+e.name+", skipping");
+                        invalidReport.subsection("Cannot update");
+                        if(e.name==null) invalidReport.failure("Common name is missing");
+                        if(e.type==null) { invalidReport.failure("Type is missing");
+                        } else if(!validType(e.type)) {
+                            invalidReport.failure("Type must be one of "+allTypes());
+                        }
+                        DictionaryAccessor.writeEntryNotes(e.row_index, invalidReport.toString());
+                    }
+                    bad_count++;
+                }
+            }
+            log.info("Completed certification of dictionary");
+            report.subsection("Inventory: ");
+            report.success(entries.size()+" entries");
+            report.success(mod_count+" modified");
+            if(bad_count>0) report.failure(bad_count+" invalid");
+        } catch(Exception e) {
+            e.printStackTrace();
+            report.failure("Dictionary update failed with exception of type "+e.getClass().getName(), true);
+        }
+        DictionaryAccessor.writeStatusUpdate(report.toString());
         // TODO: report this on sheet, including N valid & invalid items, # just updated
     }
 }
