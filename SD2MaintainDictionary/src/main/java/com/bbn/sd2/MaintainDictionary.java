@@ -53,26 +53,9 @@ public final class MaintainDictionary {
         return s.toString();
     }
     
-    // imported from libSBOLj:
-    private static final String displayIDpattern = "[a-zA-Z_]+[a-zA-Z0-9_]*";//"[a-zA-Z0-9_]+";
-    private static final Pattern displayIDpatternPat = Pattern.compile(displayIDpattern);
-    
-    public static String sanitizeNameToDisplayID(String name) {
-        String sanitized = "";
-        for(int i=0;i<name.length();i++) {
-            String character = name.substring(i, i+1);
-            if(displayIDpatternPat.matcher(character).matches()) {
-                sanitized += character;
-            } else {
-                sanitized += "0x"+String.format("%H", character);
-            }
-        }
-        return sanitized;
-    }
-    
     public static SBOLDocument createEntity(String name, String type) throws SBOLValidationException, SynBioHubException {
         SBOLDocument document = SynBioHubAccessor.newBlankDocument();
-        String displayId = sanitizeNameToDisplayID(name);
+        String displayId = SynBioHubAccessor.sanitizeNameToDisplayID(name);
         if(componentTypes.containsKey(type)) {
             log.info("Creating dummy Component for "+name);
             ComponentDefinition cd = document.createComponentDefinition(displayId, "1", componentTypes.get(type));

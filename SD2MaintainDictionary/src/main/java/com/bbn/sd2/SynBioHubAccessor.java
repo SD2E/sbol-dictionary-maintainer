@@ -4,6 +4,7 @@ package com.bbn.sd2;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.DefaultParser;
@@ -82,7 +83,7 @@ public final class SynBioHubAccessor {
         SearchQuery query = new SearchQuery();
         SearchCriteria criterion = new SearchCriteria();
         criterion.setKey("dcterms:title");
-        criterion.setValue(name);
+        criterion.setValue(sanitizeNameToDisplayID(name));
         query.addCriteria(criterion);
         ArrayList<IdentifiedMetadata> response = repository.search(query);
         // If anything comes back, return it; else null
@@ -94,6 +95,26 @@ public final class SynBioHubAccessor {
             log.severe("Cannot resolve: multiple URIs match name "+name);
             return null;
         }
+    }
+    
+    // displayID pattern imported from libSBOLj:
+    private static final Pattern displayIDpattern = Pattern.compile("[a-zA-Z_]+[a-zA-Z0-9_]*");
+    /**
+     * Convert an arbitrary item name to a "safe" name for a displayID
+     * @param name 
+     * @return sanitized version of name
+     */
+    public static String sanitizeNameToDisplayID(String name) {
+        String sanitized = "";
+        for(int i=0;i<name.length();i++) {
+            String character = name.substring(i, i+1);
+            if(displayIDpattern.matcher(character).matches()) {
+                sanitized += character;
+            } else {
+                sanitized += "0x"+String.format("%H", character);
+            }
+        }
+        return sanitized;
     }
     
     /**
