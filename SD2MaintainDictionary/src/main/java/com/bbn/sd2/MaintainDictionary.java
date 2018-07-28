@@ -87,6 +87,15 @@ public final class MaintainDictionary {
         return document;
     }
     
+    /**
+     * Update a single dictionary entry
+     * @param e entry to be updated
+     * @return true if anything has been changed
+     * @throws SBOLConversionException
+     * @throws IOException
+     * @throws SBOLValidationException
+     * @throws SynBioHubException
+     */
     private static boolean update_entry(DictionaryEntry e) throws SBOLConversionException, IOException, SBOLValidationException, SynBioHubException {
         UpdateReport report = new UpdateReport();
         // This is never called unless the entry is known valid
@@ -131,6 +140,9 @@ public final class MaintainDictionary {
         return changed;
     }
     
+    /**
+     * Run one pass through the dictionary, updating all entries as needed
+     */
     public static void maintain_dictionary() throws IOException, GeneralSecurityException, SBOLValidationException, SynBioHubException, SBOLConversionException {
         UpdateReport report = new UpdateReport();
         try {
@@ -166,6 +178,5 @@ public final class MaintainDictionary {
             report.failure("Dictionary update failed with exception of type "+e.getClass().getName(), true);
         }
         DictionaryAccessor.writeStatusUpdate("SD2 Dictionary ("+DictionaryMaintainerApp.VERSION+") "+report.toString());
-        // TODO: report this on sheet, including N valid & invalid items, # just updated
     }
 }
