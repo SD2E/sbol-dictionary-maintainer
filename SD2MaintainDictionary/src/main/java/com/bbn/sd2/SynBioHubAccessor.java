@@ -158,6 +158,11 @@ public final class SynBioHubAccessor {
         return URI.create(uri.toString().replace(collectionPrefix, localNamespace));
     }
 
+    /** Map a URI from our local namespace to the SynBioHub namespace */
+    public static URI translateLocalURI(URI uri) {
+        return URI.create(uri.toString().replace(localNamespace, collectionPrefix));
+    }
+
     /**
      * The main function here creates a scratch test collection
      */

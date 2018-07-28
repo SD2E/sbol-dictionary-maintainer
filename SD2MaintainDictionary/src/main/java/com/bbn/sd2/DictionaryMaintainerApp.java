@@ -23,10 +23,14 @@ public class DictionaryMaintainerApp {
             while(true) {
                 try {
                     MaintainDictionary.maintain_dictionary();
-                    Thread.sleep(sleepMillis);
                 } catch(Exception e) {
                     log.severe("Exception while maintaining dictionary:");
                     e.printStackTrace();
+                }
+                try {
+                    Thread.sleep(sleepMillis);
+                } catch(InterruptedException e) {
+                    // ignore sleep interruptions
                 }
             }
         }
