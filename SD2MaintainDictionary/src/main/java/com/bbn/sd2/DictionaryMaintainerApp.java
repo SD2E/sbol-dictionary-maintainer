@@ -46,10 +46,11 @@ public class DictionaryMaintainerApp {
         // Set up options
         Options options = new Options();
         options.addOption("s", "sleep", true, "seconds to sleep between updates");
-        options.addOption("l", "login", false, "login email account for SynBioHub maintainer account");
+        options.addOption("l", "login", true, "login email account for SynBioHub maintainer account");
         options.addOption("p", "password", true, "login password for SynBioHub maintainer account");
-        options.addOption("c", "collection", false, "URL for SynBioHub collection to be synchronized");
-        options.addOption("g", "gsheet_id", false, "Google Sheets ID of spreadsheet");
+        options.addOption("c", "collection", true, "URL for SynBioHub collection to be synchronized");
+        options.addOption("g", "gsheet_id", true, "Google Sheets ID of spreadsheet");
+        options.addOption("S", "server", true, "URL for SynBioHub server");
         
         // Parse arguments
         CommandLine cmd = null;

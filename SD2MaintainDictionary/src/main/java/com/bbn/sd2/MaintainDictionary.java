@@ -65,7 +65,7 @@ public final class MaintainDictionary {
      * @throws SBOLValidationException
      * @throws SynBioHubException
      */
-    private static SBOLDocument createDummyOfType(String name, String type) throws SBOLValidationException, SynBioHubException {
+    private static SBOLDocument createStubOfType(String name, String type) throws SBOLValidationException, SynBioHubException {
         SBOLDocument document = SynBioHubAccessor.newBlankDocument();
         String displayId = SynBioHubAccessor.sanitizeNameToDisplayID(name);
         if(componentTypes.containsKey(type)) {
@@ -84,11 +84,13 @@ public final class MaintainDictionary {
             return null;
         }
         
+        // push to create now
+        SynBioHubAccessor.update(document);
         return document;
     }
     
     /**
-     * Update a single dictionary entry
+     * Update a single dictionary entry, assumed to be valid
      * @param e entry to be updated
      * @return true if anything has been changed
      * @throws SBOLConversionException
@@ -97,13 +99,15 @@ public final class MaintainDictionary {
      * @throws SynBioHubException
      */
     private static boolean update_entry(DictionaryEntry e) throws SBOLConversionException, IOException, SBOLValidationException, SynBioHubException {
+        assert(e.valid);
+        
         UpdateReport report = new UpdateReport();
         // This is never called unless the entry is known valid
         SBOLDocument document = null;
         boolean changed = false;
         // if the entry has no URI, create per type
         if(e.uri==null) {
-            document = createDummyOfType(e.name, e.type);
+            document = createStubOfType(e.name, e.type);
             // pull out the first (and only) element to get the URI
             e.local_uri = document.getTopLevels().iterator().next().getIdentity();
             e.uri = SynBioHubAccessor.translateLocalURI(e.local_uri);
@@ -111,19 +115,35 @@ public final class MaintainDictionary {
             DictionaryAccessor.writeEntryURI(e.row_index, e.uri);
             changed = true;
         } else { // otherwise get a copy from SynBioHub
-            document = SynBioHubAccessor.retrieve(e.uri);
+            try {
+                document = SynBioHubAccessor.retrieve(e.uri);
+            } catch(SynBioHubException sbhe) {
+                report.failure("Could not retrieve "+e.uri, true);
+                return changed;
+            }
+        }
+        
+        // Make sure we've got the entity to update in our hands:
+        TopLevel entity = document.getTopLevel(e.local_uri);
+        if(entity==null) {
+            report.failure("Could not find or make object "+e.uri, true);
+            return changed;
+        }
+        
+        // update entity name if needed
+        if(e.name!=null && !e.name.equals(entity.getName())) {
+            entity.setName(e.name);
+            changed = true;
+            report.success("Name changed to '"+e.name+"'",true);
         }
         
         // if the entry has lab entries, check if they match and (re)annotate if different
         if(!e.labUIDs.isEmpty()) {
-            TopLevel entity = document.getTopLevel(e.local_uri);
-            log.info("Checking lab UIDs for "+e.name);
             for(String labKey : e.labUIDs.keySet()) {
                 String labValue = e.labUIDs.get(labKey);
                 QName labQKey = new QName("http://sd2e.org#",labKey,"sd2");
                 Annotation annotation = entity.getAnnotation(labQKey);
                 if(annotation==null || !labValue.equals(annotation.getStringValue())) {
-                    log.info("Lab parameters updated for "+e.name+": "+labKey+"="+labValue);
                     if(annotation!=null) { entity.removeAnnotation(annotation); }
                     entity.createAnnotation(labQKey, labValue);
                     changed = true;
@@ -131,6 +151,7 @@ public final class MaintainDictionary {
                 }
             }
         }
+        
         if(changed) {
             document.write(System.out);
             SynBioHubAccessor.update(document);

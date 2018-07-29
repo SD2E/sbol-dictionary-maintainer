@@ -28,6 +28,7 @@ public final class SynBioHubAccessor {
     private static URI collectionID;
     private static String login = null;
     private static String password = null;
+    private static String synbiohubServer = null;
     
     private static SynBioHubFrontend repository = null;
     
@@ -39,12 +40,17 @@ public final class SynBioHubAccessor {
     
     /** Configure from command-line arguments */
     public static void configure(CommandLine cmd) {
-        collectionPrefix = cmd.getOptionValue("collectionPrefix","https://hub.sd2e.org/user/sd2e/scratch_test_collection/");
+        // get server to connect to
+        synbiohubServer = cmd.getOptionValue("server","https://synbiohub.utah.edu/");
+        
+        // get collection information
+        collectionPrefix = cmd.getOptionValue("collection","https://hub.sd2e.org/user/sd2e/scratch_test_collection/");
         if(!collectionPrefix.endsWith("/")) collectionPrefix = collectionPrefix+"/";
         String collectionName = collectionToCollectionName(collectionPrefix);
         // TODO: is there ever a case on SBH where our collection version is not 1 or collection name is not derivable?
         collectionID = URI.create(collectionPrefix+collectionName+"_collection/1");
         
+        // get login/password
         login = cmd.getOptionValue("login","sd2_service@sd2e.org");
         password = cmd.getOptionValue("password");
     }
@@ -61,7 +67,7 @@ public final class SynBioHubAccessor {
         if(repository != null) return;
         
         try {
-            SynBioHubFrontend sbh = new SynBioHubFrontend("https://hub.sd2e.org/");
+            SynBioHubFrontend sbh = new SynBioHubFrontend(synbiohubServer);
             sbh.login(login, password);
             repository = sbh;
             log.info("Successfully logged into SD2 SynBioHub");
