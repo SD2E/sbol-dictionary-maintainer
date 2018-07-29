@@ -4,6 +4,8 @@ package com.bbn.sd2;
 import java.io.IOException;
 import java.net.URI;
 import java.security.GeneralSecurityException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -68,27 +70,37 @@ public final class MaintainDictionary {
     private static SBOLDocument createStubOfType(String name, String type) throws SBOLValidationException, SynBioHubException {
         SBOLDocument document = SynBioHubAccessor.newBlankDocument();
         String displayId = SynBioHubAccessor.sanitizeNameToDisplayID(name);
+        TopLevel tl = null;
         if(componentTypes.containsKey(type)) {
             log.info("Creating dummy Component for "+name);
             ComponentDefinition cd = document.createComponentDefinition(displayId, "1", componentTypes.get(type));
-            cd.setName(name);
-            cd.createAnnotation(new QName("http://sd2e.org#","stub_object","sd2"), "true");
+            tl = cd;
         } else if(moduleTypes.containsKey(type)) {
             log.info("Creating dummy Module for "+name);
             ModuleDefinition m = document.createModuleDefinition(displayId, "1");
             m.addRole(moduleTypes.get(type));
-            m.setName(name);
-            m.createAnnotation(new QName("http://sd2e.org#","stub_object","sd2"), "true");
+            tl = m;
         } else {
             log.info("Don't know how to make type: "+type);
             return null;
         }
+        // annotate with stub and creation information
+        tl.setName(name);
+        tl.createAnnotation(new QName("http://sd2e.org#","stub_object","sd2"), "true");
+        tl.createAnnotation(new QName("http://purl.org/dc/terms/","created","dcterms"), xmlDateTimeStamp());
         
         // push to create now
         SynBioHubAccessor.update(document);
         return document;
     }
     
+    private static String xmlDateTimeStamp() {
+        // Standard XML date format
+        SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX");
+        // return current date/time
+        return sdfDate.format(new Date());
+    }
+
     /**
      * Update a single dictionary entry, assumed to be valid
      * @param e entry to be updated
@@ -153,6 +165,7 @@ public final class MaintainDictionary {
         }
         
         if(changed) {
+            entity.createAnnotation(new QName("http://purl.org/dc/terms/","modified","dcterms"), xmlDateTimeStamp());
             document.write(System.out);
             SynBioHubAccessor.update(document);
             DictionaryAccessor.writeEntryNotes(e.row_index, report.toString());

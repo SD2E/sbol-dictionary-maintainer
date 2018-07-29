@@ -41,7 +41,7 @@ public final class SynBioHubAccessor {
     /** Configure from command-line arguments */
     public static void configure(CommandLine cmd) {
         // get server to connect to
-        synbiohubServer = cmd.getOptionValue("server","https://synbiohub.utah.edu/");
+        synbiohubServer = cmd.getOptionValue("server","https://hub.sd2e.org/");
         
         // get collection information
         collectionPrefix = cmd.getOptionValue("collection","https://hub.sd2e.org/user/sd2e/scratch_test_collection/");
@@ -67,6 +67,7 @@ public final class SynBioHubAccessor {
         if(repository != null) return;
         
         try {
+            log.info("Attempting to log into "+synbiohubServer);
             SynBioHubFrontend sbh = new SynBioHubFrontend(synbiohubServer);
             sbh.login(login, password);
             repository = sbh;
