@@ -172,6 +172,11 @@ public final class MaintainDictionary {
         // if the entry has no URI, create per type
         if(e.uri==null) {
             document = createStubOfType(e.name, e.type);
+            if(document==null) {
+                report.failure("Could not make object "+e.name, true);
+                DictionaryAccessor.writeEntryNotes(e.row_index, report.toString());
+                return changed;
+            }
             // pull out the first (and only) element to get the URI
             e.local_uri = document.getTopLevels().iterator().next().getIdentity();
             e.uri = SynBioHubAccessor.translateLocalURI(e.local_uri);
