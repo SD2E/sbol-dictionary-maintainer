@@ -182,7 +182,8 @@ public final class MaintainDictionary {
             try {
                 document = SynBioHubAccessor.retrieve(e.uri);
             } catch(SynBioHubException sbhe) {
-                report.failure("Could not retrieve "+e.uri, true);
+                report.failure("Could not retrieve linked object from SynBioHub", true);
+                DictionaryAccessor.writeEntryNotes(e.row_index, report.toString());
                 return changed;
             }
         }
@@ -191,12 +192,20 @@ public final class MaintainDictionary {
         TopLevel entity = document.getTopLevel(e.local_uri);
         if(entity==null) {
             report.failure("Could not find or make object "+e.uri, true);
+            DictionaryAccessor.writeEntryNotes(e.row_index, report.toString());
             return changed;
         }
         
         // Check if typing is valid
         if(!validateEntityType(entity,e.type)) {
             report.failure("Type does not match '"+e.type+"'", true);
+        }
+        
+        boolean entity_is_stub = (entity.getAnnotation(STUB_ANNOTATION) != null);
+        if(e.stub != entity_is_stub) {
+            e.stub = entity_is_stub;
+            report.note(e.stub?"Stub object":"No longer stub", true);
+            changed = true;
         }
         
         // update entity name if needed
@@ -225,6 +234,7 @@ public final class MaintainDictionary {
             document.write(System.out);
             SynBioHubAccessor.update(document);
             DictionaryAccessor.writeEntryNotes(e.row_index, report.toString());
+            DictionaryAccessor.writeEntryStub(e.row_index, e.stub);
         }
         
         return changed;

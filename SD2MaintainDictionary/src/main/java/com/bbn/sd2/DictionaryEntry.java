@@ -18,6 +18,7 @@ public class DictionaryEntry {
     public URI uri = null;
     public URI local_uri = null;
     public Map<String,String> labUIDs = new HashMap<>();
+    public boolean stub = false;
     
     private boolean fullbox(List<Object> row,int i) {
         return row.size()>i && row.get(i).toString().length()>0;
@@ -33,6 +34,7 @@ public class DictionaryEntry {
         if(fullbox(row,3)) labUIDs.put("BioFAB_UID", row.get(3).toString());
         if(fullbox(row,4)) labUIDs.put("Ginkgo_UID", row.get(4).toString());
         if(fullbox(row,5)) labUIDs.put("Transcriptic_UID", row.get(5).toString());
+        if(fullbox(row,6)) if(row.get(6).toString().equals("Stub")) stub=true;
         
         // If the URI is null and the name is not, attempt to resolve:
         if(uri==null && name!=null) {

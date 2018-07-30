@@ -98,7 +98,7 @@ public class DictionaryAccessor {
 
     // TODO: generalize the readRange
     private final static int row_offset = 2; // number of header rows
-    private final static String readRange = "Dictionary!A"+(row_offset+1)+":F";
+    private final static String readRange = "Dictionary!A"+(row_offset+1)+":G";
     public static List<DictionaryEntry> snapshotCurrentDictionary() throws IOException, GeneralSecurityException {
         ensureSheetsService();
         // pull the current range
@@ -139,11 +139,21 @@ public class DictionaryAccessor {
     /**
      * Write the URI of the entry in row i
      * @param i  absolute index of row (including header rows)
+     * @param uri definitive location for dictionary entry definition
+     * @throws IOException
+     */
+    public static void writeEntryStub(int i, boolean stub) throws IOException {
+        writeLocationText("Dictionary!G"+i, stub?"Stub":"");
+    }
+    
+    /**
+     * Write the URI of the entry in row i
+     * @param i  absolute index of row (including header rows)
      * @param notes string to be written
      * @throws IOException
      */
     public static void writeEntryNotes(int i, String notes) throws IOException {
-        writeLocationText("Dictionary!G"+i, notes);
+        writeLocationText("Dictionary!H"+i, notes);
     }
 
     /**
