@@ -31,6 +31,11 @@ import org.synbiohub.frontend.SynBioHubException;
 public final class MaintainDictionary {
     private static Logger log = Logger.getGlobal();
     
+    private static final QName STUB_ANNOTATION = new QName("http://sd2e.org#","stub_object","sd2");
+    private static final QName CREATED = new QName("http://purl.org/dc/terms/","created","dcterms");
+    private static final QName MODIFIED = new QName("http://purl.org/dc/terms/","modified","dcterms");
+    
+    /** Classes of object that are implemented as a ComponentDefinition */
     private static Map<String,URI> componentTypes = new HashMap<String,URI>() {{
         put("Bead",URI.create("http://purl.obolibrary.org/obo/NCIT_C70671")); 
         put("CHEBI",ComponentDefinition.SMALL_MOLECULE); 
@@ -39,9 +44,15 @@ public final class MaintainDictionary {
         put("RNA",ComponentDefinition.RNA); 
     }};
     
+    /** Classes of object that are implemented as a ModuleDefinition */
     private static Map<String,URI> moduleTypes = new HashMap<String,URI>(){{
         put("Strain",URI.create("http://purl.obolibrary.org/obo/NCIT_C14419")); 
         put("Media",URI.create("http://purl.obolibrary.org/obo/OBI_0000079")); 
+    }};
+    
+    /** Classes of object that are not stored in SynBioHub, but are grounded in external definitions */
+    private static Map<String,QName> externalTypes = new HashMap<String,QName>(){{
+        put("Attribute",new QName("http://sd2e.org/types/#","attribute","sd2"));
     }};
     
     /**
@@ -49,19 +60,21 @@ public final class MaintainDictionary {
      * @return true if we know how to handle entries of this type
      */
     private static boolean validType(String type) {
-        return componentTypes.containsKey(type) || moduleTypes.containsKey(type);
+        return componentTypes.containsKey(type) || moduleTypes.containsKey(type) 
+                || externalTypes.containsKey(type);
     }
     
     /** @return A string listing all valid types */
     private static String allTypes() {
         Set<String> s = new HashSet<>(componentTypes.keySet());
         s.addAll(moduleTypes.keySet());
+        s.addAll(externalTypes.keySet());
         return s.toString();
     }
     
     /**
      * Create a new dummy object
-     * @param name Name of the new object, which will alo be converted to a displayID and URI
+     * @param name Name of the new object, which will also be converted to a displayID and URI
      * @param type 
      * @return
      * @throws SBOLValidationException
@@ -72,22 +85,26 @@ public final class MaintainDictionary {
         String displayId = SynBioHubAccessor.sanitizeNameToDisplayID(name);
         TopLevel tl = null;
         if(componentTypes.containsKey(type)) {
-            log.info("Creating dummy Component for "+name);
+            log.info("Creating stub Component for "+name);
             ComponentDefinition cd = document.createComponentDefinition(displayId, "1", componentTypes.get(type));
+            cd.createAnnotation(STUB_ANNOTATION, "true");
             tl = cd;
         } else if(moduleTypes.containsKey(type)) {
-            log.info("Creating dummy Module for "+name);
+            log.info("Creating stub Module for "+name);
             ModuleDefinition m = document.createModuleDefinition(displayId, "1");
             m.addRole(moduleTypes.get(type));
+            m.createAnnotation(STUB_ANNOTATION, "true");
             tl = m;
+        } else if(externalTypes.containsKey(type)) {
+            log.info("Creating definition placeholder for "+name);
+            tl = document.createGenericTopLevel(displayId, "1", externalTypes.get(type));
         } else {
-            log.info("Don't know how to make type: "+type);
+            log.info("Don't know how to make stub for type: "+type);
             return null;
         }
         // annotate with stub and creation information
         tl.setName(name);
-        tl.createAnnotation(new QName("http://sd2e.org#","stub_object","sd2"), "true");
-        tl.createAnnotation(new QName("http://purl.org/dc/terms/","created","dcterms"), xmlDateTimeStamp());
+        tl.createAnnotation(CREATED, xmlDateTimeStamp());
         
         // push to create now
         SynBioHubAccessor.update(document);
@@ -156,8 +173,7 @@ public final class MaintainDictionary {
                 QName labQKey = new QName("http://sd2e.org#",labKey,"sd2");
                 Annotation annotation = entity.getAnnotation(labQKey);
                 if(annotation==null || !labValue.equals(annotation.getStringValue())) {
-                    if(annotation!=null) { entity.removeAnnotation(annotation); }
-                    entity.createAnnotation(labQKey, labValue);
+                    replaceOldAnnotations(entity,labQKey,labValue);
                     changed = true;
                     report.success(labKey+" for "+e.name+" is '"+labValue+"'",true);
                 }
@@ -165,7 +181,7 @@ public final class MaintainDictionary {
         }
         
         if(changed) {
-            entity.createAnnotation(new QName("http://purl.org/dc/terms/","modified","dcterms"), xmlDateTimeStamp());
+            replaceOldAnnotations(entity,MODIFIED,xmlDateTimeStamp());
             document.write(System.out);
             SynBioHubAccessor.update(document);
             DictionaryAccessor.writeEntryNotes(e.row_index, report.toString());
@@ -174,6 +190,17 @@ public final class MaintainDictionary {
         return changed;
     }
     
+    /** 
+     * Remove all prior instances of an annotation and replace with the new one 
+     * @throws SBOLValidationException 
+     */
+    private static void replaceOldAnnotations(TopLevel entity, QName key, String value) throws SBOLValidationException {
+        while(entity.getAnnotation(key)!=null) { 
+            entity.removeAnnotation(entity.getAnnotation(key));
+        }
+        entity.createAnnotation(key, value);
+    }
+
     /**
      * Run one pass through the dictionary, updating all entries as needed
      */
