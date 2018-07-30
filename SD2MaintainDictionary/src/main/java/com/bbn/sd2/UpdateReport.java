@@ -24,6 +24,7 @@ class UpdateReport {
     }
     
     private void addToLastSubsection(String report) {
+        if(reports.size()==0) reports.add(new ArrayList<>()); // insert at front if needed
         reports.get(reports.size()-1).add(report); // add to end of subsection
         
     }

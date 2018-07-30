@@ -18,6 +18,7 @@ import javax.xml.namespace.QName;
 
 import org.sbolstandard.core2.Annotation;
 import org.sbolstandard.core2.ComponentDefinition;
+import org.sbolstandard.core2.GenericTopLevel;
 import org.sbolstandard.core2.ModuleDefinition;
 import org.sbolstandard.core2.SBOLConversionException;
 import org.sbolstandard.core2.SBOLDocument;
@@ -72,6 +73,28 @@ public final class MaintainDictionary {
         return s.toString();
     }
     
+    private static boolean validateEntityType(TopLevel entity, String type) {
+        if(componentTypes.containsKey(type)) {
+            if(entity instanceof ComponentDefinition) {
+                ComponentDefinition cd = (ComponentDefinition)entity;
+                return cd.getTypes().contains(componentTypes.get(type));
+            }
+        } else if(moduleTypes.containsKey(type)) {
+            if(entity instanceof ModuleDefinition) {
+                ModuleDefinition md = (ModuleDefinition)entity;
+                return md.getRoles().contains(moduleTypes.get(type));
+            }
+        } else if(externalTypes.containsKey(type)) {
+            if(entity instanceof GenericTopLevel) {
+                GenericTopLevel tl = (GenericTopLevel)entity;
+                return tl.getRDFType().equals(externalTypes.get(type));
+            }
+        } else {
+            log.info("Don't recognize type "+type);
+        }
+        return false;
+    }
+    
     /**
      * Create a new dummy object
      * @param name Name of the new object, which will also be converted to a displayID and URI
@@ -111,11 +134,23 @@ public final class MaintainDictionary {
         return document;
     }
     
+    /** Get current date/time in standard XML format */
     private static String xmlDateTimeStamp() {
         // Standard XML date format
         SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX");
         // return current date/time
         return sdfDate.format(new Date());
+    }
+
+    /** 
+     * Remove all prior instances of an annotation and replace with the new one 
+     * @throws SBOLValidationException 
+     */
+    private static void replaceOldAnnotations(TopLevel entity, QName key, String value) throws SBOLValidationException {
+        while(entity.getAnnotation(key)!=null) { 
+            entity.removeAnnotation(entity.getAnnotation(key));
+        }
+        entity.createAnnotation(key, value);
     }
 
     /**
@@ -159,6 +194,11 @@ public final class MaintainDictionary {
             return changed;
         }
         
+        // Check if typing is valid
+        if(!validateEntityType(entity,e.type)) {
+            report.failure("Type does not match '"+e.type+"'", true);
+        }
+        
         // update entity name if needed
         if(e.name!=null && !e.name.equals(entity.getName())) {
             entity.setName(e.name);
@@ -190,17 +230,6 @@ public final class MaintainDictionary {
         return changed;
     }
     
-    /** 
-     * Remove all prior instances of an annotation and replace with the new one 
-     * @throws SBOLValidationException 
-     */
-    private static void replaceOldAnnotations(TopLevel entity, QName key, String value) throws SBOLValidationException {
-        while(entity.getAnnotation(key)!=null) { 
-            entity.removeAnnotation(entity.getAnnotation(key));
-        }
-        entity.createAnnotation(key, value);
-    }
-
     /**
      * Run one pass through the dictionary, updating all entries as needed
      */
