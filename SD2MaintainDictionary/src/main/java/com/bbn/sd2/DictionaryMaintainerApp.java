@@ -51,6 +51,7 @@ public class DictionaryMaintainerApp {
         options.addOption("c", "collection", true, "URL for SynBioHub collection to be synchronized");
         options.addOption("g", "gsheet_id", true, "Google Sheets ID of spreadsheet");
         options.addOption("S", "server", true, "URL for SynBioHub server");
+        options.addOption("f", "spoofing", true, "URL prefix for a test SynBioHub server spoofing as another");
         
         // Parse arguments
         CommandLine cmd = null;

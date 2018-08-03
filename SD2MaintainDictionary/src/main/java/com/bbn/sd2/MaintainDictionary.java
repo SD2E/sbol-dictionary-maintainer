@@ -102,8 +102,9 @@ public final class MaintainDictionary {
      * @return
      * @throws SBOLValidationException
      * @throws SynBioHubException
+     * @throws SBOLConversionException 
      */
-    private static SBOLDocument createStubOfType(String name, String type) throws SBOLValidationException, SynBioHubException {
+    private static SBOLDocument createStubOfType(String name, String type) throws SBOLValidationException, SynBioHubException, SBOLConversionException {
         SBOLDocument document = SynBioHubAccessor.newBlankDocument();
         String displayId = SynBioHubAccessor.sanitizeNameToDisplayID(name);
         TopLevel tl = null;
@@ -130,6 +131,7 @@ public final class MaintainDictionary {
         tl.createAnnotation(CREATED, xmlDateTimeStamp());
         
         // push to create now
+        document.write(System.out);
         SynBioHubAccessor.update(document);
         return document;
     }
