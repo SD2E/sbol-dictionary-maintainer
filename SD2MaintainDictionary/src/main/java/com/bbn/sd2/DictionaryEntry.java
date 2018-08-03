@@ -61,4 +61,24 @@ public class DictionaryEntry {
             local_uri = SynBioHubAccessor.translateURI(uri);
         }
     }
+
+    public boolean validType() {
+        for(String type : allowedTypes) {
+            if(type.equals(this.type)) 
+                return true;
+        }
+        return false;
+    }
+
+    public String allowedTypes() {
+        String s = "";
+        if(allowedTypes.length==0) s+="(INTERNAL ERROR: no valid types available)";
+        if(allowedTypes.length>1) s+="one of ";
+        for(int i=0;i<allowedTypes.length;i++) {
+            if(i>0 && allowedTypes.length>2) s+= ", ";
+            if(i>0 && i==allowedTypes.length-1) s+="or ";
+            s+="'"+allowedTypes[i]+"'";
+        }
+        return s;
+    }
 }
