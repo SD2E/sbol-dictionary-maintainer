@@ -11,6 +11,8 @@ import org.synbiohub.frontend.SynBioHubException;
 
 public class DictionaryEntry {
     private static Logger log = Logger.getGlobal();
+    public String tab = null;
+    public String[] allowedTypes = null; // What sort of type is this allowed to be
     public int row_index = -1; 
     public boolean valid = false;
     public String name = null;
@@ -24,7 +26,9 @@ public class DictionaryEntry {
         return row.size()>i && row.get(i).toString().length()>0;
     }
     
-    public DictionaryEntry(int row_number, List<Object> row) {
+    public DictionaryEntry(String tab, int row_number, List<Object> row, String[] allowedTypes) {
+        this.tab = tab;
+        this.allowedTypes = allowedTypes;
         row_index = row_number;
         valid = fullbox(row,0) && fullbox(row,1); // only valid if have both name and type
         
@@ -41,7 +45,7 @@ public class DictionaryEntry {
             try {
                 uri = SynBioHubAccessor.nameToURI(name);
                 if(uri!=null) {
-                    DictionaryAccessor.writeEntryURI(row_number,uri);
+                    DictionaryAccessor.writeEntryURI(this,uri);
                 }
             } catch (SynBioHubException e) {
                 valid = false; // Don't try to make anything if we couldn't check if it exists
@@ -56,5 +60,25 @@ public class DictionaryEntry {
         if(uri!=null) {
             local_uri = SynBioHubAccessor.translateURI(uri);
         }
+    }
+
+    public boolean validType() {
+        for(String type : allowedTypes) {
+            if(type.equals(this.type)) 
+                return true;
+        }
+        return false;
+    }
+
+    public String allowedTypes() {
+        String s = "";
+        if(allowedTypes.length==0) s+="(INTERNAL ERROR: no valid types available)";
+        if(allowedTypes.length>1) s+="one of ";
+        for(int i=0;i<allowedTypes.length;i++) {
+            if(i>0 && allowedTypes.length>2) s+= ", ";
+            if(i>0 && i==allowedTypes.length-1) s+="or ";
+            s+="'"+allowedTypes[i]+"'";
+        }
+        return s;
     }
 }
