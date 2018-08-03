@@ -42,7 +42,7 @@ public class DictionaryMaintainerApp {
      * Prepare and 
      * @param args Current command-line arguments, to be passed in
      */
-    private static CommandLine parseArguments(String ...args) {
+    public static CommandLine parseArguments(String ...args) {
         // Set up options
         Options options = new Options();
         options.addOption("s", "sleep", true, "seconds to sleep between updates");
