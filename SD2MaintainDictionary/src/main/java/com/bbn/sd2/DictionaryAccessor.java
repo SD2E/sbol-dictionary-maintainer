@@ -22,10 +22,15 @@ import java.net.URI;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 
+import javax.xml.namespace.QName;
+
 import org.apache.commons.cli.CommandLine;
+import org.sbolstandard.core2.ComponentDefinition;
 
 public class DictionaryAccessor {
     private static Logger log = Logger.getGlobal();
@@ -35,6 +40,16 @@ public class DictionaryAccessor {
     private static Sheets service = null;
 
     private DictionaryAccessor() {} // static-only class
+    
+    /** Type Tabs */
+    private static final Map<String,String[]> typeTabs = new HashMap<String,String[]>() {{
+        put("Genetic Construct",new String[]{"DNA","RNA"});
+        put("Reagent",new String[]{"Bead","CHEBI","Media"});
+        put("Strain",new String[]{"Strain"});
+        put("Protein",new String[]{"Protein"});
+        put("Attribute",new String[]{"Attribute"});
+    }};
+    
     
     /** Configure from command-line arguments */
     public static void configure(CommandLine cmd) {
@@ -98,15 +113,20 @@ public class DictionaryAccessor {
 
     // TODO: generalize the readRange
     private final static int row_offset = 2; // number of header rows
-    private final static String readRange = "Dictionary!A"+(row_offset+1)+":G";
+    private final static String readColumns = "!A"+(row_offset+1)+":G";
     public static List<DictionaryEntry> snapshotCurrentDictionary() throws IOException, GeneralSecurityException {
         ensureSheetsService();
-        // pull the current range
-        ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
+        // Go to each tab in turn, collecting entries
         List<DictionaryEntry> entries = new ArrayList<>();
-        int row_index = row_offset;
-        for(List<Object> value : response.getValues()) {
-            entries.add(new DictionaryEntry(++row_index,value));
+        for(String tab : typeTabs.keySet()) {
+            // pull the current range
+            String readRange = tab+readColumns;
+            ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
+            if(response.getValues()==null) continue; // skip empty sheets
+            int row_index = row_offset;
+            for(List<Object> value : response.getValues()) {
+                entries.add(new DictionaryEntry(tab,++row_index,value,typeTabs.get(tab)));
+            }
         }
         return entries;
     }
@@ -132,8 +152,8 @@ public class DictionaryAccessor {
      * @param uri definitive location for dictionary entry definition
      * @throws IOException
      */
-    public static void writeEntryURI(int i, URI uri) throws IOException {
-        writeLocationText("Dictionary!C"+i, uri.toString());
+    public static void writeEntryURI(DictionaryEntry e, URI uri) throws IOException {
+        writeLocationText(e.tab+"!C"+e.row_index, uri.toString());
     }
     
     /**
@@ -142,8 +162,8 @@ public class DictionaryAccessor {
      * @param uri definitive location for dictionary entry definition
      * @throws IOException
      */
-    public static void writeEntryStub(int i, boolean stub) throws IOException {
-        writeLocationText("Dictionary!G"+i, stub?"Stub":"");
+    public static void writeEntryStub(DictionaryEntry e, boolean stub) throws IOException {
+        writeLocationText(e.tab+"!G"+e.row_index, stub?"Stub":"");
     }
     
     /**
@@ -152,8 +172,8 @@ public class DictionaryAccessor {
      * @param notes string to be written
      * @throws IOException
      */
-    public static void writeEntryNotes(int i, String notes) throws IOException {
-        writeLocationText("Dictionary!H"+i, notes);
+    public static void writeEntryNotes(DictionaryEntry e, String notes) throws IOException {
+        writeLocationText(e.tab+"!H"+e.row_index, notes);
     }
 
     /**
@@ -162,7 +182,9 @@ public class DictionaryAccessor {
      * @throws IOException
      */
     public static void writeStatusUpdate(String status) throws IOException {
-        writeLocationText("Dictionary!I1", status);
+        for(String tab : typeTabs.keySet()) {
+            writeLocationText(tab+"!I1", status);
+        }
     }
     
 //    public static void main(String... args) throws IOException, GeneralSecurityException {
