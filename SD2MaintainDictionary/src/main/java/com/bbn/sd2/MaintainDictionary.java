@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
 import javax.xml.namespace.QName;
 
@@ -256,21 +257,22 @@ public final class MaintainDictionary {
             log.info("Beginning dictionary update");
             int mod_count = 0, bad_count = 0;
             for(DictionaryEntry e : entries) {
-                if(e.valid && e.validType()) {
+                if(e.valid) {
                     boolean modified = update_entry(e);
                     mod_count += modified?1:0;
                 } else {
-                    // if the entry is not valid, ignore it and report
-                    UpdateReport invalidReport = new UpdateReport();
-                    log.info("Invalid entry for name "+e.name+", skipping");
-                    invalidReport.subsection("Cannot update");
-                    if(e.name==null) invalidReport.failure("Common name is missing");
-                    if(e.type==null) { invalidReport.failure("Type is missing");
-                    } else if(!e.validType()) {
-                        invalidReport.failure("Type must be "+e.allowedTypes());
+                    // if the entry is not valid, ignore it
+                    if(!e.valid) {
+                        UpdateReport invalidReport = new UpdateReport();
+                        log.info("Invalid entry for name "+e.name+", skipping");
+                        invalidReport.subsection("Cannot update");
+                        if(e.name==null) invalidReport.failure("Common name is missing");
+                        if(e.type==null) { invalidReport.failure("Type is missing");
+                        } else if(!validType(e.type)) {
+                            invalidReport.failure("Type must be one of "+allTypes());
+                        }
+                        DictionaryAccessor.writeEntryNotes(e, invalidReport.toString());
                     }
-                    DictionaryAccessor.writeEntryNotes(e, invalidReport.toString());
-
                     bad_count++;
                 }
             }
