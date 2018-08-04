@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
-import java.util.regex.Pattern;
 
 import javax.xml.namespace.QName;
 
@@ -176,21 +175,21 @@ public final class MaintainDictionary {
             document = createStubOfType(e.name, e.type);
             if(document==null) {
                 report.failure("Could not make object "+e.name, true);
-                DictionaryAccessor.writeEntryNotes(e.row_index, report.toString());
+                DictionaryAccessor.writeEntryNotes(e, report.toString());
                 return changed;
             }
             // pull out the first (and only) element to get the URI
             e.local_uri = document.getTopLevels().iterator().next().getIdentity();
             e.uri = SynBioHubAccessor.translateLocalURI(e.local_uri);
             report.success("Created stub in SynBioHub",true);
-            DictionaryAccessor.writeEntryURI(e.row_index, e.uri);
+            DictionaryAccessor.writeEntryURI(e, e.uri);
             changed = true;
         } else { // otherwise get a copy from SynBioHub
             try {
                 document = SynBioHubAccessor.retrieve(e.uri);
             } catch(SynBioHubException sbhe) {
                 report.failure("Could not retrieve linked object from SynBioHub", true);
-                DictionaryAccessor.writeEntryNotes(e.row_index, report.toString());
+                DictionaryAccessor.writeEntryNotes(e, report.toString());
                 return changed;
             }
         }
@@ -199,7 +198,7 @@ public final class MaintainDictionary {
         TopLevel entity = document.getTopLevel(e.local_uri);
         if(entity==null) {
             report.failure("Could not find or make object "+e.uri, true);
-            DictionaryAccessor.writeEntryNotes(e.row_index, report.toString());
+            DictionaryAccessor.writeEntryNotes(e, report.toString());
             return changed;
         }
         
@@ -240,8 +239,8 @@ public final class MaintainDictionary {
             replaceOldAnnotations(entity,MODIFIED,xmlDateTimeStamp());
             document.write(System.out);
             SynBioHubAccessor.update(document);
-            DictionaryAccessor.writeEntryNotes(e.row_index, report.toString());
-            DictionaryAccessor.writeEntryStub(e.row_index, e.stub);
+            DictionaryAccessor.writeEntryNotes(e, report.toString());
+            DictionaryAccessor.writeEntryStub(e, e.stub);
         }
         
         return changed;
@@ -257,22 +256,21 @@ public final class MaintainDictionary {
             log.info("Beginning dictionary update");
             int mod_count = 0, bad_count = 0;
             for(DictionaryEntry e : entries) {
-                if(e.valid) {
+                if(e.valid && e.validType()) {
                     boolean modified = update_entry(e);
                     mod_count += modified?1:0;
                 } else {
-                    // if the entry is not valid, ignore it
-                    if(!e.valid) {
-                        UpdateReport invalidReport = new UpdateReport();
-                        log.info("Invalid entry for name "+e.name+", skipping");
-                        invalidReport.subsection("Cannot update");
-                        if(e.name==null) invalidReport.failure("Common name is missing");
-                        if(e.type==null) { invalidReport.failure("Type is missing");
-                        } else if(!validType(e.type)) {
-                            invalidReport.failure("Type must be one of "+allTypes());
-                        }
-                        DictionaryAccessor.writeEntryNotes(e.row_index, invalidReport.toString());
+                    // if the entry is not valid, ignore it and report
+                    UpdateReport invalidReport = new UpdateReport();
+                    log.info("Invalid entry for name "+e.name+", skipping");
+                    invalidReport.subsection("Cannot update");
+                    if(e.name==null) invalidReport.failure("Common name is missing");
+                    if(e.type==null) { invalidReport.failure("Type is missing");
+                    } else if(!e.validType()) {
+                        invalidReport.failure("Type must be "+e.allowedTypes());
                     }
+                    DictionaryAccessor.writeEntryNotes(e, invalidReport.toString());
+
                     bad_count++;
                 }
             }
