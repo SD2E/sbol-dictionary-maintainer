@@ -238,7 +238,7 @@ public final class MaintainDictionary {
         
         if(e.attribute && e.attributeDefinition!=null) {
             Set<URI> derivations = entity.getWasDerivedFroms();
-            if(derivations.size()==0 || e.attributeDefinition.equals(derivations.iterator().next())) {
+            if(derivations.size()==0 || !e.attributeDefinition.equals(derivations.iterator().next())) {
                 derivations.clear(); derivations.add(e.attributeDefinition);
                 entity.setWasDerivedFroms(derivations);
                 changed = true;
@@ -251,10 +251,12 @@ public final class MaintainDictionary {
             document.write(System.out);
             SynBioHubAccessor.update(document);
             DictionaryAccessor.writeEntryNotes(e, report.toString());
-            if(e.attribute) {
+            if(!e.attribute) {
                 DictionaryAccessor.writeEntryStub(e, e.stub);
             } else {
-                DictionaryAccessor.writeEntryDefinition(e, e.attributeDefinition);
+                if(e.attributeDefinition!=null) {
+                    DictionaryAccessor.writeEntryDefinition(e, e.attributeDefinition);
+                }
             }
         }
         
@@ -271,7 +273,7 @@ public final class MaintainDictionary {
             log.info("Beginning dictionary update");
             int mod_count = 0, bad_count = 0;
             for(DictionaryEntry e : entries) {
-                if(e.valid && e.validType()) {
+                if(e.valid) {
                     boolean modified = update_entry(e);
                     mod_count += modified?1:0;
                 } else {
