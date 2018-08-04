@@ -21,6 +21,8 @@ public class DictionaryEntry {
     public URI local_uri = null;
     public Map<String,String> labUIDs = new HashMap<>();
     public boolean stub = false;
+    public boolean attribute = false;
+    public URI attributeDefinition = null;
     
     private boolean fullbox(List<Object> row,int i) {
         return row.size()>i && row.get(i).toString().length()>0;
@@ -34,11 +36,19 @@ public class DictionaryEntry {
         
         if(fullbox(row,0)) name = row.get(0).toString();
         if(fullbox(row,1)) type = row.get(1).toString();
+        if(!validType()) valid=false; // if type is restricted, watch out for it
+        if("Attribute".equals(type)) attribute = true; // check if it's an attribute
         if(fullbox(row,2)) uri = URI.create(row.get(2).toString());
         if(fullbox(row,3)) labUIDs.put("BioFAB_UID", row.get(3).toString());
         if(fullbox(row,4)) labUIDs.put("Ginkgo_UID", row.get(4).toString());
         if(fullbox(row,5)) labUIDs.put("Transcriptic_UID", row.get(5).toString());
-        if(fullbox(row,6)) if(row.get(6).toString().equals("Stub")) stub=true;
+        if(fullbox(row,6)) {
+            if(attribute) {
+                attributeDefinition = URI.create(row.get(6).toString());
+            } else {
+                if(row.get(6).toString().equals("Stub")) stub=true;
+            }
+        }
         
         // If the URI is null and the name is not, attempt to resolve:
         if(uri==null && name!=null) {
@@ -63,6 +73,7 @@ public class DictionaryEntry {
     }
 
     public boolean validType() {
+        if(allowedTypes==null) return true; // if we don't have restrictions, don't worry about it
         for(String type : allowedTypes) {
             if(type.equals(this.type)) 
                 return true;

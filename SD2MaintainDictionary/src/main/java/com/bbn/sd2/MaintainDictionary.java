@@ -236,12 +236,28 @@ public final class MaintainDictionary {
             }
         }
         
+        if(e.attribute && e.attributeDefinition!=null) {
+            Set<URI> derivations = entity.getWasDerivedFroms();
+            if(derivations.size()==0 || !e.attributeDefinition.equals(derivations.iterator().next())) {
+                derivations.clear(); derivations.add(e.attributeDefinition);
+                entity.setWasDerivedFroms(derivations);
+                changed = true;
+                report.success("Definition for "+e.name+" is '"+e.attributeDefinition+"'",true);
+            }
+        }
+        
         if(changed) {
             replaceOldAnnotations(entity,MODIFIED,xmlDateTimeStamp());
             document.write(System.out);
             SynBioHubAccessor.update(document);
             DictionaryAccessor.writeEntryNotes(e, report.toString());
-            DictionaryAccessor.writeEntryStub(e, e.stub);
+            if(!e.attribute) {
+                DictionaryAccessor.writeEntryStub(e, e.stub);
+            } else {
+                if(e.attributeDefinition!=null) {
+                    DictionaryAccessor.writeEntryDefinition(e, e.attributeDefinition);
+                }
+            }
         }
         
         return changed;
@@ -261,18 +277,17 @@ public final class MaintainDictionary {
                     boolean modified = update_entry(e);
                     mod_count += modified?1:0;
                 } else {
-                    // if the entry is not valid, ignore it
-                    if(!e.valid) {
-                        UpdateReport invalidReport = new UpdateReport();
-                        log.info("Invalid entry for name "+e.name+", skipping");
-                        invalidReport.subsection("Cannot update");
-                        if(e.name==null) invalidReport.failure("Common name is missing");
-                        if(e.type==null) { invalidReport.failure("Type is missing");
-                        } else if(!validType(e.type)) {
-                            invalidReport.failure("Type must be one of "+allTypes());
-                        }
-                        DictionaryAccessor.writeEntryNotes(e, invalidReport.toString());
+                    // if the entry is not valid, ignore it and report
+                    UpdateReport invalidReport = new UpdateReport();
+                    log.info("Invalid entry for name "+e.name+", skipping");
+                    invalidReport.subsection("Cannot update");
+                    if(e.name==null) invalidReport.failure("Common name is missing");
+                    if(e.type==null) { invalidReport.failure("Type is missing");
+                    } else if(!e.validType()) {
+                        invalidReport.failure("Type must be "+e.allowedTypes());
                     }
+                    DictionaryAccessor.writeEntryNotes(e, invalidReport.toString());
+
                     bad_count++;
                 }
             }
