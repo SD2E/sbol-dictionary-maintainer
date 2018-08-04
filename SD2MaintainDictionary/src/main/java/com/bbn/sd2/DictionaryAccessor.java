@@ -147,8 +147,8 @@ public class DictionaryAccessor {
     }
     
     /**
-     * Write the URI of the entry in row i
-     * @param i  absolute index of row (including header rows)
+     * Write the URI of the entry
+     * @param e  entry to be written
      * @param uri definitive location for dictionary entry definition
      * @throws IOException
      */
@@ -157,8 +157,8 @@ public class DictionaryAccessor {
     }
     
     /**
-     * Write the URI of the entry in row i
-     * @param i  absolute index of row (including header rows)
+     * Write the URI of the entry
+     * @param e  entry to be written
      * @param uri definitive location for dictionary entry definition
      * @throws IOException
      */
@@ -167,8 +167,18 @@ public class DictionaryAccessor {
     }
     
     /**
-     * Write the URI of the entry in row i
-     * @param i  absolute index of row (including header rows)
+     * Write the URI of the entry 
+     * @param e  entry to be written
+     * @param uri definitive location for ontology source definition
+     * @throws IOException
+     */
+    public static void writeEntryDefinition(DictionaryEntry e, URI attributeDefinition) throws IOException {
+        writeLocationText(e.tab+"!G"+e.row_index, attributeDefinition.toString());
+    }
+    
+    /**
+     * Write the URI of the entry
+     * @param e  entry to be written
      * @param notes string to be written
      * @throws IOException
      */
@@ -186,7 +196,7 @@ public class DictionaryAccessor {
             writeLocationText(tab+"!I1", status);
         }
     }
-    
+
 //    public static void main(String... args) throws IOException, GeneralSecurityException {
 //        List<DictionaryEntry> entries = snapshotCurrentDictionary();
 //        if (entries.isEmpty()) {

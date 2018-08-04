@@ -235,12 +235,26 @@ public final class MaintainDictionary {
             }
         }
         
+        if(e.attribute && e.attributeDefinition!=null) {
+            Set<URI> derivations = entity.getWasDerivedFroms();
+            if(derivations.size()==0 || e.attributeDefinition.equals(derivations.iterator().next())) {
+                derivations.clear(); derivations.add(e.attributeDefinition);
+                entity.setWasDerivedFroms(derivations);
+                changed = true;
+                report.success("Definition for "+e.name+" is '"+e.attributeDefinition+"'",true);
+            }
+        }
+        
         if(changed) {
             replaceOldAnnotations(entity,MODIFIED,xmlDateTimeStamp());
             document.write(System.out);
             SynBioHubAccessor.update(document);
             DictionaryAccessor.writeEntryNotes(e, report.toString());
-            DictionaryAccessor.writeEntryStub(e, e.stub);
+            if(e.attribute) {
+                DictionaryAccessor.writeEntryStub(e, e.stub);
+            } else {
+                DictionaryAccessor.writeEntryDefinition(e, e.attributeDefinition);
+            }
         }
         
         return changed;
