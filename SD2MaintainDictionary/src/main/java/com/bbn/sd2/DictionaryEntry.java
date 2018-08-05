@@ -2,6 +2,7 @@ package com.bbn.sd2;
 
 import java.io.IOException;
 import java.net.URI;
+import java.security.GeneralSecurityException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,18 +27,34 @@ public class DictionaryEntry {
         return row.size()>i && row.get(i).toString().length()>0;
     }
     
-    public DictionaryEntry(String tab, int row_number, List<Object> row, String[] allowedTypes) {
+    public DictionaryEntry(String tab, int row_number, List<Object> row, String[] allowedTypes) throws IOException, GeneralSecurityException {
         this.tab = tab;
         this.allowedTypes = allowedTypes;
         row_index = row_number;
         valid = fullbox(row,0) && fullbox(row,1); // only valid if have both name and type
         
-        if(fullbox(row,0)) name = row.get(0).toString();
+        if(fullbox(row,0)) {
+        	name = row.get(0).toString();
+        	if (!DictionaryAccessor.validateUniquenessOfEntry('A', row_number))
+        		this.valid = false;
+        }
         if(fullbox(row,1)) type = row.get(1).toString();
         if(fullbox(row,2)) uri = URI.create(row.get(2).toString());
-        if(fullbox(row,3)) labUIDs.put("BioFAB_UID", row.get(3).toString());
-        if(fullbox(row,4)) labUIDs.put("Ginkgo_UID", row.get(4).toString());
-        if(fullbox(row,5)) labUIDs.put("Transcriptic_UID", row.get(5).toString());
+        if(fullbox(row,3)) {
+        	labUIDs.put("BioFAB_UID", row.get(3).toString());
+        	if (!DictionaryAccessor.validateUniquenessOfEntry('C', row_number))
+        		this.valid = false;
+        }
+        if(fullbox(row,4)) {
+        	labUIDs.put("Ginkgo_UID", row.get(4).toString());
+        	if (!DictionaryAccessor.validateUniquenessOfEntry('D', row_number))
+        		this.valid = false;
+        };
+        if(fullbox(row,5)) {
+        	labUIDs.put("Transcriptic_UID", row.get(5).toString());
+        	if (!DictionaryAccessor.validateUniquenessOfEntry('E', row_number))
+        		this.valid = false;
+        }
         if(fullbox(row,6)) if(row.get(6).toString().equals("Stub")) stub=true;
         
         // If the URI is null and the name is not, attempt to resolve:

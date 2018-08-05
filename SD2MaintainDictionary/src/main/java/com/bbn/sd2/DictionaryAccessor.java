@@ -130,6 +130,41 @@ public class DictionaryAccessor {
         }
         return entries;
     }
+
+    // Reads one column
+    public static List<String> snapshotColumn(char column_id) throws IOException, GeneralSecurityException {
+    	String column_range = "!" + column_id + (row_offset+1) + ":" + (char)(column_id+1);
+    	List<String> cell_vals = new ArrayList<>();
+    	Sheets.Spreadsheets.Values.Get request = service.spreadsheets().values().get(spreadsheetId, column_range);
+    	request.setMajorDimension("COLUMNS");
+    	ValueRange result = request.execute();
+        List<Object> column = result.getValues().get(0);
+        for (Object cell : column) {
+        	cell_vals.add(cell.toString());
+        }
+    	return cell_vals;
+    }
+    
+    // Checks if the cell value at the given spreadsheet coordinate is duplicated elsewhere in the column
+    public static boolean validateUniquenessOfEntry(char column_id, Integer row_number) throws IOException, GeneralSecurityException {
+    	Integer row_index = row_number - DictionaryAccessor.row_offset - 1;
+    	List<String> cell_vals = snapshotColumn(column_id);
+    	if (row_index >= cell_vals.size())  // Last row, no more entries left in this column to validate
+    		return true;
+    	String entry = cell_vals.get(row_index);
+    	
+    	if (!entry.trim().isEmpty())  // Ignore blank cells and their duplicates
+    		return true;
+    	
+    	for (Integer i_cell=0; i_cell < cell_vals.size(); ++i_cell) {
+        	if (i_cell == row_index)
+        		continue;
+        	else if (cell_vals.get(i_cell).equals(entry)) {
+        		return false;
+        	}
+       	}
+    	return true;
+    }
     
     /**
      * Write text to an arbitrary single cell

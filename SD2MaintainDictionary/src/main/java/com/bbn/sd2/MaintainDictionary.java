@@ -94,7 +94,7 @@ public final class MaintainDictionary {
         }
         return false;
     }
-    
+ 
     /**
      * Create a new dummy object
      * @param name Name of the new object, which will also be converted to a displayID and URI
@@ -270,7 +270,8 @@ public final class MaintainDictionary {
                         if(e.type==null) { invalidReport.failure("Type is missing");
                         } else if(!validType(e.type)) {
                             invalidReport.failure("Type must be one of "+allTypes());
-                        }
+                        } else
+                        	invalidReport.failure("Duplicate value detected in one of the columns");
                         DictionaryAccessor.writeEntryNotes(e, invalidReport.toString());
                     }
                     bad_count++;
