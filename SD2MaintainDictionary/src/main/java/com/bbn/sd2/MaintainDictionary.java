@@ -94,7 +94,7 @@ public final class MaintainDictionary {
         }
         return false;
     }
-    
+ 
     /**
      * Create a new dummy object
      * @param name Name of the new object, which will also be converted to a displayID and URI
@@ -277,17 +277,18 @@ public final class MaintainDictionary {
                     boolean modified = update_entry(e);
                     mod_count += modified?1:0;
                 } else {
-                    // if the entry is not valid, ignore it and report
-                    UpdateReport invalidReport = new UpdateReport();
-                    log.info("Invalid entry for name "+e.name+", skipping");
-                    invalidReport.subsection("Cannot update");
-                    if(e.name==null) invalidReport.failure("Common name is missing");
-                    if(e.type==null) { invalidReport.failure("Type is missing");
-                    } else if(!e.validType()) {
-                        invalidReport.failure("Type must be "+e.allowedTypes());
+                    if(!e.valid) {
+                        // if the entry is not valid, ignore it
+                    	UpdateReport invalidReport = new UpdateReport();
+                        log.info("Invalid entry for name "+e.name+", skipping");
+                        invalidReport.subsection("Cannot update");
+                        if(e.name==null) invalidReport.failure("Common name is missing");
+                        if(e.type==null) { invalidReport.failure("Type is missing");
+                        } else if(!validType(e.type)) {
+                            invalidReport.failure("Type must be one of "+allTypes());
+                        }
+                        DictionaryAccessor.writeEntryNotes(e, invalidReport.toString());
                     }
-                    DictionaryAccessor.writeEntryNotes(e, invalidReport.toString());
-
                     bad_count++;
                 }
             }
