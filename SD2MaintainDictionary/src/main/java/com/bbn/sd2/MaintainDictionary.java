@@ -165,7 +165,7 @@ public final class MaintainDictionary {
      * @throws SynBioHubException
      */
     private static boolean update_entry(DictionaryEntry e) throws SBOLConversionException, IOException, SBOLValidationException, SynBioHubException {
-        assert(e.valid);
+        assert(e.status_code == StatusCode.VALID);
         
         UpdateReport report = new UpdateReport();
         // This is never called unless the entry is known valid
@@ -184,6 +184,7 @@ public final class MaintainDictionary {
             e.uri = SynBioHubAccessor.translateLocalURI(e.local_uri);
             report.success("Created stub in SynBioHub",true);
             DictionaryAccessor.writeEntryURI(e, e.uri);
+            DictionaryAccessor.writeEntryNotes(e, report.toString());
             changed = true;
         } else { // otherwise get a copy from SynBioHub
             try {
@@ -273,23 +274,40 @@ public final class MaintainDictionary {
             log.info("Beginning dictionary update");
             int mod_count = 0, bad_count = 0;
             for(DictionaryEntry e : entries) {
-                if(e.valid) {
+                if (e.status_code == StatusCode.VALID) {
                     boolean modified = update_entry(e);
                     mod_count += modified?1:0;
-                } else {
-                    if(!e.valid) {
-                        // if the entry is not valid, ignore it
-                    	UpdateReport invalidReport = new UpdateReport();
-                        log.info("Invalid entry for name "+e.name+", skipping");
-                        invalidReport.subsection("Cannot update");
-                        if(e.name==null) invalidReport.failure("Common name is missing");
-                        if(e.type==null) { invalidReport.failure("Type is missing");
-                        } else if(!validType(e.type)) {
-                            invalidReport.failure("Type must be one of "+allTypes());
-                        }
-                        DictionaryAccessor.writeEntryNotes(e, invalidReport.toString());
-                    }
-                    bad_count++;
+                }
+                else {
+                    // if the entry is not valid, ignore it
+                	UpdateReport invalidReport = new UpdateReport();
+                    invalidReport.subsection("Cannot update");
+                	switch (e.status_code) {
+                		case MISSING_NAME: 
+                			log.info("Invalid entry, missing name, skipping");
+                			invalidReport.failure("Common name is missing");
+                			break;
+                		case MISSING_TYPE: 
+                			log.info("Invalid entry for name "+e.name+", skipping");
+                			invalidReport.failure("Type is missing");
+                			break;
+                		case INVALID_TYPE: 
+                			log.info("Invalid entry for name "+e.name+", skipping");
+                			invalidReport.failure("Type must be one of "+allTypes());
+                			break;
+                		case DUPLICATE_VALUE: 
+                			log.info("Invalid entry for name "+e.name+", skipping");
+                			invalidReport.failure("Multiple entries detected for "+e.name);
+                			break;
+                		case SBH_CONNECTION_FAILED:
+                			break;
+                		case GOOGLE_SHEETS_CONNECTION_FAILED:
+                			break;
+					default:
+						break;
+                	}
+                	DictionaryAccessor.writeEntryNotes(e, invalidReport.toString());
+                	bad_count++;
                 }
             }
             log.info("Completed certification of dictionary");
