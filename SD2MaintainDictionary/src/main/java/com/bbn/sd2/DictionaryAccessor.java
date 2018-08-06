@@ -21,8 +21,11 @@ import java.io.InputStreamReader;
 import java.net.URI;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
@@ -41,6 +44,9 @@ public class DictionaryAccessor {
 
     private DictionaryAccessor() {} // static-only class
     
+    /** Expected headers */
+    private static final List<String> validHeaders = Arrays.asList("Common Name", "Type", "SynBioHub URI", "BioFAB UID", "Ginkgo UID", "Transcriptic UID", "Stub Object?", "Definition URI"); 
+
     /** Type Tabs */
     private static final Map<String,String[]> typeTabs = new HashMap<String,String[]>() {{
         put("Genetic Construct",new String[]{"DNA","RNA"});
@@ -49,8 +55,7 @@ public class DictionaryAccessor {
         put("Protein",new String[]{"Protein"});
         put("Attribute",new String[]{"Attribute"});
     }};
-    
-    
+        
     /** Configure from command-line arguments */
     public static void configure(CommandLine cmd) {
         spreadsheetId = cmd.getOptionValue("gsheet_id","1oLJTTydL_5YPyk-wY-dspjIw_bPZ3oCiWiK0xtG8t3g");
@@ -113,24 +118,42 @@ public class DictionaryAccessor {
 
     // TODO: generalize the readRange
     private final static int row_offset = 2; // number of header rows
-    private final static String readColumns = "!A"+(row_offset+1)+":G";
-    public static List<DictionaryEntry> snapshotCurrentDictionary() throws IOException, GeneralSecurityException {
+    private final static String last_column = "G";
+    public static List<DictionaryEntry> snapshotCurrentDictionary() throws Exception {
         ensureSheetsService();
         // Go to each tab in turn, collecting entries
         List<DictionaryEntry> entries = new ArrayList<>();
         for(String tab : typeTabs.keySet()) {
+        	Hashtable<String, Integer> header_map = getDictionaryHeaders(tab);
+
             // pull the current range
-            String readRange = tab+readColumns;
+            String readRange = tab + "!A" + (row_offset+1) + ":" + last_column;
             ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
             if(response.getValues()==null) continue; // skip empty sheets
             int row_index = row_offset;
             for(List<Object> value : response.getValues()) {
-                entries.add(new DictionaryEntry(tab,++row_index,value,typeTabs.get(tab)));
+                entries.add(new DictionaryEntry(tab, header_map, ++row_index, value, typeTabs.get(tab)));
             }
         }
         return entries;
     }
 
+    public static Hashtable<String, Integer> getDictionaryHeaders(String tab) throws Exception {
+    	Hashtable<String, Integer> header_map = new Hashtable();
+        String headerRange = tab + "!A" + (row_offset) + ":" + last_column + (row_offset);
+        ValueRange response = service.spreadsheets().values().get(spreadsheetId, headerRange).execute();
+        if(response.getValues()==null) return header_map; // skip empty sheets
+        List<Object> headers = response.getValues().get(0);
+        // TODO: validate required headers Type, Common Name, etc.
+        // TODO: if header cells aren't locked, might need to check for duplicate header entries
+        for(int i_h = 0; i_h < headers.size(); ++i_h) {
+        	String header = headers.get(i_h).toString();
+        	if (!validHeaders.contains(header))
+        		throw new Exception("Invalid header " + header + " found in table " + tab);
+        	header_map.put(header, i_h);
+        }    	
+    	return header_map;
+    }
     // Reads one column
     public static List<String> snapshotColumn(char column_id) throws IOException, GeneralSecurityException {
     	String column_range = "!" + column_id + (row_offset+1) + ":" + (char)(column_id+1);

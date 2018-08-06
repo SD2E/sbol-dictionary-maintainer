@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.security.GeneralSecurityException;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -55,7 +56,7 @@ public final class MaintainDictionary {
     private static Map<String,QName> externalTypes = new HashMap<String,QName>(){{
         put("Attribute",new QName("http://sd2e.org/types/#","attribute","sd2"));
     }};
-    
+        
     /**
      * @param type String naming a type
      * @return true if we know how to handle entries of this type

@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.security.GeneralSecurityException;
 import java.util.HashMap;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
@@ -29,12 +30,12 @@ public class DictionaryEntry {
         return row.size()>i && row.get(i).toString().length()>0;
     }
     
-    public DictionaryEntry(String tab, int row_number, List<Object> row, String[] allowedTypes) throws IOException, GeneralSecurityException {
+    public DictionaryEntry(String tab, Hashtable<String, Integer> header_map, int row_number, List<Object> row, String[] allowedTypes) throws IOException, GeneralSecurityException {
         this.tab = tab;
         this.allowedTypes = allowedTypes;
         row_index = row_number;
         
-        if (fullbox(row,0)) {
+        if (fullbox(row, header_map.get("Common Name"))) {
             name = row.get(0).toString();
             if (!DictionaryAccessor.validateUniquenessOfEntry('A', row_number))
             	status_code = StatusCode.DUPLICATE_VALUE;
@@ -42,7 +43,7 @@ public class DictionaryEntry {
         else
           	status_code = StatusCode.MISSING_NAME;
         
-        if(fullbox(row,1)) {
+        if(fullbox(row, header_map.get("Type"))) {
         	type = row.get(1).toString();
         	// if type is restricted, watch out for it
             if(!validType()) 
@@ -53,23 +54,24 @@ public class DictionaryEntry {
         
 
         if("Attribute".equals(type)) attribute = true; // check if it's an attribute
-        if(fullbox(row,2)) uri = URI.create(row.get(2).toString());
-        if(fullbox(row,3)) {
+        if(fullbox(row, header_map.get("SynBioHub URI"))) uri = URI.create(row.get(2).toString());
+        if(fullbox(row, header_map.get("BioFAB UID"))) {
         	labUIDs.put("BioFAB_UID", row.get(3).toString());
         	if (!DictionaryAccessor.validateUniquenessOfEntry('D', row_number))
                 status_code = StatusCode.DUPLICATE_VALUE;
         }
-        if(fullbox(row,4)) {
+        if(fullbox(row, header_map.get("Ginkgo UID"))) {
         	labUIDs.put("Ginkgo_UID", row.get(4).toString());
         	if (!DictionaryAccessor.validateUniquenessOfEntry('E', row_number))
                 status_code = StatusCode.DUPLICATE_VALUE;
         };
-        if(fullbox(row,5)) {
+        if(fullbox(row, header_map.get("Transcriptic UID"))) {
         	labUIDs.put("Transcriptic_UID", row.get(5).toString());
         	if (!DictionaryAccessor.validateUniquenessOfEntry('F', row_number))
                 status_code = StatusCode.DUPLICATE_VALUE;
         }
-        if(fullbox(row,6)) if(row.get(6).toString().equals("Stub")) stub=true;
+        if (header_map.get("Stub Object?") != null && fullbox(row, header_map.get("Stub Object?")))
+        	stub=true;
         
         // If the URI is null and the name is not, attempt to resolve:
         if(uri==null && name!=null) {
