@@ -35,11 +35,8 @@ public class DictionaryEntry {
         this.allowedTypes = allowedTypes;
         row_index = row_number;
         
-        if (fullbox(row, header_map.get("Common Name"))) {
+        if (fullbox(row, header_map.get("Common Name")))
             name = row.get(0).toString();
-            if (!DictionaryAccessor.validateUniquenessOfEntry('A', row_number))
-            	status_code = StatusCode.DUPLICATE_VALUE;
-        }
         else
           	status_code = StatusCode.MISSING_NAME;
         
@@ -55,21 +52,16 @@ public class DictionaryEntry {
 
         if("Attribute".equals(type)) attribute = true; // check if it's an attribute
         if(fullbox(row, header_map.get("SynBioHub URI"))) uri = URI.create(row.get(2).toString());
-        if(fullbox(row, header_map.get("BioFAB UID"))) {
-        	labUIDs.put("BioFAB_UID", row.get(3).toString());
-        	if (!DictionaryAccessor.validateUniquenessOfEntry('D', row_number))
-                status_code = StatusCode.DUPLICATE_VALUE;
-        }
-        if(fullbox(row, header_map.get("Ginkgo UID"))) {
-        	labUIDs.put("Ginkgo_UID", row.get(4).toString());
-        	if (!DictionaryAccessor.validateUniquenessOfEntry('E', row_number))
-                status_code = StatusCode.DUPLICATE_VALUE;
-        };
-        if(fullbox(row, header_map.get("Transcriptic UID"))) {
-        	labUIDs.put("Transcriptic_UID", row.get(5).toString());
-        	if (!DictionaryAccessor.validateUniquenessOfEntry('F', row_number))
-                status_code = StatusCode.DUPLICATE_VALUE;
-        }
+        
+        if(fullbox(row, header_map.get("BioFAB UID")))
+        	labUIDs.put("BioFAB_UID", row.get(header_map.get("BioFAB UID")).toString());
+
+        if(fullbox(row, header_map.get("Ginkgo UID")))
+        	labUIDs.put("Ginkgo_UID", row.get(header_map.get("Ginkgo UID")).toString());
+
+        if(fullbox(row, header_map.get("Transcriptic UID")))
+        	labUIDs.put("Transcriptic_UID", row.get(header_map.get("Transcriptic UID")).toString());
+
         if (header_map.get("Stub Object?") != null && fullbox(row, header_map.get("Stub Object?")))
         	stub=true;
         

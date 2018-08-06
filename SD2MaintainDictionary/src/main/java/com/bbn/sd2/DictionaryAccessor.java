@@ -154,45 +154,101 @@ public class DictionaryAccessor {
         }    	
     	return header_map;
     }
-    // Reads one column
-    public static List<String> snapshotColumn(char column_id) throws IOException, GeneralSecurityException {
-    	String column_range = "!" + column_id + (row_offset+1) + ":" + (char)(column_id+1);
+
+    //    // Reads one column
+//    public static List<String> snapshotColumn(char column_id) throws IOException, GeneralSecurityException {
+//    	String column_range = "!" + column_id + (row_offset+1) + ":" + (char)(column_id+1);
+//    	List<String> cell_vals = new ArrayList<>();
+//    	Sheets.Spreadsheets.Values.Get request = service.spreadsheets().values().get(spreadsheetId, column_range);
+//    	request.setMajorDimension("COLUMNS");
+//    	ValueRange result = request.execute();
+//        List<Object> column = result.getValues().get(0);
+//        for (Object cell : column) {
+//        	cell_vals.add(cell.toString());
+//        }
+//    	return cell_vals;
+//    }
+
+    // Checks if the cell value at the given spreadsheet coordinate is duplicated elsewhere in the column
+    public static void validateUniquenessOfEntries(String header_name, List<DictionaryEntry> entries) throws IOException, GeneralSecurityException {
+//		System.out.println("Validating " + column_id + row_number);
     	List<String> cell_vals = new ArrayList<>();
-    	Sheets.Spreadsheets.Values.Get request = service.spreadsheets().values().get(spreadsheetId, column_range);
-    	request.setMajorDimension("COLUMNS");
-    	ValueRange result = request.execute();
-        List<Object> column = result.getValues().get(0);
-        for (Object cell : column) {
-        	cell_vals.add(cell.toString());
-        }
-    	return cell_vals;
+    	
+    	// Get data column-wise
+    	for(DictionaryEntry e : entries) {
+    		System.out.println(e.row_index);
+        	switch (header_name) {
+        		case "Common Name": 
+        			cell_vals.add(e.name);
+        			break;
+        		case "BioFAB UID": 
+        			cell_vals.add(e.labUIDs.get("BioFAB_UID"));
+        			break;
+        		case "Ginkgo UID":
+        			cell_vals.add(e.labUIDs.get("Ginkgo_UID"));
+        			break;
+        		case "Transcriptic UID":
+        			cell_vals.add(e.labUIDs.get("Transcriptic_UID"));
+        			break;
+        		default:
+        			break;
+        	}
+    	}
+    	for (String val : cell_vals)
+    		System.out.println(val);
+    	
+    	// Scan columns for duplicates
+    	for(DictionaryEntry e : entries) {
+        	Integer cell_index = e.row_index - DictionaryAccessor.row_offset - 1;
+ 
+        	String entry = cell_vals.get(cell_index);
+        	if (entry == null)
+        		continue;
+        	if (entry.trim().isEmpty())  // Ignore blank cells and their duplicates
+        		continue;
+    	
+        	for (Integer i_cell=0; i_cell < cell_vals.size(); ++i_cell) {
+            	System.out.println("Validating " + entry + "\t" + cell_index + "\t" + i_cell );
+        		if (i_cell.equals(cell_index))
+        			continue;
+        		if (cell_vals.get(i_cell) == null)
+        			continue;
+        		else if (cell_vals.get(i_cell).equals(entry)) {
+        			System.out.println("Found duplicated " + header_name + " in rows " + e.row_index + " and " + (i_cell+DictionaryAccessor.row_offset+1));
+        			e.status_code = StatusCode.DUPLICATE_VALUE;
+        		}
+        	}
+        	System.out.println("Validated " + entry);
+
+    	}
+    	System.out.println("Validated " + header_name);
     }
     
-    // Checks if the cell value at the given spreadsheet coordinate is duplicated elsewhere in the column
-    public static boolean validateUniquenessOfEntry(char column_id, Integer row_number) throws IOException, GeneralSecurityException {
-//		System.out.println("Validating " + column_id + row_number);
-
-    	Integer row_index = row_number - DictionaryAccessor.row_offset - 1;
-    	List<String> cell_vals = snapshotColumn(column_id);
-    	if (row_index >= cell_vals.size())  {
-    		return true;
-
-    		// Last row, no more entries left in this column to validate
-    	}
-    	String entry = cell_vals.get(row_index);
-    	if (entry.trim().isEmpty())  // Ignore blank cells and their duplicates
-    		return true;
-    	
-    	for (Integer i_cell=0; i_cell < cell_vals.size(); ++i_cell) {
-        	if (i_cell == row_index)
-        		continue;
-        	else if (cell_vals.get(i_cell).equals(entry)) {
-        		System.out.println("Found duplicate in " + column_id + row_number + ":" + entry);
-        		return false;
-        	}
-       	}
-    	return true;
-    }
+//    // Checks if the cell value at the given spreadsheet coordinate is duplicated elsewhere in the column
+//    public static boolean validateUniquenessOfEntry(char column_id, Integer row_number) throws IOException, GeneralSecurityException {
+////		System.out.println("Validating " + column_id + row_number);
+//
+//    	Integer row_index = row_number - DictionaryAccessor.row_offset - 1;
+//    	List<String> cell_vals = snapshotColumn(column_id);
+//    	if (row_index >= cell_vals.size())  {
+//    		return true;
+//
+//    		// Last row, no more entries left in this column to validate
+//    	}
+//    	String entry = cell_vals.get(row_index);
+//    	if (entry.trim().isEmpty())  // Ignore blank cells and their duplicates
+//    		return true;
+//    	
+//    	for (Integer i_cell=0; i_cell < cell_vals.size(); ++i_cell) {
+//        	if (i_cell == row_index)
+//        		continue;
+//        	else if (cell_vals.get(i_cell).equals(entry)) {
+//        		System.out.println("Found duplicate in " + column_id + row_number + ":" + entry);
+//        		return false;
+//        	}
+//       	}
+//    	return true;
+//    }
     
     /**
      * Write text to an arbitrary single cell

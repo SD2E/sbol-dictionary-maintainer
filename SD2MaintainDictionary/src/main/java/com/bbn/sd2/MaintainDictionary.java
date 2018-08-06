@@ -272,6 +272,10 @@ public final class MaintainDictionary {
         UpdateReport report = new UpdateReport();
         try {
             List<DictionaryEntry> entries = DictionaryAccessor.snapshotCurrentDictionary();
+            DictionaryAccessor.validateUniquenessOfEntries("Common Name", entries);
+            DictionaryAccessor.validateUniquenessOfEntries("BioFAB UID", entries);
+            DictionaryAccessor.validateUniquenessOfEntries("Ginkgo UID", entries);
+            DictionaryAccessor.validateUniquenessOfEntries("Transcriptic UID", entries);
             log.info("Beginning dictionary update");
             int mod_count = 0, bad_count = 0;
             for(DictionaryEntry e : entries) {
