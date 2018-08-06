@@ -51,7 +51,7 @@ public class DictionaryEntry {
         
 
         if("Attribute".equals(type)) attribute = true; // check if it's an attribute
-        if(fullbox(row, header_map.get("SynBioHub URI"))) uri = URI.create(row.get(2).toString());
+        if(fullbox(row, header_map.get("SynBioHub URI"))) uri = URI.create(row.get(header_map.get("SynBioHub URI")).toString());
         
         if(fullbox(row, header_map.get("BioFAB UID")))
         	labUIDs.put("BioFAB_UID", row.get(header_map.get("BioFAB UID")).toString());
