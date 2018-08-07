@@ -16,7 +16,8 @@ public class DictionaryEntry {
     public String tab = null;
     public String[] allowedTypes = null; // What sort of type is this allowed to be
     public int row_index = -1; 
-    public StatusCode status_code = StatusCode.VALID;
+    public StatusCode statusCode = StatusCode.VALID;
+    public String statusLog = null;  // Store additional info for the user, such as when comparing entries across columns
     public String name = null;
     public String type = null;
     public URI uri = null;
@@ -38,16 +39,16 @@ public class DictionaryEntry {
         if (fullbox(row, header_map.get("Common Name")))
             name = row.get(0).toString();
         else
-          	status_code = StatusCode.MISSING_NAME;
+          	statusCode = StatusCode.MISSING_NAME;
         
         if(fullbox(row, header_map.get("Type"))) {
         	type = row.get(1).toString();
         	// if type is restricted, watch out for it
             if(!validType()) 
-            	status_code = StatusCode.INVALID_TYPE; 
+            	statusCode = StatusCode.INVALID_TYPE; 
         }
         else
-            status_code = StatusCode.MISSING_TYPE;
+        	statusCode = StatusCode.MISSING_TYPE;
         
 
         if("Attribute".equals(type)) attribute = true; // check if it's an attribute
@@ -73,11 +74,11 @@ public class DictionaryEntry {
                     DictionaryAccessor.writeEntryURI(this,uri);
                 }
             } catch (SynBioHubException e) {
-                status_code = StatusCode.SBH_CONNECTION_FAILED; // Don't try to make anything if we couldn't check if it exists
+            	statusCode = StatusCode.SBH_CONNECTION_FAILED; // Don't try to make anything if we couldn't check if it exists
                 e.printStackTrace();
                 log.warning("SynBioHub connection failed in trying to resolve URI to name");
             } catch (IOException e) {
-                status_code = StatusCode.GOOGLE_SHEETS_CONNECTION_FAILED; // Don't try to update anything if we couldn't report the URI
+            	statusCode = StatusCode.GOOGLE_SHEETS_CONNECTION_FAILED; // Don't try to update anything if we couldn't report the URI
                 e.printStackTrace();
                 log.warning("Google Sheets connection failed in trying to report resolved URI");
             }

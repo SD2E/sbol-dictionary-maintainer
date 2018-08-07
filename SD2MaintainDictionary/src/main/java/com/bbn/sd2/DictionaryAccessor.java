@@ -169,86 +169,71 @@ public class DictionaryAccessor {
 //    	return cell_vals;
 //    }
 
-    // Checks if the cell value at the given spreadsheet coordinate is duplicated elsewhere in the column
+    /**
+     * Checks if entries under the given header are unique across all sheets in the Dictionary
+     * @param header_name The spreadsheet column in which to look
+     * @param entries A snapshot of the dictionary
+     * @throws IOException
+     * @throw GeneralSecurityException
+     */
     public static void validateUniquenessOfEntries(String header_name, List<DictionaryEntry> entries) throws IOException, GeneralSecurityException {
-//		System.out.println("Validating " + column_id + row_number);
-    	List<String> cell_vals = new ArrayList<>();
-    	
-    	// Get data column-wise
-    	for(DictionaryEntry e : entries) {
-    		System.out.println(e.row_index);
+    	for(int e_i = 0; e_i < entries.size(); ++e_i) {
+    		DictionaryEntry entry_i = entries.get(e_i);
+    		String val_i = null;
         	switch (header_name) {
         		case "Common Name": 
-        			cell_vals.add(e.name);
+        			val_i = entry_i.name;
         			break;
         		case "BioFAB UID": 
-        			cell_vals.add(e.labUIDs.get("BioFAB_UID"));
+        			val_i = entry_i.labUIDs.get("BioFAB_UID");
         			break;
         		case "Ginkgo UID":
-        			cell_vals.add(e.labUIDs.get("Ginkgo_UID"));
+        			val_i = entry_i.labUIDs.get("Ginkgo_UID");
         			break;
         		case "Transcriptic UID":
-        			cell_vals.add(e.labUIDs.get("Transcriptic_UID"));
+        			val_i = entry_i.labUIDs.get("Transcriptic_UID");
         			break;
         		default:
         			break;
         	}
-    	}
-    	for (String val : cell_vals)
-    		System.out.println(val);
-    	
-    	// Scan columns for duplicates
-    	for(DictionaryEntry e : entries) {
-        	Integer cell_index = e.row_index - DictionaryAccessor.row_offset - 1;
- 
-        	String entry = cell_vals.get(cell_index);
-        	if (entry == null)
+        	if (val_i == null)  // Ignore empty cells
         		continue;
-        	if (entry.trim().isEmpty())  // Ignore blank cells and their duplicates
+        	if (val_i.trim().isEmpty())  // Ignore blank cells and their duplicates
         		continue;
-    	
-        	for (Integer i_cell=0; i_cell < cell_vals.size(); ++i_cell) {
-            	System.out.println("Validating " + entry + "\t" + cell_index + "\t" + i_cell );
-        		if (i_cell.equals(cell_index))
+        	for(int e_j = 0; e_j < entries.size(); ++e_j) {
+        		DictionaryEntry entry_j = entries.get(e_j);
+        		String val_j = null;
+        		switch (header_name) {
+            		case "Common Name": 
+            			val_j = entry_j.name;
+            			break;
+            		case "BioFAB UID": 
+            			val_j = entry_j.labUIDs.get("BioFAB_UID");
+            			break;
+            		case "Ginkgo UID":
+            			val_j = entry_j.labUIDs.get("Ginkgo_UID");
+            			break;
+            		case "Transcriptic UID":
+            			val_j = entry_j.labUIDs.get("Transcriptic_UID");
+            			break;
+            		default:
+            			break;
+            	}
+        		if (e_i == e_j)  // Do not flag as a duplicate value when comparing a cell to itself
         			continue;
-        		if (cell_vals.get(i_cell) == null)
-        			continue;
-        		else if (cell_vals.get(i_cell).equals(entry)) {
-        			System.out.println("Found duplicated " + header_name + " in rows " + e.row_index + " and " + (i_cell+DictionaryAccessor.row_offset+1));
-        			e.status_code = StatusCode.DUPLICATE_VALUE;
-        		}
+            	if (val_j == null)  // Ignore empty cells
+            		continue;
+            	if (val_j.trim().isEmpty())  // Ignore blank cells and their duplicates
+            		continue;
+            	if (val_i.equals(val_j)) {  // Found duplicate
+            		if (entry_i.uri == null) {  // If this entry already has a URI, then it is the original, not the duplicate
+            			entry_i.statusLog = "Duplicate entry. Also found " + val_i + " in row " + entry_j.row_index;
+            			entry_i.statusCode = StatusCode.DUPLICATE_VALUE;
+            		}
+            	}
         	}
-        	System.out.println("Validated " + entry);
-
     	}
-    	System.out.println("Validated " + header_name);
     }
-    
-//    // Checks if the cell value at the given spreadsheet coordinate is duplicated elsewhere in the column
-//    public static boolean validateUniquenessOfEntry(char column_id, Integer row_number) throws IOException, GeneralSecurityException {
-////		System.out.println("Validating " + column_id + row_number);
-//
-//    	Integer row_index = row_number - DictionaryAccessor.row_offset - 1;
-//    	List<String> cell_vals = snapshotColumn(column_id);
-//    	if (row_index >= cell_vals.size())  {
-//    		return true;
-//
-//    		// Last row, no more entries left in this column to validate
-//    	}
-//    	String entry = cell_vals.get(row_index);
-//    	if (entry.trim().isEmpty())  // Ignore blank cells and their duplicates
-//    		return true;
-//    	
-//    	for (Integer i_cell=0; i_cell < cell_vals.size(); ++i_cell) {
-//        	if (i_cell == row_index)
-//        		continue;
-//        	else if (cell_vals.get(i_cell).equals(entry)) {
-//        		System.out.println("Found duplicate in " + column_id + row_number + ":" + entry);
-//        		return false;
-//        	}
-//       	}
-//    	return true;
-//    }
     
     /**
      * Write text to an arbitrary single cell
