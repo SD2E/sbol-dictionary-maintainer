@@ -166,7 +166,7 @@ public final class MaintainDictionary {
      * @throws SynBioHubException
      */
     private static boolean update_entry(DictionaryEntry e) throws SBOLConversionException, IOException, SBOLValidationException, SynBioHubException {
-        assert(e.status_code == StatusCode.VALID);
+        assert(e.statusCode == StatusCode.VALID);
         
         UpdateReport report = new UpdateReport();
         // This is never called unless the entry is known valid
@@ -272,10 +272,14 @@ public final class MaintainDictionary {
         UpdateReport report = new UpdateReport();
         try {
             List<DictionaryEntry> entries = DictionaryAccessor.snapshotCurrentDictionary();
+            DictionaryAccessor.validateUniquenessOfEntries("Common Name", entries);
+            DictionaryAccessor.validateUniquenessOfEntries("BioFAB UID", entries);
+            DictionaryAccessor.validateUniquenessOfEntries("Ginkgo UID", entries);
+            DictionaryAccessor.validateUniquenessOfEntries("Transcriptic UID", entries);
             log.info("Beginning dictionary update");
             int mod_count = 0, bad_count = 0;
             for(DictionaryEntry e : entries) {
-                if (e.status_code == StatusCode.VALID) {
+                if (e.statusCode == StatusCode.VALID) {
                     boolean modified = update_entry(e);
                     mod_count += modified?1:0;
                 }
@@ -283,7 +287,7 @@ public final class MaintainDictionary {
                     // if the entry is not valid, ignore it
                 	UpdateReport invalidReport = new UpdateReport();
                     invalidReport.subsection("Cannot update");
-                	switch (e.status_code) {
+                	switch (e.statusCode) {
                 		case MISSING_NAME: 
                 			log.info("Invalid entry, missing name, skipping");
                 			invalidReport.failure("Common name is missing");
@@ -298,7 +302,7 @@ public final class MaintainDictionary {
                 			break;
                 		case DUPLICATE_VALUE: 
                 			log.info("Invalid entry for name "+e.name+", skipping");
-                			invalidReport.failure("Multiple entries detected for "+e.name);
+                			invalidReport.failure(e.statusLog);
                 			break;
                 		case SBH_CONNECTION_FAILED:
                 			break;
