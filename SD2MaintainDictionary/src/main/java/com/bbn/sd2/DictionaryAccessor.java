@@ -13,11 +13,15 @@ import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.store.FileDataStoreFactory;
 import com.google.api.services.sheets.v4.Sheets;
 import com.google.api.services.sheets.v4.SheetsScopes;
+import com.google.api.services.sheets.v4.model.Sheet;
 import com.google.api.services.sheets.v4.model.ValueRange;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.URI;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
@@ -134,10 +138,37 @@ public class DictionaryAccessor {
             for(List<Object> value : response.getValues()) {
                 entries.add(new DictionaryEntry(tab, header_map, ++row_index, value, typeTabs.get(tab)));
             }
-        }
+        }        
         return entries;
     }
+    
+    public static void exportCSV() throws IOException {
+        for(String tab : typeTabs.keySet()) {
+            String readRange = tab + "!A1:" + last_column;
+            ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
+            if(response.getValues()==null) continue; // skip empty sheets
+    		File file = new File("./" + tab + ".txt");
+    		if (!file.exists()) {
+    			file.createNewFile();
+    		}
+    		OutputStream outStream = new FileOutputStream(file); 
+            for(List<Object> row : response.getValues()) {
+            	String csv_row = "";
+            	for (Object cell : row) {
+            		csv_row += cell.toString() + ",";
+            	}
+            	if (csv_row.length() > 1)
+            		csv_row = csv_row.substring(0, csv_row.length() - 1);
+            	csv_row += "\r\n";
+            	outStream.write(csv_row.getBytes());
+            }
+            outStream.flush();
+            outStream.close();
+            System.out.println("Wrote " + file.getAbsolutePath());
+        }
+    }
 
+        
     public static Hashtable<String, Integer> getDictionaryHeaders(String tab) throws Exception {
     	Hashtable<String, Integer> header_map = new Hashtable();
         String headerRange = tab + "!A" + (row_offset) + ":" + last_column + (row_offset);
