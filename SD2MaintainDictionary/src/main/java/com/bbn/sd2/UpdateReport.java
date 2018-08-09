@@ -6,8 +6,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.logging.Logger;
 
-import org.mortbay.log.Log;
-
 class UpdateReport {
     private static Logger log = Logger.getGlobal();
     List<List<String>> reports = new ArrayList<>();
@@ -69,7 +67,7 @@ class UpdateReport {
         String report = "Updated "+getCurrentTimeStamp();
         for(int i=0;i<reports.size();i++) {
             if(i==0) report += ": "; else report += "; "; // add in separator punctuation
-            List subsection = reports.get(i);
+            List<String> subsection = reports.get(i);
             report += subsection.get(0); // add section header or standalone message
             for(int j=1;j<subsection.size();j++) {
                 if(j==1) report += ": "; else report += ", ";// add in separator punctuation

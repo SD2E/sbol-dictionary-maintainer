@@ -40,7 +40,7 @@ public final class MaintainDictionary {
     /** Each spreadsheet tab is only allowed to contain objects of certain types, as determined by this mapping */
     private static Map<String, Set<String>> typeTabs = new HashMap<String,Set<String>>() {{
     	put("Attribute", new HashSet<>(Arrays.asList("Attribute")));
-    	put("Reagent", new HashSet<>(Arrays.asList("Bead", "CHEBI", "DNA", "Protein", "RNA", "Media")));
+    	put("Reagent", new HashSet<>(Arrays.asList("Bead", "CHEBI", "DNA", "Protein", "RNA", "Media", "Stain")));
     	put("Genetic Construct", new HashSet<>(Arrays.asList("DNA", "RNA")));
     	put("Strain", new HashSet<>(Arrays.asList("Strain")));
     	put("Protein", new HashSet<>(Arrays.asList("Protein")));
@@ -62,6 +62,7 @@ public final class MaintainDictionary {
     private static Map<String,URI> moduleTypes = new HashMap<String,URI>(){{
         put("Strain",URI.create("http://purl.obolibrary.org/obo/NCIT_C14419")); 
         put("Media",URI.create("http://purl.obolibrary.org/obo/OBI_0000079")); 
+        put("Stain",URI.create("http://purl.obolibrary.org/obo/NCIT_C841"));
     }};
     
     /** Classes of object that are not stored in SynBioHub, but are grounded in external definitions */
