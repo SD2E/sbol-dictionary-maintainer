@@ -47,19 +47,7 @@ public class DictionaryAccessor {
     private static Sheets service = null;
 
     private DictionaryAccessor() {} // static-only class
-    
-    /** Expected headers */
-    private static final List<String> validHeaders = Arrays.asList("Common Name", "Type", "SynBioHub URI", "BioFAB UID", "Ginkgo UID", "Transcriptic UID", "Stub Object?", "Definition URI"); 
-
-    /** Type Tabs */
-    private static final Map<String,String[]> typeTabs = new HashMap<String,String[]>() {{
-        put("Genetic Construct",new String[]{"DNA","RNA"});
-        put("Reagent",new String[]{"Bead","CHEBI","Media"});
-        put("Strain",new String[]{"Strain"});
-        put("Protein",new String[]{"Protein"});
-        put("Attribute",new String[]{"Attribute"});
-    }};
-        
+            
     /** Configure from command-line arguments */
     public static void configure(CommandLine cmd) {
         spreadsheetId = cmd.getOptionValue("gsheet_id","1oLJTTydL_5YPyk-wY-dspjIw_bPZ3oCiWiK0xtG8t3g");
@@ -127,7 +115,7 @@ public class DictionaryAccessor {
         ensureSheetsService();
         // Go to each tab in turn, collecting entries
         List<DictionaryEntry> entries = new ArrayList<>();
-        for(String tab : typeTabs.keySet()) {
+        for(String tab : MaintainDictionary.tabs()) {
         	Hashtable<String, Integer> header_map = getDictionaryHeaders(tab);
 
             // pull the current range
@@ -136,14 +124,14 @@ public class DictionaryAccessor {
             if(response.getValues()==null) continue; // skip empty sheets
             int row_index = row_offset;
             for(List<Object> value : response.getValues()) {
-                entries.add(new DictionaryEntry(tab, header_map, ++row_index, value, typeTabs.get(tab)));
+                entries.add(new DictionaryEntry(tab, header_map, ++row_index, value));
             }
         }        
         return entries;
     }
     
     public static void exportCSV() throws IOException {
-        for(String tab : typeTabs.keySet()) {
+        for(String tab : MaintainDictionary.tabs()) {
             String readRange = tab + "!A1:" + last_column;
             ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
             if(response.getValues()==null) continue; // skip empty sheets
@@ -179,7 +167,7 @@ public class DictionaryAccessor {
         // TODO: if header cells aren't locked, might need to check for duplicate header entries
         for(int i_h = 0; i_h < headers.size(); ++i_h) {
         	String header = headers.get(i_h).toString();
-        	if (!validHeaders.contains(header))
+        	if (!MaintainDictionary.headers().contains(header))
         		throw new Exception("Invalid header " + header + " found in table " + tab);
         	header_map.put(header, i_h);
         }    	
@@ -327,7 +315,7 @@ public class DictionaryAccessor {
      * @throws IOException
      */
     public static void writeStatusUpdate(String status) throws IOException {
-        for(String tab : typeTabs.keySet()) {
+        for(String tab : MaintainDictionary.tabs()) {
             writeLocationText(tab+"!I1", status);
         }
     }

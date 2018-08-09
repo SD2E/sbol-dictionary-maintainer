@@ -14,7 +14,6 @@ import org.synbiohub.frontend.SynBioHubException;
 public class DictionaryEntry {
     private static Logger log = Logger.getGlobal();
     public String tab = null;
-    public String[] allowedTypes = null; // What sort of type is this allowed to be
     public int row_index = -1; 
     public StatusCode statusCode = StatusCode.VALID;
     public String statusLog = null;  // Store additional info for the user, such as when comparing entries across columns
@@ -31,9 +30,8 @@ public class DictionaryEntry {
         return row.size()>i && row.get(i).toString().length()>0;
     }
     
-    public DictionaryEntry(String tab, Hashtable<String, Integer> header_map, int row_number, List<Object> row, String[] allowedTypes) throws IOException, GeneralSecurityException {
+    public DictionaryEntry(String tab, Hashtable<String, Integer> header_map, int row_number, List<Object> row) throws IOException, GeneralSecurityException {
         this.tab = tab;
-        this.allowedTypes = allowedTypes;
         row_index = row_number;
         
         if (fullbox(row, header_map.get("Common Name")))
@@ -44,7 +42,7 @@ public class DictionaryEntry {
         if(fullbox(row, header_map.get("Type"))) {
         	type = row.get(1).toString();
         	// if type is restricted, watch out for it
-            if(!validType()) 
+            if(!MaintainDictionary.validType(tab, type)) 
             	statusCode = StatusCode.INVALID_TYPE; 
         }
         else
@@ -88,24 +86,24 @@ public class DictionaryEntry {
         }
     }
 
-    public boolean validType() {
-        if(allowedTypes==null) return true; // if we don't have restrictions, don't worry about it
-        for(String type : allowedTypes) {
-            if(type.equals(this.type)) 
-                return true;
-        }
-        return false;
-    }
-
-    public String allowedTypes() {
-        String s = "";
-        if(allowedTypes.length==0) s+="(INTERNAL ERROR: no valid types available)";
-        if(allowedTypes.length>1) s+="one of ";
-        for(int i=0;i<allowedTypes.length;i++) {
-            if(i>0 && allowedTypes.length>2) s+= ", ";
-            if(i>0 && i==allowedTypes.length-1) s+="or ";
-            s+="'"+allowedTypes[i]+"'";
-        }
-        return s;
-    }
+//    public boolean validType() {
+//        if(allowedTypes==null) return true; // if we don't have restrictions, don't worry about it
+//        for(String type : allowedTypes) {
+//            if(type.equals(this.type)) 
+//                return true;
+//        }
+//        return false;
+//    }
+//
+//    public String allowedTypes() {
+//        String s = "";
+//        if(allowedTypes.length==0) s+="(INTERNAL ERROR: no valid types available)";
+//        if(allowedTypes.length>1) s+="one of ";
+//        for(int i=0;i<allowedTypes.length;i++) {
+//            if(i>0 && allowedTypes.length>2) s+= ", ";
+//            if(i>0 && i==allowedTypes.length-1) s+="or ";
+//            s+="'"+allowedTypes[i]+"'";
+//        }
+//        return s;
+//    }
 }

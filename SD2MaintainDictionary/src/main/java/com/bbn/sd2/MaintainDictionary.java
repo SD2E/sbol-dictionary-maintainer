@@ -37,6 +37,18 @@ public final class MaintainDictionary {
     private static final QName CREATED = new QName("http://purl.org/dc/terms/","created","dcterms");
     private static final QName MODIFIED = new QName("http://purl.org/dc/terms/","modified","dcterms");
     
+    /** Each spreadsheet tab is only allowed to contain objects of certain types, as determined by this mapping */
+    private static Map<String, Set<String>> typeTabs = new HashMap<String,Set<String>>() {{
+    	put("Attribute", new HashSet<>(Arrays.asList("Attribute")));
+    	put("Reagent", new HashSet<>(Arrays.asList("Bead", "CHEBI", "DNA", "Protein", "RNA", "Media")));
+    	put("Genetic Construct", new HashSet<>(Arrays.asList("DNA", "RNA")));
+    	put("Strain", new HashSet<>(Arrays.asList("Strain")));
+    	put("Protein", new HashSet<>(Arrays.asList("Protein")));
+    }};
+
+    /** Expected headers */
+    private static final Set<String> validHeaders = new HashSet<>(Arrays.asList("Common Name", "Type", "SynBioHub URI", "BioFAB UID", "Ginkgo UID", "Transcriptic UID", "Stub Object?", "Definition URI")); 
+    
     /** Classes of object that are implemented as a ComponentDefinition */
     private static Map<String,URI> componentTypes = new HashMap<String,URI>() {{
         put("Bead",URI.create("http://purl.obolibrary.org/obo/NCIT_C70671")); 
@@ -58,12 +70,28 @@ public final class MaintainDictionary {
     }};
         
     /**
+     * @param tab String name of a spreadsheet tab
      * @param type String naming a type
      * @return true if we know how to handle entries of this type
      */
-    private static boolean validType(String type) {
-        return componentTypes.containsKey(type) || moduleTypes.containsKey(type) 
-                || externalTypes.containsKey(type);
+    public static boolean validType(String tab, String type) {
+    	return typeTabs.get(tab).contains(type);
+    }
+    
+    /**
+     * @param tab String name of a spreadsheet tab
+     * @return true if the given spreadsheet tab belongs to a predetermined set
+     */
+    public static boolean validTab(String tab) {
+    	return typeTabs.keySet().contains(tab);
+    }
+    
+    public static Set<String> headers() {
+    	return validHeaders;
+    }
+
+    public static Set<String> tabs() {
+    	return typeTabs.keySet();
     }
     
     /** @return A string listing all valid types */
@@ -298,7 +326,7 @@ public final class MaintainDictionary {
                 			break;
                 		case INVALID_TYPE: 
                 			log.info("Invalid entry for name "+e.name+", skipping");
-                			invalidReport.failure("Type must be one of "+allTypes());
+                			invalidReport.failure("Type must be one of "+ typeTabs.get(e.tab).toString());
                 			break;
                 		case DUPLICATE_VALUE: 
                 			log.info("Invalid entry for name "+e.name+", skipping");
