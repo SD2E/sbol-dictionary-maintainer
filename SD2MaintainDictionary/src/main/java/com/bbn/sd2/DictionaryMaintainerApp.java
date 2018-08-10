@@ -5,7 +5,7 @@ import java.util.logging.Logger;
 import org.apache.commons.cli.*;
 
 public class DictionaryMaintainerApp {
-    public static final String VERSION = "1.0.0";
+    public static final String VERSION = "1.0.1-alpha";
     
     private static Logger log = Logger.getGlobal();
     private static int sleepMillis;
