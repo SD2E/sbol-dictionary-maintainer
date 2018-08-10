@@ -42,12 +42,12 @@ public final class SynBioHubAccessor {
     /** Configure from command-line arguments */
     public static void configure(CommandLine cmd) {
         // get server to connect to
-        synbiohubServer = cmd.getOptionValue("server","https://hub.sd2e.org/");
-        if(cmd.hasOption("spoofing"))
+        synbiohubServer = cmd.getOptionValue("server","https://hub-staging.sd2e.org/");
+        if(cmd.hasOption("spoofing")) // for staging, should be: "https://hub.sd2e.org/"
             spoofingPrefix = cmd.getOptionValue("spoofing");
         
         // get collection information
-        collectionPrefix = cmd.getOptionValue("collection","https://hub.sd2e.org/user/sd2e/scratch_test_collection/");
+        collectionPrefix = cmd.getOptionValue("collection","https://hub.sd2e.org/user/sd2e/design/");
         if(!collectionPrefix.endsWith("/")) collectionPrefix = collectionPrefix+"/";
         String collectionName = collectionToCollectionName(collectionPrefix);
         // TODO: is there ever a case on SBH where our collection version is not 1 or collection name is not derivable?

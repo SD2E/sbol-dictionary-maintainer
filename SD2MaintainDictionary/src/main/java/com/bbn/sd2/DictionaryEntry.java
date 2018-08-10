@@ -22,7 +22,8 @@ public class DictionaryEntry {
     public URI uri = null;
     public URI local_uri = null;
     public Map<String,String> labUIDs = new HashMap<>();
-    public boolean stub = false;
+    public enum StubStatus { YES, NO, UNDEFINED };
+    public StubStatus stub = StubStatus.UNDEFINED;
     public boolean attribute = false;
     public URI attributeDefinition = null;
     
@@ -61,8 +62,14 @@ public class DictionaryEntry {
         if(fullbox(row, header_map.get("Transcriptic UID")))
         	labUIDs.put("Transcriptic_UID", row.get(header_map.get("Transcriptic UID")).toString());
 
-        if (header_map.get("Stub Object?") != null && fullbox(row, header_map.get("Stub Object?")))
-        	stub=true;
+        if (header_map.get("Stub Object?") != null && fullbox(row, header_map.get("Stub Object?"))) {
+            String value = row.get(header_map.get("Stub Object?")).toString();
+            if(value.equals("YES")) {
+                stub = StubStatus.YES;
+            } else if(value.equals("NO")) {
+                stub = StubStatus.NO;
+            }
+        }
         
         // If the URI is null and the name is not, attempt to resolve:
         if(uri==null && name!=null) {

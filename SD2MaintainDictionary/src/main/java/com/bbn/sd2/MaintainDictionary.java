@@ -27,6 +27,8 @@ import org.sbolstandard.core2.SBOLValidationException;
 import org.sbolstandard.core2.TopLevel;
 import org.synbiohub.frontend.SynBioHubException;
 
+import com.bbn.sd2.DictionaryEntry.StubStatus;
+
 /**
  * Helper class for importing SBOL into the working compilation.
  */
@@ -242,9 +244,9 @@ public final class MaintainDictionary {
         }
         
         boolean entity_is_stub = (entity.getAnnotation(STUB_ANNOTATION) != null);
-        if(e.stub != entity_is_stub) {
-            e.stub = entity_is_stub;
-            report.note(e.stub?"Stub object":"No longer stub", true);
+        if((entity_is_stub && e.stub!=StubStatus.YES) || (!entity_is_stub && e.stub!=StubStatus.NO)) {
+            e.stub = entity_is_stub ? StubStatus.YES : StubStatus.NO;
+            report.note(entity_is_stub?"Stub object":"Linked with non-stub object", true);
             changed = true;
         }
         

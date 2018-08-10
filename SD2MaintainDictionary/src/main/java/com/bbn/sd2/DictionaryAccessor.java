@@ -1,6 +1,7 @@
 package com.bbn.sd2;
 
 
+import com.bbn.sd2.DictionaryEntry.StubStatus;
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
 import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
@@ -285,8 +286,14 @@ public class DictionaryAccessor {
      * @param uri definitive location for dictionary entry definition
      * @throws IOException
      */
-    public static void writeEntryStub(DictionaryEntry e, boolean stub) throws IOException {
-        writeLocationText(e.tab+"!G"+e.row_index, stub?"Stub":"");
+    public static void writeEntryStub(DictionaryEntry e, StubStatus stub) throws IOException {
+        String value = null;
+        switch(stub) {
+        case UNDEFINED: value = ""; break;
+        case YES: value = "YES"; break;
+        case NO: value = "NO"; break;
+        }
+        writeLocationText(e.tab+"!G"+e.row_index, value);
     }
     
     /**
