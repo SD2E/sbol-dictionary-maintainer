@@ -113,8 +113,9 @@ public final class SynBioHubAccessor {
         }
     }
     
-    // displayID pattern imported from libSBOLj:
-    private static final Pattern displayIDpattern = Pattern.compile("[a-zA-Z_]+[a-zA-Z0-9_]*");
+    // displayID pattern imported from libSBOLj and split into sub-patterns:
+    private static final Pattern displayIDfirstChar = Pattern.compile("[a-zA-Z_]");
+    private static final Pattern displayIDlaterChar = Pattern.compile("[a-zA-Z0-9_]");
     /**
      * Convert an arbitrary item name to a "safe" name for a displayID
      * @param name 
@@ -124,10 +125,24 @@ public final class SynBioHubAccessor {
         String sanitized = "";
         for(int i=0;i<name.length();i++) {
             String character = name.substring(i, i+1);
-            if(displayIDpattern.matcher(character).matches()) {
-                sanitized += character;
+            if(i==0) {
+                if(displayIDfirstChar.matcher(character).matches()) {
+                    sanitized += character;
+                } else {
+                    sanitized += "_"; // avoid starting with a number
+                    if(displayIDlaterChar.matcher(character).matches()) {
+                        sanitized += character;
+                    } else {
+                        sanitized += "0x"+String.format("%H", character);
+                    }
+                }
             } else {
-                sanitized += "0x"+String.format("%H", character);
+                if(displayIDlaterChar.matcher(character).matches()) {
+                    sanitized += character;
+                } else {
+                    sanitized += "0x"+String.format("%H", character);
+                }
+                
             }
         }
         return sanitized;
