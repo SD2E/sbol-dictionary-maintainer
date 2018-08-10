@@ -26,3 +26,14 @@ To run, execute:
 ````
 java -jar sd2-dictionary-maintainer.jar -p {SynBioHub password}
 ````
+
+## Standard SD2 Instances
+
+All work should be tested with the staging copy before being deployed live:
+
+* Staging:
+	* Sheet ID: `1xyFH-QqYzoswvI3pPJRlBqw9PQdlp91ds3mZoPc3wCU`
+	* Server: `-S "https://hub-staging.sd2e.org/" -f "https://hub.sd2e.org/"`
+* Deployment:
+   * Sheet ID: `1oLJTTydL_5YPyk-wY-dspjIw_bPZ3oCiWiK0xtG8t3g`
+	* Server: `-S "https://hub.sd2e.org/"`

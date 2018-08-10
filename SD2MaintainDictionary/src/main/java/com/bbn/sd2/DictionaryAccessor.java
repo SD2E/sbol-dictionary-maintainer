@@ -50,7 +50,7 @@ public class DictionaryAccessor {
             
     /** Configure from command-line arguments */
     public static void configure(CommandLine cmd) {
-        spreadsheetId = cmd.getOptionValue("gsheet_id","1oLJTTydL_5YPyk-wY-dspjIw_bPZ3oCiWiK0xtG8t3g");
+        spreadsheetId = cmd.getOptionValue("gsheet_id","1xyFH-QqYzoswvI3pPJRlBqw9PQdlp91ds3mZoPc3wCU");
 
     }
 
