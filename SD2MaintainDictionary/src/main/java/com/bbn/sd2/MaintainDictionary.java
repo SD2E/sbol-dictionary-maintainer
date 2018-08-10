@@ -40,7 +40,7 @@ public final class MaintainDictionary {
     /** Each spreadsheet tab is only allowed to contain objects of certain types, as determined by this mapping */
     private static Map<String, Set<String>> typeTabs = new HashMap<String,Set<String>>() {{
     	put("Attribute", new HashSet<>(Arrays.asList("Attribute")));
-    	put("Reagent", new HashSet<>(Arrays.asList("Bead", "CHEBI", "DNA", "Protein", "RNA", "Media")));
+    	put("Reagent", new HashSet<>(Arrays.asList("Bead", "CHEBI", "DNA", "Protein", "RNA", "Media", "Stain", "Buffer", "Solution")));
     	put("Genetic Construct", new HashSet<>(Arrays.asList("DNA", "RNA")));
     	put("Strain", new HashSet<>(Arrays.asList("Strain")));
     	put("Protein", new HashSet<>(Arrays.asList("Protein")));
@@ -52,16 +52,19 @@ public final class MaintainDictionary {
     /** Classes of object that are implemented as a ComponentDefinition */
     private static Map<String,URI> componentTypes = new HashMap<String,URI>() {{
         put("Bead",URI.create("http://purl.obolibrary.org/obo/NCIT_C70671")); 
-        put("CHEBI",ComponentDefinition.SMALL_MOLECULE); 
+        put("CHEBI",URI.create("http://identifiers.org/chebi/CHEBI:24431")); 
         put("DNA",ComponentDefinition.DNA); 
-        put("Protein",ComponentDefinition.PROTEIN); 
+        put("Protein",ComponentDefinition.PROTEIN);
         put("RNA",ComponentDefinition.RNA); 
     }};
     
     /** Classes of object that are implemented as a ModuleDefinition */
     private static Map<String,URI> moduleTypes = new HashMap<String,URI>(){{
         put("Strain",URI.create("http://purl.obolibrary.org/obo/NCIT_C14419")); 
-        put("Media",URI.create("http://purl.obolibrary.org/obo/OBI_0000079")); 
+        put("Media",URI.create("http://purl.obolibrary.org/obo/NCIT_C85504")); 
+        put("Stain",URI.create("http://purl.obolibrary.org/obo/NCIT_C841"));
+        put("Buffer",URI.create("http://purl.obolibrary.org/obo/NCIT_C70815"));
+        put("Solution",URI.create("http://purl.obolibrary.org/obo/NCIT_C70830"));
     }};
     
     /** Classes of object that are not stored in SynBioHub, but are grounded in external definitions */
