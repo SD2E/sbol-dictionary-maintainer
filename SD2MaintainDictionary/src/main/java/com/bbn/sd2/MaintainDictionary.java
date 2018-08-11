@@ -44,7 +44,8 @@ public final class MaintainDictionary {
     	put("Attribute", new HashSet<>(Arrays.asList("Attribute")));
     	put("Reagent", new HashSet<>(Arrays.asList("Bead", "CHEBI", "DNA", "Protein", "RNA", "Media", "Stain", "Buffer", "Solution")));
     	put("Genetic Construct", new HashSet<>(Arrays.asList("DNA", "RNA")));
-    	put("Strain", new HashSet<>(Arrays.asList("Strain")));
+    	// Kludge: remove "strain" until SynBioHub issue #663 is fixed
+    	//put("Strain", new HashSet<>(Arrays.asList("Strain")));
     	put("Protein", new HashSet<>(Arrays.asList("Protein")));
     }};
 
@@ -283,7 +284,8 @@ public final class MaintainDictionary {
         
         if(changed) {
             replaceOldAnnotations(entity,MODIFIED,xmlDateTimeStamp());
-            document.write(System.out);
+            // turn off update write until SynBioHub issue #663 is fixed
+            //document.write(System.out);
             SynBioHubAccessor.update(document);
             DictionaryAccessor.writeEntryNotes(e, report.toString());
             if(!e.attribute) {
