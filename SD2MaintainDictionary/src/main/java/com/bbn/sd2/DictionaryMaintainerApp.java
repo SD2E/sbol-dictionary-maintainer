@@ -20,7 +20,7 @@ public class DictionaryMaintainerApp {
         DictionaryAccessor.configure(cmd);
         SynBioHubAccessor.configure(cmd);
 
-
+        kludge_heartbeat_reporter();
         // Run as an eternal loop, reporting errors but not crashing out
         do {
             DictionaryAccessor.restart();
@@ -40,9 +40,23 @@ public class DictionaryMaintainerApp {
                 }
             } while(!oneShot);
         } while(!oneShot);
+        kludge_heartbeat_stop = true;
         log.info("Dictionary Maintainer run complete, shutting down.");
     }
     
+    private static boolean kludge_heartbeat_stop = false;
+    private static void kludge_heartbeat_reporter() {
+        new Thread() { public void run() {
+            int count=0;
+            while(!kludge_heartbeat_stop) {
+                System.out.println("[Still Running: "+(count++)+" minutes]");
+                try { Thread.sleep(60000); } catch(InterruptedException e) {}
+            }
+            System.out.println("[Stopped]");
+        }}.start();
+        
+    }
+
     /**
      * Prepare and 
      * @param args Current command-line arguments, to be passed in
