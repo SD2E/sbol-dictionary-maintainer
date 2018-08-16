@@ -110,7 +110,7 @@ public class DictionaryAccessor {
 
     // TODO: generalize the readRange
     private final static int row_offset = 2; // number of header rows
-    private final static String last_column = "H";
+    private final static char last_column = (char)('A' + MaintainDictionary.headers().size() - 1);
     public static List<DictionaryEntry> snapshotCurrentDictionary() throws Exception {
         log.info("Taking snapshot");
     	ensureSheetsService();
@@ -168,8 +168,7 @@ public class DictionaryAccessor {
         
     public static Hashtable<String, Integer> getDictionaryHeaders(String tab) throws Exception {
     	Hashtable<String, Integer> header_map = new Hashtable();
-        String headerRange = tab + "!A" + row_offset + ":H" + row_offset;
-//        String headerRange = tab + "!A" + (row_offset) + ":" + last_column + (row_offset);
+        String headerRange = tab + "!A" + row_offset + ":" + last_column + row_offset;
         ValueRange response = service.spreadsheets().values().get(spreadsheetId, headerRange).execute();
         if(response.getValues()==null) return header_map; // skip empty sheets
         List<Object> headers = response.getValues().get(0);
