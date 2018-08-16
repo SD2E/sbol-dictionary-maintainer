@@ -39,6 +39,9 @@ public final class MaintainDictionary {
     private static final QName CREATED = new QName("http://purl.org/dc/terms/","created","dcterms");
     private static final QName MODIFIED = new QName("http://purl.org/dc/terms/","modified","dcterms");
     
+    /** The ID for the current SD2E Dictionary Spreadsheet */
+    private static final String SD2E_DICTIONARY = "1oLJTTydL_5YPyk-wY-dspjIw_bPZ3oCiWiK0xtG8t3g";
+    
     /** Each spreadsheet tab is only allowed to contain objects of certain types, as determined by this mapping */
     private static Map<String, Set<String>> typeTabs = new HashMap<String,Set<String>>() {{
     	put("Attribute", new HashSet<>(Arrays.asList("Attribute")));
@@ -99,6 +102,15 @@ public final class MaintainDictionary {
     	return typeTabs.keySet();
     }
     
+    public static String defaultSpreadsheet() {
+    	return SD2E_DICTIONARY;
+    }
+    
+    public static Set<String> getAllowedTypesForTab(String tab) {
+    	return typeTabs.get(tab);
+    }
+    
+    
     /** @return A string listing all valid types */
     private static String allTypes() {
         Set<String> s = new HashSet<>(componentTypes.keySet());
@@ -134,11 +146,9 @@ public final class MaintainDictionary {
      * @param name Name of the new object, which will also be converted to a displayID and URI
      * @param type 
      * @return
-     * @throws SBOLValidationException
-     * @throws SynBioHubException
-     * @throws SBOLConversionException 
+     * @throws Exception 
      */
-    private static SBOLDocument createStubOfType(String name, String type) throws SBOLValidationException, SynBioHubException, SBOLConversionException {
+    private static SBOLDocument createStubOfType(String name, String type) throws Exception {
         SBOLDocument document = SynBioHubAccessor.newBlankDocument();
         String displayId = SynBioHubAccessor.sanitizeNameToDisplayID(name);
         TopLevel tl = null;
@@ -193,12 +203,9 @@ public final class MaintainDictionary {
      * Update a single dictionary entry, assumed to be valid
      * @param e entry to be updated
      * @return true if anything has been changed
-     * @throws SBOLConversionException
-     * @throws IOException
-     * @throws SBOLValidationException
-     * @throws SynBioHubException
+     * @throws Exception 
      */
-    private static boolean update_entry(DictionaryEntry e) throws SBOLConversionException, IOException, SBOLValidationException, SynBioHubException {
+    private static boolean update_entry(DictionaryEntry e) throws Exception {
         assert(e.statusCode == StatusCode.VALID);
         
         UpdateReport report = new UpdateReport();
@@ -357,5 +364,6 @@ public final class MaintainDictionary {
             report.failure("Dictionary update failed with exception of type "+e.getClass().getName(), true);
         }
         DictionaryAccessor.writeStatusUpdate("SD2 Dictionary ("+DictionaryMaintainerApp.VERSION+") "+report.toString());
+        //DictionaryAccessor.exportCSV();
     }
 }

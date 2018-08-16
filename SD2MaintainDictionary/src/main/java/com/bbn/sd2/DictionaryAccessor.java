@@ -51,8 +51,7 @@ public class DictionaryAccessor {
             
     /** Configure from command-line arguments */
     public static void configure(CommandLine cmd) {
-        spreadsheetId = cmd.getOptionValue("gsheet_id","1xyFH-QqYzoswvI3pPJRlBqw9PQdlp91ds3mZoPc3wCU");
-
+    	spreadsheetId = cmd.getOptionValue("gsheet_id", MaintainDictionary.defaultSpreadsheet());
     }
 
     /** Make a clean boot, tearing down old instance if needed */
@@ -111,23 +110,32 @@ public class DictionaryAccessor {
 
     // TODO: generalize the readRange
     private final static int row_offset = 2; // number of header rows
-    private final static String last_column = "G";
+    private final static String last_column = "H";
     public static List<DictionaryEntry> snapshotCurrentDictionary() throws Exception {
-        ensureSheetsService();
+        log.info("Taking snapshot");
+    	ensureSheetsService();
         // Go to each tab in turn, collecting entries
         List<DictionaryEntry> entries = new ArrayList<>();
         for(String tab : MaintainDictionary.tabs()) {
+            log.info("Scanning tab " + tab);
         	Hashtable<String, Integer> header_map = getDictionaryHeaders(tab);
-
-            // pull the current range
+        	System.out.println(header_map.toString());
+        	
+            // Pull the current range
             String readRange = tab + "!A" + (row_offset+1) + ":" + last_column;
             ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
-            if(response.getValues()==null) continue; // skip empty sheets
+            if(response.getValues()==null) {
+            	log.info("No entries found on this tab");
+            	continue; // skip empty sheets
+            }
             int row_index = row_offset;
+            
             for(List<Object> value : response.getValues()) {
                 entries.add(new DictionaryEntry(tab, header_map, ++row_index, value));
             }
-        }        
+        }     
+        log.info("Read " + entries.size());
+
         return entries;
     }
     
@@ -160,7 +168,8 @@ public class DictionaryAccessor {
         
     public static Hashtable<String, Integer> getDictionaryHeaders(String tab) throws Exception {
     	Hashtable<String, Integer> header_map = new Hashtable();
-        String headerRange = tab + "!A" + (row_offset) + ":" + last_column + (row_offset);
+        String headerRange = tab + "!A" + row_offset + ":H" + row_offset;
+//        String headerRange = tab + "!A" + (row_offset) + ":" + last_column + (row_offset);
         ValueRange response = service.spreadsheets().values().get(spreadsheetId, headerRange).execute();
         if(response.getValues()==null) return header_map; // skip empty sheets
         List<Object> headers = response.getValues().get(0);

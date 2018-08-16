@@ -9,8 +9,9 @@ public class DictionaryMaintainerApp {
     
     private static Logger log = Logger.getGlobal();
     private static int sleepMillis;
+    private static boolean stopSignal = false;
     
-    public static void main(String... args) {
+    public static void main(String... args) throws Exception {
         // Parse arguments and configure
         CommandLine cmd = parseArguments(args);
         sleepMillis = 1000*Integer.valueOf(cmd.getOptionValue("sleep","60"));
@@ -18,11 +19,11 @@ public class DictionaryMaintainerApp {
         SynBioHubAccessor.configure(cmd);
 
         // Run as an eternal loop, reporting errors but not crashing out
-        while(true) {
+        while(!stopSignal) {
             DictionaryAccessor.restart();
             SynBioHubAccessor.restart();
             
-            while(true) {
+            while(!stopSignal) {
                 try {
                     MaintainDictionary.maintain_dictionary();
                 } catch(Exception e) {
@@ -34,6 +35,8 @@ public class DictionaryMaintainerApp {
                 } catch(InterruptedException e) {
                     // ignore sleep interruptions
                 }
+                if (cmd.getOptionValue("test_mode", "").equals("yes"))
+                	setStopSignal();   		
             }
         }
     }
@@ -52,7 +55,8 @@ public class DictionaryMaintainerApp {
         options.addOption("g", "gsheet_id", true, "Google Sheets ID of spreadsheet");
         options.addOption("S", "server", true, "URL for SynBioHub server");
         options.addOption("f", "spoofing", true, "URL prefix for a test SynBioHub server spoofing as another");
-        
+        options.addOption("t", "test_mode", true, "Run only one update for testing purposes, then terminate");
+
         // Parse arguments
         CommandLine cmd = null;
         try {
@@ -65,5 +69,12 @@ public class DictionaryMaintainerApp {
         }
         return cmd;
     }
-
+    
+    public static void setStopSignal() {
+    	stopSignal = true;
+    }
+    
+    public static void restart() {
+    	stopSignal = false;
+    }
 }
