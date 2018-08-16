@@ -44,7 +44,7 @@ public final class SynBioHubAccessor {
     /** Configure from command-line arguments */
     public static void configure(CommandLine cmd) {
         // get server to connect to
-        synbiohubServer = cmd.getOptionValue("server","https://hub.sd2e.org/");
+        synbiohubServer = cmd.getOptionValue("server","https://hub-staging.sd2e.org/");
         if(!synbiohubServer.endsWith("/")) synbiohubServer = synbiohubServer+"/";
 
         // get collection information
