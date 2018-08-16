@@ -165,7 +165,6 @@ public final class SynBioHubAccessor {
      */
     public static SBOLDocument retrieve(URI uri) throws SynBioHubException, SBOLValidationException {
         ensureSynBioHubConnection();
-        
         SBOLDocument document = repository.getSBOL(uri);
         // convert to our own namespace:
         return document.changeURIPrefixVersion(localNamespace, null, "1");
@@ -174,9 +173,9 @@ public final class SynBioHubAccessor {
     /**
      * Push a document to SynBioHub to be updated
      * @param document Object to be updated
-     * @throws Exception 
+     * @throws SynBioHubException 
      */
-    public static void update(SBOLDocument document) throws Exception {
+    public static void update(SBOLDocument document) throws SynBioHubException {
         ensureSynBioHubConnection();
         repository.addToCollection(collectionID, true, document);
     }

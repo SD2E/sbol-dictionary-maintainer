@@ -40,7 +40,7 @@ public final class MaintainDictionary {
     private static final QName MODIFIED = new QName("http://purl.org/dc/terms/","modified","dcterms");
     
     /** The ID for the current SD2E Dictionary Spreadsheet */
-    private static final String SD2E_DICTIONARY = "1oLJTTydL_5YPyk-wY-dspjIw_bPZ3oCiWiK0xtG8t3g";
+    private static final String SD2E_DICTIONARY = "1xyFH-QqYzoswvI3pPJRlBqw9PQdlp91ds3mZoPc3wCU";
     
     /** Each spreadsheet tab is only allowed to contain objects of certain types, as determined by this mapping */
     private static Map<String, Set<String>> typeTabs = new HashMap<String,Set<String>>() {{
@@ -148,7 +148,7 @@ public final class MaintainDictionary {
      * @return
      * @throws Exception 
      */
-    private static SBOLDocument createStubOfType(String name, String type) throws Exception {
+    private static SBOLDocument createStubOfType(String name, String type) throws SBOLValidationException, SynBioHubException, SBOLConversionException {
         SBOLDocument document = SynBioHubAccessor.newBlankDocument();
         String displayId = SynBioHubAccessor.sanitizeNameToDisplayID(name);
         TopLevel tl = null;
@@ -205,7 +205,7 @@ public final class MaintainDictionary {
      * @return true if anything has been changed
      * @throws Exception 
      */
-    private static boolean update_entry(DictionaryEntry e) throws Exception {
+    private static boolean update_entry(DictionaryEntry e) throws SBOLConversionException, IOException, SBOLValidationException, SynBioHubException {
         assert(e.statusCode == StatusCode.VALID);
         
         UpdateReport report = new UpdateReport();
