@@ -30,7 +30,7 @@ public class DictionaryTestShared {
     	if (gsheet_id == null) {
 			fail("Unable to initialize test environment. No Google Sheet was provided.");
     	}
-    	String[] options = new String[] {"-s", "0", "-S", "https://hub-staging.sd2e.org", "-f", "https://hub.sd2e.org", "-g", gsheet_id, "-t", "yes", "-p", ""};
+    	String[] options = new String[] {"-s", "0", "-S", "https://hub-staging.sd2e.org", "-f", "https://hub.sd2e.org", "-g", gsheet_id, "-t", "true", "-p", ""};
 		options[options.length - 1] = password;  // Add password to command line
 
     	CommandLine cmd;
