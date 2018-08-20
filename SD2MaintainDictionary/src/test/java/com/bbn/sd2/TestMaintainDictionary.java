@@ -125,8 +125,8 @@ public class TestMaintainDictionary {
 		// Populate each tab with objects
 		for (String tab : MaintainDictionary.tabs()) {
         	Hashtable<String, Integer> header_map = DictionaryAccessor.getDictionaryHeaders(tab);
-        	System.out.println(header_map.toString());
-			// Populate one new object for each allowed type
+
+        	// Populate a dummy object for each allowed type
         	for (String type : MaintainDictionary.getAllowedTypesForTab(tab)) {
 				String[] row_entries = new String[header_map.keySet().size()];
 				for (String header : header_map.keySet()) {
