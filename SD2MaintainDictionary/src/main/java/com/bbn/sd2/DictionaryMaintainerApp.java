@@ -9,35 +9,58 @@ public class DictionaryMaintainerApp {
     
     private static Logger log = Logger.getGlobal();
     private static int sleepMillis;
+    private static boolean stopSignal = false;
+
     
-    public static void main(String... args) {
+    public static void main(String... args) throws Exception {
         // Parse arguments and configure
         CommandLine cmd = parseArguments(args);
         sleepMillis = 1000*Integer.valueOf(cmd.getOptionValue("sleep","60"));
+        log.info("Dictionary Maintainer initializing "+(cmd.hasOption("test_mode")?"in single update mode":"for continuous operation"));
         DictionaryAccessor.configure(cmd);
         SynBioHubAccessor.configure(cmd);
+        kludge_heartbeat_reporter();
 
         // Run as an eternal loop, reporting errors but not crashing out
-        while(true) {
+        while(!stopSignal) {
             DictionaryAccessor.restart();
             SynBioHubAccessor.restart();
             
-            while(true) {
+            while(!stopSignal) {
                 try {
                     MaintainDictionary.maintain_dictionary();
                 } catch(Exception e) {
                     log.severe("Exception while maintaining dictionary:");
                     e.printStackTrace();
                 }
-                try {
-                    Thread.sleep(sleepMillis);
-                } catch(InterruptedException e) {
-                    // ignore sleep interruptions
+                if (cmd.hasOption("test_mode"))
+                	setStopSignal();
+                else {
+                	try {
+                		Thread.sleep(sleepMillis);
+                	} catch(InterruptedException e) {
+                		// ignore sleep interruptions
+                	}
                 }
             }
         }
+        kludge_heartbeat_stop = true;
+        log.info("Dictionary Maintainer run complete, shutting down.");
     }
     
+    private static boolean kludge_heartbeat_stop = false;
+    private static void kludge_heartbeat_reporter() {
+        new Thread() { public void run() {
+            int count=0;
+            while(!kludge_heartbeat_stop) {
+                System.out.println("[Still Running: "+(count++)+" minutes]");
+                try { Thread.sleep(60000); } catch(InterruptedException e) {}
+            }
+            System.out.println("[Stopped]");
+        }}.start();
+        
+    }
+
     /**
      * Prepare and 
      * @param args Current command-line arguments, to be passed in
@@ -52,7 +75,8 @@ public class DictionaryMaintainerApp {
         options.addOption("g", "gsheet_id", true, "Google Sheets ID of spreadsheet");
         options.addOption("S", "server", true, "URL for SynBioHub server");
         options.addOption("f", "spoofing", true, "URL prefix for a test SynBioHub server spoofing as another");
-        
+        options.addOption("t", "test_mode", false, "Run only one update for testing purposes, then terminate");
+
         // Parse arguments
         CommandLine cmd = null;
         try {
@@ -65,5 +89,12 @@ public class DictionaryMaintainerApp {
         }
         return cmd;
     }
-
+    
+    public static void setStopSignal() {
+    	stopSignal = true;
+    }
+    
+    public static void restart() {
+    	stopSignal = false;
+    }
 }

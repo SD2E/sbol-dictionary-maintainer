@@ -32,16 +32,17 @@ public class DictionaryEntry {
     }
     
     public DictionaryEntry(String tab, Hashtable<String, Integer> header_map, int row_number, List<Object> row) throws IOException, GeneralSecurityException {
-        this.tab = tab;
+    	this.tab = tab;
         row_index = row_number;
         
         if (fullbox(row, header_map.get("Common Name")))
-            name = row.get(0).toString();
+            name = row.get(header_map.get("Common Name")).toString();
         else
           	statusCode = StatusCode.MISSING_NAME;
-        
+        log.info("Scanning entry " + name);
+
         if(fullbox(row, header_map.get("Type"))) {
-        	type = row.get(1).toString();
+        	type = row.get(header_map.get("Type")).toString();
         	// if type is restricted, watch out for it
             if(!MaintainDictionary.validType(tab, type)) 
             	statusCode = StatusCode.INVALID_TYPE; 
