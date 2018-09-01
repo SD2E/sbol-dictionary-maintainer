@@ -165,7 +165,7 @@ public final class SynBioHubAccessor {
      */
     public static SBOLDocument retrieve(URI uri) throws SynBioHubException, SBOLValidationException {
         ensureSynBioHubConnection();
-        SBOLDocument document = repository.getSBOL(uri);
+        SBOLDocument document = repository.getSBOL(uri, false);
         // convert to our own namespace:
         return document.changeURIPrefixVersion(localNamespace, null, "1");
     }
@@ -209,10 +209,13 @@ public final class SynBioHubAccessor {
      * @throws SynBioHubException 
      * @throws URISyntaxException */
     public static void clean() throws SynBioHubException, URISyntaxException {
-    	// Can't use removeSBOL method with spoofed URIs, results in SynBioHubException:
-    	// Object URI does not start with correct URI prefix for this repository.
- //    	repository.removeSBOL(new URI("https://hub-staging.sd2e.org/user/sd2e/scratch_test/scratch_test_collection/1"));
+    	// Using removeSBOL method successfully deletes the object but throws SynBioHubException anyway. See SBH issue #671
+    	try {
+    		repository.removeSBOL(new URI("https://hub.sd2e.org/user/sd2e/scratch_test/scratch_test_collection/1"));
+    	} catch (SynBioHubException e) {
+    	}
     }
+   
     
     /**
      * The main function here creates a scratch test collection
