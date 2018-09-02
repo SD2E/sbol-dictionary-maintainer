@@ -182,7 +182,7 @@ public final class MaintainDictionary {
     }
     
     /** Get current date/time in standard XML format */
-    private static String xmlDateTimeStamp() {
+    public static String xmlDateTimeStamp() {
         // Standard XML date format
         SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX");
         // return current date/time
