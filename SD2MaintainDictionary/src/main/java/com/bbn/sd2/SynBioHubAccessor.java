@@ -37,7 +37,7 @@ public final class SynBioHubAccessor {
     
     private SynBioHubAccessor() {} // static-only class
     
-    private static String collectionToCollectionName(String collectionPrefix) {
+    public static String collectionToCollectionName(String collectionPrefix) {
         return collectionPrefix.substring(collectionPrefix.substring(0, collectionPrefix.length()-1).lastIndexOf('/') + 1,collectionPrefix.length() - 1);
     }
     
@@ -233,7 +233,7 @@ public final class SynBioHubAccessor {
         configure(new DefaultParser().parse(options, args));
         ensureSynBioHubConnection();
         try {
-        	repository.createCollection(collectionToCollectionName(collectionPrefix), "1", "SD Dictionary Collection", "A test Collection targeted by SD2 Dictionary Maintainer", "", true);
+        	repository.createCollection(collectionToCollectionName(collectionPrefix), "1", "SD Dictionary Collection", "A test Collection targeted by SD2 Dictionary Maintainer", "", false);
         } catch (SynBioHubException sbh_e) {
         	// Assume Collection already exists and that caused the error, though there could be another type of error
         } catch (Exception e) {
