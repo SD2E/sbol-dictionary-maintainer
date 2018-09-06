@@ -233,6 +233,7 @@ public final class MaintainDictionary {
             } catch(SynBioHubException sbhe) {
                 report.failure("Could not retrieve linked object " + e.uri + " from SynBioHub", true);
                 DictionaryAccessor.writeEntryNotes(e, report.toString());
+                log.severe(sbhe.getMessage());
                 return changed;
             }
         }
