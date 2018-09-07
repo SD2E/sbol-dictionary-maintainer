@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.security.GeneralSecurityException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
@@ -206,14 +207,24 @@ public final class MaintainDictionary {
     }
 
     /** 
-     * Remove all prior instances of an annotation and replace with the new one 
+     * Clear all prior instances of an annotation and replace with the new one 
      * @throws SBOLValidationException 
      */
-    private static void replaceOldAnnotations(TopLevel entity, QName key, String value) throws SBOLValidationException {
-    	while(entity.getAnnotation(key)!=null) { 
+    private static void replaceOldAnnotations(TopLevel entity, QName key, String new_value) throws SBOLValidationException {
+        Set<String> new_values = new HashSet<String>() {{ add(new_value); }};
+        replaceOldAnnotations(entity, key, new_values);
+    }
+    
+    /** 
+     * Clear all prior instances of an annotation and replace with a set of new annotations 
+     * @throws SBOLValidationException 
+     */
+    private static void replaceOldAnnotations(TopLevel entity, QName key, Set<String> new_values) throws SBOLValidationException {
+        while(entity.getAnnotation(key)!=null) { 
             entity.removeAnnotation(entity.getAnnotation(key));
         }
-        entity.createAnnotation(key, value);
+        for (String value : new_values)
+        	entity.createAnnotation(key, value);
     }
 
     /**
@@ -252,7 +263,7 @@ public final class MaintainDictionary {
                 report.failure("Could not retrieve linked object from SynBioHub", true);
                 log.severe(sbhe.getMessage());
                 DictionaryAccessor.writeEntryNotes(e, report.toString());
-                log.severe(sbhe.getMessage());
+                System.out.println(sbhe.getMessage());
                 return changed;
             }
         }
@@ -292,16 +303,26 @@ public final class MaintainDictionary {
         }
         
         // if the entry has lab entries, check if they match and (re)annotate if different
-        if(!e.labUIDs.isEmpty()) {
-            for(String labKey : e.labUIDs.keySet()) {
-                String labValue = e.labUIDs.get(labKey);
-                QName labQKey = new QName("http://sd2e.org#",labKey,"sd2");
-                Annotation annotation = entity.getAnnotation(labQKey);
-                if(annotation==null || !labValue.equals(annotation.getStringValue())) {
-                    replaceOldAnnotations(entity,labQKey,labValue);
-                    changed = true;
-                    report.success(labKey+" for "+e.name+" is '"+labValue+"'",true);
-                }
+        for(String labKey : e.labUIDs.keySet()) {
+            QName labQKey = new QName("http://sd2e.org#",labKey,"sd2");
+            String labEntry = e.labUIDs.get(labKey);
+            Set<String> labIds = new HashSet<String>();
+            if(labEntry != null)
+            	labIds.addAll(Arrays.asList(labEntry.split("\\s*,\\s*")));  // Separate by comma and whitespace
+            Set<String> currentIds = new HashSet<String>();
+            List<Annotation> annotations = entity.getAnnotations();
+            for (Annotation ann : annotations) {
+            	if(ann.getQName().equals(labQKey)) {
+            		currentIds.add(ann.getStringValue());
+            	}
+            }
+            if(!labIds.equals(currentIds)) {
+                replaceOldAnnotations(entity,labQKey,labIds);
+                changed = true;
+                if(labIds.size() > 0)
+                	report.success(labKey+" for "+e.name+" is "+String.join(", ", labIds),true);
+                else
+                	report.success("Deleted lab UID", true);
             }
         }
        

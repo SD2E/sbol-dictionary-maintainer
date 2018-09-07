@@ -56,13 +56,19 @@ public class DictionaryEntry {
         
         if(fullbox(row, header_map.get("BioFAB UID")))
         	labUIDs.put("BioFAB_UID", row.get(header_map.get("BioFAB UID")).toString());
-
+        else
+        	labUIDs.put("BioFAB_UID", null);
+        	
         if(fullbox(row, header_map.get("Ginkgo UID")))
         	labUIDs.put("Ginkgo_UID", row.get(header_map.get("Ginkgo UID")).toString());
-
+        else
+        	labUIDs.put("Ginkgo_UID", null);
+        
         if(fullbox(row, header_map.get("Transcriptic UID")))
         	labUIDs.put("Transcriptic_UID", row.get(header_map.get("Transcriptic UID")).toString());
-
+        else
+        	labUIDs.put("Transcriptic_UID", null);
+        
         if (header_map.get("Stub Object?") != null && fullbox(row, header_map.get("Stub Object?"))) {
             String value = row.get(header_map.get("Stub Object?")).toString();
             if(value.equals("YES")) {
