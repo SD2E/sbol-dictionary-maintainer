@@ -288,10 +288,8 @@ public class DictionaryAccessor {
             	if (val_j.trim().isEmpty())  // Ignore blank cells and their duplicates
             		continue;
             	if (val_i.equals(val_j)) {  // Found duplicate
-            		if (entry_i.uri == null) {  // If this entry already has a URI, then it is the original, not the duplicate
-            			entry_i.statusLog = "Duplicate entry. Also found " + val_i + " in row " + entry_j.row_index;
-            			entry_i.statusCode = StatusCode.DUPLICATE_VALUE;
-            		}
+        			entry_i.statusLog = "Duplicate entry. Also found " + val_i + " in row " + entry_j.row_index + " of " + entry_j.tab;
+        			entry_i.statusCode = StatusCode.DUPLICATE_VALUE;
             	}
         	}
     	}

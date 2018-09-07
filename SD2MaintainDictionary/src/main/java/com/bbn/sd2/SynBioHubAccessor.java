@@ -166,6 +166,7 @@ public final class SynBioHubAccessor {
     public static SBOLDocument retrieve(URI uri) throws SynBioHubException, SBOLValidationException {
         ensureSynBioHubConnection();
         SBOLDocument document = repository.getSBOL(uri, false);
+
         // convert to our own namespace:
         return document.changeURIPrefixVersion(localNamespace, null, "1");
     }
@@ -203,6 +204,10 @@ public final class SynBioHubAccessor {
 
     public static String getCollectionPrefix() {
     	return collectionPrefix;
+    }
+    
+    public static URI getCollectionID() {
+    	return collectionID;
     }
     
     /** Used for clean-up after tests 

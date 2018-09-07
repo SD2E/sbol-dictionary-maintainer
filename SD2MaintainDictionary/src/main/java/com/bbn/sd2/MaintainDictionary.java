@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
 import javax.xml.namespace.QName;
 
 import org.sbolstandard.core2.Annotation;
+import org.sbolstandard.core2.Collection;
 import org.sbolstandard.core2.ComponentDefinition;
 import org.sbolstandard.core2.GenericTopLevel;
 import org.sbolstandard.core2.ModuleDefinition;
@@ -49,6 +50,7 @@ public final class MaintainDictionary {
     	put("Genetic Construct", new HashSet<>(Arrays.asList("DNA", "RNA")));
     	put("Strain", new HashSet<>(Arrays.asList("Strain")));
     	put("Protein", new HashSet<>(Arrays.asList("Protein")));
+    	put("Collections", new HashSet<>(Arrays.asList("Challenge Problem")));
     }};
 
     /** Expected headers */
@@ -70,6 +72,13 @@ public final class MaintainDictionary {
         put("Stain",URI.create("http://purl.obolibrary.org/obo/NCIT_C841"));
         put("Buffer",URI.create("http://purl.obolibrary.org/obo/NCIT_C70815"));
         put("Solution",URI.create("http://purl.obolibrary.org/obo/NCIT_C70830"));
+    }};
+ 
+    /** Classes of object that are implemented as a Collection.
+     *  Currently no subtypes of Collections other than Challenge Problem are 
+     *  specified, though that may change in the future */
+    private static Map<String,URI> collectionTypes = new HashMap<String,URI>(){{
+        put("Challenge Problem",URI.create("")); 
     }};
     
     /** Classes of object that are not stored in SynBioHub, but are grounded in external definitions */
@@ -135,6 +144,9 @@ public final class MaintainDictionary {
                 GenericTopLevel tl = (GenericTopLevel)entity;
                 return tl.getRDFType().equals(externalTypes.get(type));
             }
+        } else if(collectionTypes.containsKey(type)) {
+        	if (entity instanceof Collection)	
+        		return true;
         } else {
             log.info("Don't recognize type "+type);
         }
@@ -163,6 +175,11 @@ public final class MaintainDictionary {
             m.addRole(moduleTypes.get(type));
             m.createAnnotation(STUB_ANNOTATION, "true");
             tl = m;
+        } else if(collectionTypes.containsKey(type)) {
+            log.info("Creating stub Collection for "+name);
+            Collection c = document.createCollection(displayId, "1");
+            c.createAnnotation(STUB_ANNOTATION, "true");
+            tl = c;
         } else if(externalTypes.containsKey(type)) {
             log.info("Creating definition placeholder for "+name);
             tl = document.createGenericTopLevel(displayId, "1", externalTypes.get(type));
@@ -212,6 +229,7 @@ public final class MaintainDictionary {
         // This is never called unless the entry is known valid
         SBOLDocument document = null;
         boolean changed = false;
+        
         // if the entry has no URI, create per type
         if(e.uri==null) {
             document = createStubOfType(e.name, e.type);
@@ -231,17 +249,25 @@ public final class MaintainDictionary {
             try {
                 document = SynBioHubAccessor.retrieve(e.uri);
             } catch(SynBioHubException sbhe) {
-                report.failure("Could not retrieve linked object " + e.uri + " from SynBioHub", true);
+                report.failure("Could not retrieve linked object from SynBioHub", true);
+                log.severe(sbhe.getMessage());
                 DictionaryAccessor.writeEntryNotes(e, report.toString());
                 log.severe(sbhe.getMessage());
                 return changed;
             }
         }
         
+        // Check if object belongs to the target Collection
+    	if(e.uri.equals(e.local_uri)) { // this condition occurs when the entry does not belong to the target collection, probably a more explicit and better way to check for it
+    		report.failure("Object does not belong to Dictionary collection " + SynBioHubAccessor.getCollectionID());
+            DictionaryAccessor.writeEntryNotes(e, report.toString());
+    		return changed;
+    	}
+    	
         // Make sure we've got the entity to update in our hands:
         TopLevel entity = document.getTopLevel(e.local_uri);
         if(entity==null) {
-            report.failure("Could not find or make object "+e.uri, true);
+            report.failure("Could not find or make object", true);
             DictionaryAccessor.writeEntryNotes(e, report.toString());
             return changed;
         }
@@ -278,7 +304,7 @@ public final class MaintainDictionary {
                 }
             }
         }
-        
+       
         if(e.attribute && e.attributeDefinition!=null) {
             Set<URI> derivations = entity.getWasDerivedFroms();
             if(derivations.size()==0 || !e.attributeDefinition.equals(derivations.iterator().next())) {
@@ -302,7 +328,6 @@ public final class MaintainDictionary {
                 }
             }
         }
-        
         return changed;
     }
     
