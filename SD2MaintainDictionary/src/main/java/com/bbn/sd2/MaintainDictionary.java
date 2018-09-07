@@ -225,6 +225,7 @@ public final class MaintainDictionary {
         // This is never called unless the entry is known valid
         SBOLDocument document = null;
         boolean changed = false;
+        
         // if the entry has no URI, create per type
         if(e.uri==null) {
             document = createStubOfType(e.name, e.type);
@@ -251,10 +252,17 @@ public final class MaintainDictionary {
             }
         }
         
+        // Check if object belongs to the target Collection
+    	if(e.uri.equals(e.local_uri)) { // this condition occurs when the entry does not belong to the target collection, probably a more explicit and better way to check for it
+    		report.failure("Object does not belong to Dictionary collection " + SynBioHubAccessor.getCollectionID());
+            DictionaryAccessor.writeEntryNotes(e, report.toString());
+    		return changed;
+    	}
+    	
         // Make sure we've got the entity to update in our hands:
         TopLevel entity = document.getTopLevel(e.local_uri);
         if(entity==null) {
-            report.failure("Could not find or make object "+e.uri, true);
+            report.failure("Could not find or make object", true);
             DictionaryAccessor.writeEntryNotes(e, report.toString());
             return changed;
         }
@@ -291,7 +299,7 @@ public final class MaintainDictionary {
                 }
             }
         }
-        
+       
         if(e.attribute && e.attributeDefinition!=null) {
             Set<URI> derivations = entity.getWasDerivedFroms();
             if(derivations.size()==0 || !e.attributeDefinition.equals(derivations.iterator().next())) {
@@ -316,7 +324,6 @@ public final class MaintainDictionary {
                 }
             }
         }
-        
         return changed;
     }
     
