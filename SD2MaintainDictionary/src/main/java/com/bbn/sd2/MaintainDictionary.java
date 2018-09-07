@@ -176,6 +176,11 @@ public final class MaintainDictionary {
             m.addRole(moduleTypes.get(type));
             m.createAnnotation(STUB_ANNOTATION, "true");
             tl = m;
+        } else if(collectionTypes.containsKey(type)) {
+            log.info("Creating stub Collection for "+name);
+            Collection c = document.createCollection(displayId, "1");
+            c.createAnnotation(STUB_ANNOTATION, "true");
+            tl = c;
         } else if(externalTypes.containsKey(type)) {
             log.info("Creating definition placeholder for "+name);
             tl = document.createGenericTopLevel(displayId, "1", externalTypes.get(type));
