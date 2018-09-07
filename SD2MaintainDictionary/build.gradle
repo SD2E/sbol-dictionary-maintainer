@@ -2,10 +2,14 @@ apply plugin: 'java'
 
 repositories {
     mavenCentral()
+
+	maven {
+   		url 'https://oss.sonatype.org/content/repositories/snapshots/'
+	}
 }
 
 dependencies {
-	compile "org.sbolstandard:libSBOLj:2.3.1"
+	compile 'org.sbolstandard:libSBOLj:2.3.2-SNAPSHOT'
     compile 'com.google.api-client:google-api-client:1.23.0'
     compile 'com.google.oauth-client:google-oauth-client-jetty:1.23.0'
     compile 'com.google.apis:google-api-services-sheets:v4-rev516-1.23.0'
