@@ -47,8 +47,7 @@ public final class MaintainDictionary {
     	put("Attribute", new HashSet<>(Arrays.asList("Attribute")));
     	put("Reagent", new HashSet<>(Arrays.asList("Bead", "CHEBI", "DNA", "Protein", "RNA", "Media", "Stain", "Buffer", "Solution")));
     	put("Genetic Construct", new HashSet<>(Arrays.asList("DNA", "RNA")));
-    	// Kludge: remove "strain" until SynBioHub issue #663 is fixed
-    	//put("Strain", new HashSet<>(Arrays.asList("Strain")));
+    	put("Strain", new HashSet<>(Arrays.asList("Strain")));
     	put("Protein", new HashSet<>(Arrays.asList("Protein")));
     }};
 
@@ -194,7 +193,7 @@ public final class MaintainDictionary {
      * @throws SBOLValidationException 
      */
     private static void replaceOldAnnotations(TopLevel entity, QName key, String value) throws SBOLValidationException {
-        while(entity.getAnnotation(key)!=null) { 
+    	while(entity.getAnnotation(key)!=null) { 
             entity.removeAnnotation(entity.getAnnotation(key));
         }
         entity.createAnnotation(key, value);
@@ -232,8 +231,9 @@ public final class MaintainDictionary {
             try {
                 document = SynBioHubAccessor.retrieve(e.uri);
             } catch(SynBioHubException sbhe) {
-                report.failure("Could not retrieve linked object from SynBioHub", true);
+                report.failure("Could not retrieve linked object " + e.uri + " from SynBioHub", true);
                 DictionaryAccessor.writeEntryNotes(e, report.toString());
+                log.severe(sbhe.getMessage());
                 return changed;
             }
         }
@@ -291,8 +291,7 @@ public final class MaintainDictionary {
         
         if(changed) {
             replaceOldAnnotations(entity,MODIFIED,xmlDateTimeStamp());
-            // turn off update write until SynBioHub issue #663 is fixed
-            //document.write(System.out);
+            document.write(System.out);
             SynBioHubAccessor.update(document);
             DictionaryAccessor.writeEntryNotes(e, report.toString());
             if(!e.attribute) {

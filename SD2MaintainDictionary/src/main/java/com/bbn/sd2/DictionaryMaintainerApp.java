@@ -1,5 +1,7 @@
 package com.bbn.sd2;
 
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
 import java.util.logging.Logger;
 
 import org.apache.commons.cli.*;
@@ -28,7 +30,11 @@ public class DictionaryMaintainerApp {
             
             while(!stopSignal) {
                 try {
+                	long start = System.currentTimeMillis();
                     MaintainDictionary.maintain_dictionary();
+                    long end = System.currentTimeMillis();
+                    NumberFormat formatter = new DecimalFormat("#0.00000");
+                    log.info("Dictionary update executed in " + formatter.format((end - start) / 1000d) + " seconds");
                 } catch(Exception e) {
                     log.severe("Exception while maintaining dictionary:");
                     e.printStackTrace();
