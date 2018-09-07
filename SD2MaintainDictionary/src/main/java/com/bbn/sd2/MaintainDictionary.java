@@ -41,7 +41,7 @@ public final class MaintainDictionary {
     private static final QName CREATED = new QName("http://purl.org/dc/terms/","created","dcterms");
     private static final QName MODIFIED = new QName("http://purl.org/dc/terms/","modified","dcterms");
     
-    /** The ID for the current SD2E Dictionary Spreadsheet */
+    /** The ID for the default Dictionary Spreadsheet, currently the "staging instance" */
     private static final String SD2E_DICTIONARY = "1xyFH-QqYzoswvI3pPJRlBqw9PQdlp91ds3mZoPc3wCU";
     
     /** Each spreadsheet tab is only allowed to contain objects of certain types, as determined by this mapping */
@@ -263,7 +263,6 @@ public final class MaintainDictionary {
                 report.failure("Could not retrieve linked object from SynBioHub", true);
                 log.severe(sbhe.getMessage());
                 DictionaryAccessor.writeEntryNotes(e, report.toString());
-                System.out.println(sbhe.getMessage());
                 return changed;
             }
         }
