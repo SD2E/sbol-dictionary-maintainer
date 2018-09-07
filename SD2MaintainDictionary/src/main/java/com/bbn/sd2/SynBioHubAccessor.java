@@ -37,7 +37,7 @@ public final class SynBioHubAccessor {
     
     private SynBioHubAccessor() {} // static-only class
     
-    private static String collectionToCollectionName(String collectionPrefix) {
+    public static String collectionToCollectionName(String collectionPrefix) {
         return collectionPrefix.substring(collectionPrefix.substring(0, collectionPrefix.length()-1).lastIndexOf('/') + 1,collectionPrefix.length() - 1);
     }
     
@@ -214,10 +214,13 @@ public final class SynBioHubAccessor {
      * @throws SynBioHubException 
      * @throws URISyntaxException */
     public static void clean() throws SynBioHubException, URISyntaxException {
-    	// Can't use removeSBOL method with spoofed URIs, results in SynBioHubException:
-    	// Object URI does not start with correct URI prefix for this repository.
- //    	repository.removeSBOL(new URI("https://hub-staging.sd2e.org/user/sd2e/scratch_test/scratch_test_collection/1"));
+    	// Using removeSBOL method successfully deletes the object but throws SynBioHubException anyway. See SBH issue #671
+    	try {
+    		repository.removeSBOL(new URI("https://hub.sd2e.org/user/sd2e/scratch_test/scratch_test_collection/1"));
+    	} catch (SynBioHubException e) {
+    	}
     }
+   
     
     /**
      * The main function here creates a scratch test collection
@@ -235,7 +238,7 @@ public final class SynBioHubAccessor {
         configure(new DefaultParser().parse(options, args));
         ensureSynBioHubConnection();
         try {
-        	repository.createCollection(collectionToCollectionName(collectionPrefix), "1", "SD Dictionary Collection", "A test Collection targeted by SD2 Dictionary Maintainer", "", true);
+        	repository.createCollection(collectionToCollectionName(collectionPrefix), "1", "SD Dictionary Collection", "A test Collection targeted by SD2 Dictionary Maintainer", "", false);
         } catch (SynBioHubException sbh_e) {
         	// Assume Collection already exists and that caused the error, though there could be another type of error
         } catch (Exception e) {

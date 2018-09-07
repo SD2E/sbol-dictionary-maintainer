@@ -8,12 +8,19 @@ import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.http.HttpTransport;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.store.FileDataStoreFactory;
+import com.google.api.services.drive.Drive;
+import com.google.api.services.drive.DriveScopes;
 import com.google.api.services.sheets.v4.Sheets;
 import com.google.api.services.sheets.v4.SheetsScopes;
+import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
+import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetResponse;
+import com.google.api.services.sheets.v4.model.DuplicateSheetRequest;
+import com.google.api.services.sheets.v4.model.Request;
 import com.google.api.services.sheets.v4.model.Sheet;
 import com.google.api.services.sheets.v4.model.ValueRange;
 
@@ -119,7 +126,6 @@ public class DictionaryAccessor {
         for(String tab : MaintainDictionary.tabs()) {
             log.info("Scanning tab " + tab);
         	Hashtable<String, Integer> header_map = getDictionaryHeaders(tab);
-        	System.out.println(header_map.toString());
         	
             // Pull the current range
             String readRange = tab + "!A" + (row_offset+1) + ":" + last_column;
@@ -137,6 +143,34 @@ public class DictionaryAccessor {
         log.info("Read " + entries.size());
 
         return entries;
+    }
+
+    public static void backup() throws IOException, GeneralSecurityException {
+    	String GDRIVE_BACKUP_FOLDER = "1e3Lz-fzqZpEDKrH52Xso4bG0_y46Da1x";
+        ensureSheetsService();
+	    InputStream in = DictionaryAccessor.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
+	    GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
+		HttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
+		GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
+                HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, Arrays.asList(DriveScopes.DRIVE_FILE))
+                .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
+                .setAccessType("offline")
+                .build();
+		Credential credential = new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("owner");
+		Drive drive = new Drive.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential)
+                .setApplicationName(APPLICATION_NAME)
+                .build();
+			try {
+				String backup_filename = drive.files().get(spreadsheetId).execute().getName();
+				backup_filename += "_backup_" + MaintainDictionary.xmlDateTimeStamp();
+				com.google.api.services.drive.model.File copiedFile = new com.google.api.services.drive.model.File();
+				copiedFile.setName(backup_filename);
+				copiedFile.setParents(Collections.singletonList(GDRIVE_BACKUP_FOLDER));
+				drive.files().copy(spreadsheetId, copiedFile).execute();
+				System.out.println("Successfully wrote back-up to " + backup_filename);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}	
     }
     
     public static void exportCSV() throws IOException {

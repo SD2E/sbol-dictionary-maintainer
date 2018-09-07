@@ -1,5 +1,7 @@
 package com.bbn.sd2;
 
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.logging.Logger;
@@ -22,6 +24,7 @@ public class DictionaryMaintainerApp {
         DictionaryAccessor.configure(cmd);
         SynBioHubAccessor.configure(cmd);
         kludge_heartbeat_reporter();
+        start_backup(1);
 
         // Run as an eternal loop, reporting errors but not crashing out
         while(!stopSignal) {
@@ -53,7 +56,27 @@ public class DictionaryMaintainerApp {
         kludge_heartbeat_stop = true;
         log.info("Dictionary Maintainer run complete, shutting down.");
     }
-    
+ 
+    private static void start_backup(int days) {
+    	
+    	new Thread() { 
+    		public void run() {
+    			while(!kludge_heartbeat_stop) {
+        			log.info("Executing Dictionary backup");
+					try {
+						DictionaryAccessor.backup();
+					} catch (IOException | GeneralSecurityException e) {
+						e.printStackTrace();
+					} 
+					try {
+						Thread.sleep(days*24*3600*1000);
+					}
+					catch(InterruptedException e) {}
+    			}
+    		}
+    	}.start();
+    }   
+  
     private static boolean kludge_heartbeat_stop = false;
     private static void kludge_heartbeat_reporter() {
         new Thread() { public void run() {
@@ -64,7 +87,6 @@ public class DictionaryMaintainerApp {
             }
             System.out.println("[Stopped]");
         }}.start();
-        
     }
 
     /**
