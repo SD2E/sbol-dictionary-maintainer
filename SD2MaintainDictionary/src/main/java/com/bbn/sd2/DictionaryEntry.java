@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.logging.Logger;
 
 import org.synbiohub.frontend.SynBioHubException;
@@ -26,6 +27,16 @@ public class DictionaryEntry {
     public StubStatus stub = StubStatus.UNDEFINED;
     public boolean attribute = false;
     public URI attributeDefinition = null;
+    public Hashtable<String, Integer> header_map;
+    public static Map<String, String> labUIDMap =
+        new TreeMap<String, String>() {
+            private static final long serialVersionUID = 1L;
+            {
+                put("BioFAB UID", "BioFAB_UID");
+                put("Ginkgo UID", "Ginkgo_UID");
+                put("Transcriptic UID", "Transcriptic_UID");
+            }
+        };
     
     private boolean fullbox(List<Object> row,int i) {
         return row.size()>i && row.get(i).toString().length()>0;
@@ -54,20 +65,14 @@ public class DictionaryEntry {
         if("Attribute".equals(type)) attribute = true; // check if it's an attribute
         if(fullbox(row, header_map.get("SynBioHub URI"))) uri = URI.create(row.get(header_map.get("SynBioHub URI")).toString());
         
-        if(fullbox(row, header_map.get("BioFAB UID")))
-        	labUIDs.put("BioFAB_UID", row.get(header_map.get("BioFAB UID")).toString());
-        else
-        	labUIDs.put("BioFAB_UID", null);
-        	
-        if(fullbox(row, header_map.get("Ginkgo UID")))
-        	labUIDs.put("Ginkgo_UID", row.get(header_map.get("Ginkgo UID")).toString());
-        else
-        	labUIDs.put("Ginkgo_UID", null);
-        
-        if(fullbox(row, header_map.get("Transcriptic UID")))
-        	labUIDs.put("Transcriptic_UID", row.get(header_map.get("Transcriptic UID")).toString());
-        else
-        	labUIDs.put("Transcriptic_UID", null);
+        for(String uidLabel : labUIDMap.keySet()) {
+            String uidTag = labUIDMap.get(uidLabel);
+
+            if(fullbox(row, header_map.get(uidLabel)))
+                labUIDs.put(uidTag, row.get(header_map.get(uidLabel)).toString());
+             else
+                labUIDs.put(uidTag, null);
+        }
         
         if (header_map.get("Stub Object?") != null && fullbox(row, header_map.get("Stub Object?"))) {
             String value = row.get(header_map.get("Stub Object?")).toString();
@@ -78,6 +83,8 @@ public class DictionaryEntry {
             }
         }
         
+        this.header_map = header_map;
+
         // If the URI is null and the name is not, attempt to resolve:
         if(uri==null && name!=null) {
             try {

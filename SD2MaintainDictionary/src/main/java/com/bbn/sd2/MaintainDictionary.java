@@ -55,8 +55,8 @@ public final class MaintainDictionary {
     }};
 
     /** Expected headers */
-    private static final Set<String> validHeaders = new HashSet<>(Arrays.asList("Common Name", "Type", "SynBioHub URI", "BioFAB UID", "Ginkgo UID", "Transcriptic UID", "Stub Object?", "Definition URI")); 
-    
+    private static final Set<String> validHeaders = new HashSet<>(Arrays.asList("Common Name", "Type", "SynBioHub URI", "Stub Object?", "Definition URI"));
+
     /** Classes of object that are implemented as a ComponentDefinition */
     private static Map<String,URI> componentTypes = new HashMap<String,URI>() {{
         put("Bead",URI.create("http://purl.obolibrary.org/obo/NCIT_C70671")); 
@@ -105,7 +105,12 @@ public final class MaintainDictionary {
     }
     
     public static Set<String> headers() {
-    	return validHeaders;
+        Set<String> allValidHeaders = new HashSet<String>();
+
+        allValidHeaders.addAll(validHeaders);
+        allValidHeaders.addAll(DictionaryEntry.labUIDMap.keySet());
+
+        return allValidHeaders;
     }
 
     public static Set<String> tabs() {
@@ -359,9 +364,9 @@ public final class MaintainDictionary {
         try {
             List<DictionaryEntry> entries = DictionaryAccessor.snapshotCurrentDictionary();
             DictionaryAccessor.validateUniquenessOfEntries("Common Name", entries);
-            DictionaryAccessor.validateUniquenessOfEntries("BioFAB UID", entries);
-            DictionaryAccessor.validateUniquenessOfEntries("Ginkgo UID", entries);
-            DictionaryAccessor.validateUniquenessOfEntries("Transcriptic UID", entries);
+            for(String uidTag : DictionaryEntry.labUIDMap.keySet()) {
+                DictionaryAccessor.validateUniquenessOfEntries(uidTag, entries);
+            }
             log.info("Beginning dictionary update");
             int mod_count = 0, bad_count = 0;
             for(DictionaryEntry e : entries) {
