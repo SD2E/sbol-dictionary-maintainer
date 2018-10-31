@@ -68,7 +68,12 @@ public class DictionaryEntry {
         for(String uidLabel : labUIDMap.keySet()) {
             String uidTag = labUIDMap.get(uidLabel);
 
-            if(fullbox(row, header_map.get(uidLabel)))
+            Integer column = header_map.get(uidLabel);
+            if(column == null) {
+                continue;
+            }
+
+            if(fullbox(row, column))
                 labUIDs.put(uidTag, row.get(header_map.get(uidLabel)).toString());
              else
                 labUIDs.put(uidTag, null);
