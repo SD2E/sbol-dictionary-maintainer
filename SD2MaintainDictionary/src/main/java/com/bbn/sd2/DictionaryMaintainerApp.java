@@ -104,6 +104,7 @@ public class DictionaryMaintainerApp {
         options.addOption("S", "server", true, "URL for SynBioHub server");
         options.addOption("f", "spoofing", true, "URL prefix for a test SynBioHub server spoofing as another");
         options.addOption("t", "test_mode", false, "Run only one update for testing purposes, then terminate");
+        options.addOption("T", "timeout", true, "Connection timeout in seconds (zero to disable timeout)");
 
         // Parse arguments
         CommandLine cmd = null;
