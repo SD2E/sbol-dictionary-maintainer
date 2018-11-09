@@ -297,15 +297,15 @@ public class DictionaryAccessor {
     /**
      * Generate Cell location string
      * @param e reference entry
-     * @param cell cell name
+     * @param header_name column header name
      * @throws IOException
      */
-    public static String getCellLocation(DictionaryEntry e, String cell) throws IOException {
-        Integer colInt = e.header_map.get(cell);
+    public static String getCellLocation(DictionaryEntry e, String header_name) throws IOException {
+        Integer colInt = e.header_map.get(header_name);
 
         if(colInt == null) {
             throw new IOException("Tab " + e.tab + " is missing column \""
-                                  + cell + "\"");
+                                  + header_name + "\"");
         }
         char col = (char) ('A' + (char)(int)colInt);
 
