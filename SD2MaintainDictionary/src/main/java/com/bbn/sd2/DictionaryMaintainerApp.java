@@ -29,7 +29,10 @@ public class DictionaryMaintainerApp {
         SynBioHubAccessor.configure(cmd);
         stopWorkerThreads = false;
         kludge_heartbeat_reporter();
-        start_backup(1);
+
+        if(!cmd.hasOption("test_mode")) {
+            start_backup(1);
+        }
 
         // Run as an eternal loop, reporting errors but not crashing out
         while(!stopSignal) {
