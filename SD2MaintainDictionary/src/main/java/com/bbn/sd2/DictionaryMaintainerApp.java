@@ -5,6 +5,8 @@ import java.security.GeneralSecurityException;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.logging.Logger;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.cli.*;
 
@@ -14,7 +16,9 @@ public class DictionaryMaintainerApp {
     private static Logger log = Logger.getGlobal();
     private static int sleepMillis;
     private static boolean stopSignal = false;
-
+    private static Semaphore heartbeatSem = new Semaphore(0);
+    private static Semaphore backupSem = new Semaphore(0);
+    private static boolean stopWorkerThreads = false;
     
     public static void main(String... args) throws Exception {
         // Parse arguments and configure
@@ -23,6 +27,7 @@ public class DictionaryMaintainerApp {
         log.info("Dictionary Maintainer initializing "+(cmd.hasOption("test_mode")?"in single update mode":"for continuous operation"));
         DictionaryAccessor.configure(cmd);
         SynBioHubAccessor.configure(cmd);
+        stopWorkerThreads = false;
         kludge_heartbeat_reporter();
         start_backup(1);
 
@@ -53,7 +58,9 @@ public class DictionaryMaintainerApp {
                 }
             }
         }
-        kludge_heartbeat_stop = true;
+        stopWorkerThreads = true;
+        heartbeatSem.release(1);
+        backupSem.release(1);
         log.info("Dictionary Maintainer run complete, shutting down.");
     }
  
@@ -61,7 +68,7 @@ public class DictionaryMaintainerApp {
     	
     	new Thread() { 
     		public void run() {
-    			while(!kludge_heartbeat_stop) {
+                while(!stopWorkerThreads) {
         			log.info("Executing Dictionary backup");
 					try {
 						DictionaryAccessor.backup();
@@ -69,21 +76,23 @@ public class DictionaryMaintainerApp {
 						e.printStackTrace();
 					} 
 					try {
-						Thread.sleep(days*24*3600*1000);
+						backupSem.tryAcquire(1, days*24*3600, TimeUnit.SECONDS);
 					}
 					catch(InterruptedException e) {}
     			}
+                log.info("Stopping Dictionary backups");
     		}
     	}.start();
     }   
   
-    private static boolean kludge_heartbeat_stop = false;
     private static void kludge_heartbeat_reporter() {
         new Thread() { public void run() {
             int count=0;
-            while(!kludge_heartbeat_stop) {
+            while(!stopWorkerThreads) {
                 System.out.println("[Still Running: "+(count++)+" minutes]");
-                try { Thread.sleep(60000); } catch(InterruptedException e) {}
+                try {
+                    heartbeatSem.tryAcquire(1, 60, TimeUnit.SECONDS);
+                } catch(InterruptedException e) {}
             }
             System.out.println("[Stopped]");
         }}.start();
