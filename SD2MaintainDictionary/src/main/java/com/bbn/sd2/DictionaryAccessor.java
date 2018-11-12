@@ -347,7 +347,9 @@ public class DictionaryAccessor {
      * @throws IOException
      */
     public static void writeEntryDefinition(DictionaryEntry e, URI attributeDefinition) throws IOException {
-        writeLocationText(e.tab+"!G"+e.row_index, attributeDefinition.toString());
+        String location = getCellLocation(e, "Definition URI");
+
+        writeLocationText(location, attributeDefinition.toString());
     }
     
     /**
