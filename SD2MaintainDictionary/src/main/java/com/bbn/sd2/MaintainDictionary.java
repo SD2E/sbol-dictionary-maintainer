@@ -55,7 +55,8 @@ public final class MaintainDictionary {
     }};
 
     /** Expected headers */
-    private static final Set<String> validHeaders = new HashSet<>(Arrays.asList("Common Name", "Type", "SynBioHub URI", "Stub Object?", "Definition URI"));
+    private static final Set<String> validHeaders = new HashSet<>(Arrays.asList("Common Name", "Type", "SynBioHub URI",
+                "Stub Object?", "Definition URI", "Status"));
 
     /** Classes of object that are implemented as a ComponentDefinition */
     private static Map<String,URI> componentTypes = new HashMap<String,URI>() {{

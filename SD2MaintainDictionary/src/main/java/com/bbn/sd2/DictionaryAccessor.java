@@ -357,11 +357,7 @@ public class DictionaryAccessor {
      * @throws IOException
      */
     public static void writeEntryNotes(DictionaryEntry e, String notes) throws IOException {
-        int colInt = e.header_map.size();
-
-        char col = (char) ('A' + (char)colInt);
-
-        String location = e.tab + "!"  + col + e.row_index;
+        String location = getCellLocation(e, "Status");
 
         writeLocationText(location, notes);
     }
@@ -380,7 +376,7 @@ public class DictionaryAccessor {
                 throw new IOException("Failed to get dictionary headers for tab " + tab);
             }
 
-            int colInt = header_map.size() + 1;
+            int colInt = header_map.get("Status");
             char col = (char) ('A' + (char)colInt);
 
             String location = tab + "!"  + col + "1";
