@@ -242,6 +242,9 @@ public final class SynBioHubAccessor {
     	}
     }
    
+    /**
+     * Creates a collection using the configured collection prefix on the server
+     */
     public static void createCollection() {
         try {
             repository.createCollection(collectionToCollectionName(collectionPrefix), "1", "SD Dictionary Collection",
