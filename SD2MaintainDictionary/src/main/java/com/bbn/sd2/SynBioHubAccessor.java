@@ -96,6 +96,27 @@ public final class SynBioHubAccessor {
     }
 
     /**
+     * Checks that the collection exists on the server
+     * @return true if the collection exists on the server
+     * @throws SynBioHubException
+     */
+    public static boolean collectionExists() throws SynBioHubException {
+        if(repository == null) {
+            return false;
+        }
+
+        ArrayList<IdentifiedMetadata> metaDataList = repository.getRootCollectionMetadata();
+        boolean foundCollectionPrefix = false;
+        for(IdentifiedMetadata md : metaDataList) {
+            if(md.getUri().equals(collectionID.toString())) {
+                foundCollectionPrefix = true;
+            }
+        }
+
+        return foundCollectionPrefix;
+    }
+
+    /**
      * 
      * @param name
      * @return URI for part with exact match of name, otherwise null
