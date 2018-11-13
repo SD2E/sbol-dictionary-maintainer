@@ -242,6 +242,18 @@ public final class SynBioHubAccessor {
     	}
     }
    
+    public static void createCollection() {
+        try {
+            repository.createCollection(collectionToCollectionName(collectionPrefix), "1", "SD Dictionary Collection",
+                                                                   "A test Collection targeted by SD2 Dictionary Maintainer",
+                                                                   "", false);
+        } catch (SynBioHubException sbh_e) {
+            // Assume Collection already exists and that caused the error, though there could be another type of error
+        } catch (Exception e) {
+            System.err.println("Repository collection creation failed.");
+            e.printStackTrace();
+        }
+    }
     
     /**
      * The main function here creates a scratch test collection
@@ -258,14 +270,7 @@ public final class SynBioHubAccessor {
         
         configure(new DefaultParser().parse(options, args));
         ensureSynBioHubConnection();
-        try {
-        	repository.createCollection(collectionToCollectionName(collectionPrefix), "1", "SD Dictionary Collection", "A test Collection targeted by SD2 Dictionary Maintainer", "", false);
-        } catch (SynBioHubException sbh_e) {
-        	// Assume Collection already exists and that caused the error, though there could be another type of error
-        } catch (Exception e) {
-    		System.err.println("Repository collection creation failed.");
-    		e.printStackTrace();
-        } 
+        createCollection();
     }
 
 

@@ -8,6 +8,7 @@ import java.io.InputStream;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.io.IOUtils;
 import org.junit.Test;
+import org.mortbay.log.Log;
 
 public class DictionaryTestShared {
 
@@ -40,6 +41,10 @@ public class DictionaryTestShared {
         SynBioHubAccessor.configure(cmd);
         DictionaryAccessor.restart();
         SynBioHubAccessor.restart();
+        if(!SynBioHubAccessor.collectionExists()) {
+            Log.info("Creating Collection");
+            SynBioHubAccessor.createCollection();
+        }
     	DictionaryMaintainerApp.restart();
 		DictionaryMaintainerApp.main(options);
     }
