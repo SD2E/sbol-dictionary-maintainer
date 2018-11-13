@@ -49,9 +49,11 @@ public class DictionaryMaintainerApp {
                     } else {
                         log.severe("Collection does not exist");
                     }
+                    return;
                 }
             } catch(SynBioHubException e) {
                 e.printStackTrace();
+                return;
             }
 
             while(!stopSignal) {
