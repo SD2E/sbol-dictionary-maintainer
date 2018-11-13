@@ -1,6 +1,5 @@
 package com.bbn.sd2;
 
-
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
