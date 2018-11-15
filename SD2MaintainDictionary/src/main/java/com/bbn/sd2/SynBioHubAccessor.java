@@ -1,6 +1,5 @@
 package com.bbn.sd2;
 
-
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
@@ -34,6 +33,7 @@ public final class SynBioHubAccessor {
     private static String spoofingPrefix = null;
     
     private static SynBioHubFrontend repository = null;
+    private static int connectionTimeoutSeconds = 600;
     
     private SynBioHubAccessor() {} // static-only class
     
@@ -46,6 +46,15 @@ public final class SynBioHubAccessor {
         // get server to connect to
         synbiohubServer = cmd.getOptionValue("server","https://hub-staging.sd2e.org/");
         if(!synbiohubServer.endsWith("/")) synbiohubServer = synbiohubServer+"/";
+
+        if(cmd.hasOption("timeout")) {
+            String timeoutStr = cmd.getOptionValue("timeout");
+            try {
+                connectionTimeoutSeconds = Integer.parseInt(timeoutStr);
+            } catch(Exception e) {
+                log.warning("Failed to parse timeout \"" + timeoutStr + "\"");
+            }
+        }
 
         // get collection information
         if(cmd.hasOption("spoofing")) {
@@ -82,9 +91,17 @@ public final class SynBioHubAccessor {
             log.info("Attempting to log into "+synbiohubServer);
             SynBioHubFrontend sbh;
             if(spoofingPrefix==null) {
-                sbh = new SynBioHubFrontend(synbiohubServer);
+                if(connectionTimeoutSeconds > 0) {
+                    sbh = new SynBioHubFrontend(synbiohubServer, connectionTimeoutSeconds);
+                } else {
+                    sbh = new SynBioHubFrontend(synbiohubServer);
+                }
             } else {
-                sbh = new SynBioHubFrontend(synbiohubServer,spoofingPrefix);
+                if(connectionTimeoutSeconds > 0) {
+                    sbh = new SynBioHubFrontend(synbiohubServer, spoofingPrefix, connectionTimeoutSeconds);
+                } else {
+                    sbh = new SynBioHubFrontend(synbiohubServer, spoofingPrefix);
+                }
             }
             sbh.login(login, password);
             repository = sbh;
