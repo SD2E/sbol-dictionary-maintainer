@@ -113,6 +113,27 @@ public final class SynBioHubAccessor {
     }
 
     /**
+     * Checks that the collection exists on the server
+     * @return true if the collection exists on the server
+     * @throws SynBioHubException
+     */
+    public static boolean collectionExists() throws SynBioHubException {
+        if(repository == null) {
+            return false;
+        }
+
+        ArrayList<IdentifiedMetadata> metaDataList = repository.getRootCollectionMetadata();
+        boolean foundCollectionPrefix = false;
+        for(IdentifiedMetadata md : metaDataList) {
+            if(md.getUri().equals(collectionID.toString())) {
+                foundCollectionPrefix = true;
+            }
+        }
+
+        return foundCollectionPrefix;
+    }
+
+    /**
      * 
      * @param name
      * @return URI for part with exact match of name, otherwise null
@@ -238,6 +259,21 @@ public final class SynBioHubAccessor {
     	}
     }
    
+    /**
+     * Creates a collection using the configured collection prefix on the server
+     */
+    public static void createCollection() {
+        try {
+            repository.createCollection(collectionToCollectionName(collectionPrefix), "1", "SD Dictionary Collection",
+                                                                   "A test Collection targeted by SD2 Dictionary Maintainer",
+                                                                   "", false);
+        } catch (SynBioHubException sbh_e) {
+            // Assume Collection already exists and that caused the error, though there could be another type of error
+        } catch (Exception e) {
+            System.err.println("Repository collection creation failed.");
+            e.printStackTrace();
+        }
+    }
     
     /**
      * The main function here creates a scratch test collection
@@ -254,14 +290,7 @@ public final class SynBioHubAccessor {
         
         configure(new DefaultParser().parse(options, args));
         ensureSynBioHubConnection();
-        try {
-        	repository.createCollection(collectionToCollectionName(collectionPrefix), "1", "SD Dictionary Collection", "A test Collection targeted by SD2 Dictionary Maintainer", "", false);
-        } catch (SynBioHubException sbh_e) {
-        	// Assume Collection already exists and that caused the error, though there could be another type of error
-        } catch (Exception e) {
-    		System.err.println("Repository collection creation failed.");
-    		e.printStackTrace();
-        } 
+        createCollection();
     }
 
 

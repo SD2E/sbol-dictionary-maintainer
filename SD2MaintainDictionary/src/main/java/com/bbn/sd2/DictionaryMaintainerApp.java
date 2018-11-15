@@ -1,6 +1,7 @@
 package com.bbn.sd2;
 
 import java.io.IOException;
+import java.net.URI;
 import java.security.GeneralSecurityException;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
@@ -9,6 +10,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.cli.*;
+import org.synbiohub.frontend.SynBioHubException;
 
 public class DictionaryMaintainerApp {
     public static final String VERSION = "1.0.1-alpha";
@@ -39,6 +41,21 @@ public class DictionaryMaintainerApp {
             DictionaryAccessor.restart();
             SynBioHubAccessor.restart();
             
+            try {
+                if(!SynBioHubAccessor.collectionExists()) {
+                    URI collectionID = SynBioHubAccessor.getCollectionID();
+                    if(collectionID != null) {
+                        log.severe("Collection " + collectionID + " does not exist");
+                    } else {
+                        log.severe("Collection does not exist");
+                    }
+                    return;
+                }
+            } catch(SynBioHubException e) {
+                e.printStackTrace();
+                return;
+            }
+
             while(!stopSignal) {
                 try {
                 	long start = System.currentTimeMillis();
