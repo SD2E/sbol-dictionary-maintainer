@@ -58,6 +58,9 @@ public final class MaintainDictionary {
     private static final Set<String> validHeaders = new HashSet<>(Arrays.asList("Common Name", "Type", "SynBioHub URI",
                 "Stub Object?", "Definition URI", "Status"));
 
+    private static final Set<String> protectedColumns = new HashSet<>(Arrays.asList("SynBioHub URI",
+                "Stub Object?", "Status"));
+
     /** Classes of object that are implemented as a ComponentDefinition */
     private static Map<String,URI> componentTypes = new HashMap<String,URI>() {{
         put("Bead",URI.create("http://purl.obolibrary.org/obo/NCIT_C70671")); 
@@ -105,13 +108,17 @@ public final class MaintainDictionary {
     	return typeTabs.keySet().contains(tab);
     }
     
-    public static Set<String> headers() {
+    public static final Set<String> headers() {
         Set<String> allValidHeaders = new HashSet<String>();
 
         allValidHeaders.addAll(validHeaders);
         allValidHeaders.addAll(DictionaryEntry.labUIDMap.keySet());
 
         return allValidHeaders;
+    }
+
+    public static final Set<String> getProtectedHeaders() {
+        return protectedColumns;
     }
 
     public static Set<String> tabs() {
@@ -411,6 +418,8 @@ public final class MaintainDictionary {
             report.success(entries.size()+" entries",true);
             report.success(mod_count+" modified",true);
             if(bad_count>0) report.failure(bad_count+" invalid",true);
+
+            DictionaryAccessor.checkProtections();
         } catch(Exception e) {
             e.printStackTrace();
             report.failure("Dictionary update failed with exception of type "+e.getClass().getName(), true);

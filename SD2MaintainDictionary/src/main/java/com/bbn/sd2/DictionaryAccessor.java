@@ -10,20 +10,30 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.GenericJson;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.store.FileDataStoreFactory;
 import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.DriveScopes;
 import com.google.api.services.sheets.v4.Sheets;
+import com.google.api.services.sheets.v4.Sheets.Spreadsheets.Values.Update;
+import com.google.api.services.sheets.v4.SheetsRequest;
 import com.google.api.services.sheets.v4.SheetsScopes;
+import com.google.api.services.sheets.v4.model.AddProtectedRangeRequest;
 import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
 import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetResponse;
+import com.google.api.services.sheets.v4.model.CopySheetToAnotherSpreadsheetRequest;
 import com.google.api.services.sheets.v4.model.DuplicateSheetRequest;
+import com.google.api.services.sheets.v4.model.GridRange;
+import com.google.api.services.sheets.v4.model.ProtectedRange;
 import com.google.api.services.sheets.v4.model.Request;
 import com.google.api.services.sheets.v4.model.Sheet;
+import com.google.api.services.sheets.v4.model.SheetProperties;
+import com.google.api.services.sheets.v4.model.Spreadsheet;
+import com.google.api.services.sheets.v4.model.SpreadsheetProperties;
 import com.google.api.services.sheets.v4.model.ValueRange;
-
+import com.google.api.services.sheets.v4.model.UpdateSheetPropertiesRequest;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -38,20 +48,22 @@ import java.util.Collections;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.logging.Logger;
 
 import org.apache.commons.cli.CommandLine;
 
 public class DictionaryAccessor {
     private static Logger log = Logger.getGlobal();
-    
+
     private static String spreadsheetId = null;
-    
+
     private static Sheets service = null;
 
     private DictionaryAccessor() {} // static-only class
-            
+
     /** Configure from command-line arguments */
     public static void configure(CommandLine cmd) {
     	spreadsheetId = cmd.getOptionValue("gsheet_id", MaintainDictionary.defaultSpreadsheet());
@@ -94,10 +106,10 @@ public class DictionaryAccessor {
                 .build();
         return new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("user");
     }
-    
+
     private static void ensureSheetsService() {
         if(service!=null) return;
-        
+
         try {
             // Build a new authorized API client service.
             final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
@@ -122,7 +134,7 @@ public class DictionaryAccessor {
         for(String tab : MaintainDictionary.tabs()) {
             log.info("Scanning tab " + tab);
         	Hashtable<String, Integer> header_map = getDictionaryHeaders(tab);
-        	
+
             // Pull the current range
             String readRange = tab + "!A" + (row_offset+1) + ":" + last_column;
             ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
@@ -131,11 +143,11 @@ public class DictionaryAccessor {
             	continue; // skip empty sheets
             }
             int row_index = row_offset;
-            
+
             for(List<Object> value : response.getValues()) {
                 entries.add(new DictionaryEntry(tab, header_map, ++row_index, value));
             }
-        }     
+        }
         log.info("Read " + entries.size());
 
         return entries;
@@ -166,9 +178,9 @@ public class DictionaryAccessor {
 				System.out.println("Successfully wrote back-up to " + backup_filename);
 			} catch (IOException e) {
 				e.printStackTrace();
-			}	
+			}
     }
-    
+
     public static void exportCSV() throws IOException {
         for(String tab : MaintainDictionary.tabs()) {
             String readRange = tab + "!A1:" + last_column;
@@ -178,7 +190,7 @@ public class DictionaryAccessor {
     		if (!file.exists()) {
     			file.createNewFile();
     		}
-    		OutputStream outStream = new FileOutputStream(file); 
+            OutputStream outStream = new FileOutputStream(file);
             for(List<Object> row : response.getValues()) {
             	String csv_row = "";
             	for (Object cell : row) {
@@ -195,7 +207,7 @@ public class DictionaryAccessor {
         }
     }
 
-        
+
     public static Hashtable<String, Integer> getDictionaryHeaders(String tab) throws Exception {
     	Hashtable<String, Integer> header_map = new Hashtable();
         String headerRange = tab + "!A" + row_offset + ":" + last_column + row_offset;
@@ -209,7 +221,7 @@ public class DictionaryAccessor {
         	if (!MaintainDictionary.headers().contains(header))
         		throw new Exception("Invalid header " + header + " found in table " + tab);
         	header_map.put(header, i_h);
-        }    	
+        }
     	return header_map;
     }
 
@@ -278,7 +290,7 @@ public class DictionaryAccessor {
             headers.put(val_i, entry_i);
          }
     }
-    
+
     /**
      * Write text to an arbitrary single cell
      * @param writeRange location of cell
@@ -293,7 +305,7 @@ public class DictionaryAccessor {
         ValueRange content = new ValueRange().setRange(writeRange).setValues(values);
         service.spreadsheets().values().update(spreadsheetId, writeRange, content).setValueInputOption("RAW").execute();
     }
-    
+
     /**
      * Generate Cell location string
      * @param e reference entry
@@ -323,7 +335,7 @@ public class DictionaryAccessor {
 
         writeLocationText(location, uri.toString());
     }
-    
+
     /**
      * Write the URI of the entry
      * @param e  entry to be written
@@ -339,9 +351,9 @@ public class DictionaryAccessor {
         }
         writeLocationText(getCellLocation(e, "Stub Object?"), value);
     }
-    
+
     /**
-     * Write the URI of the entry 
+     * Write the URI of the entry
      * @param e  entry to be written
      * @param uri definitive location for ontology source definition
      * @throws IOException
@@ -351,7 +363,7 @@ public class DictionaryAccessor {
 
         writeLocationText(location, attributeDefinition.toString());
     }
-    
+
     /**
      * Write the URI of the entry
      * @param e  entry to be written
@@ -387,6 +399,235 @@ public class DictionaryAccessor {
         }
     }
 
+    public static void copyTabsFromOtherSpreadSheet(String srcSpreadsheetId, String dstSpreadsheetId,
+                                                    Set<String> tabList) throws IOException {
+        // Create request body object that specifies the destination spreadsheet id
+        CopySheetToAnotherSpreadsheetRequest requestBody = new CopySheetToAnotherSpreadsheetRequest();
+        requestBody.setDestinationSpreadsheetId(dstSpreadsheetId);
+
+        // Lookup the sheet properties on the source spreadsheet
+        Sheets.Spreadsheets.Get get = service.spreadsheets().get(srcSpreadsheetId).setFields("sheets.properties");
+        Spreadsheet s = get.execute();
+        List<Sheet> sheets = s.getSheets();
+
+        // Loop the sheets on the source source spreadshet
+        for(Sheet sheet: sheets) {
+            // Get the sheet properties
+            SheetProperties srcProperties = sheet.getProperties();
+
+            // Make sure the title is in the list to be copied
+            String srcSheetTitle = srcProperties.getTitle();
+            if(!tabList.contains(srcSheetTitle)) {
+                continue;
+            }
+
+            // Copy the sheet from the source spreadsheet to the destination spreadsheet
+            SheetProperties sp = service.spreadsheets().sheets().copyTo(srcSpreadsheetId,
+                    srcProperties.getSheetId(), requestBody).execute();
+
+            // At this point the sheet as been copied, but the title is prepended with
+            // "Copy of ".  It needs to be restored to the original title
+
+            // Set the original title
+            sp.setTitle(srcSheetTitle);
+
+            // Create a request object to update the sheet properties
+            UpdateSheetPropertiesRequest changeTitle = new UpdateSheetPropertiesRequest();
+            changeTitle.setProperties(sp);
+            changeTitle.setFields("Title");
+
+            // Create a higher level request object
+            Request req = new Request().setUpdateSheetProperties(changeTitle);
+
+            // Add the lower level request object
+            ArrayList<Request> reqList = new ArrayList<Request>();
+            reqList.add(req);
+            BatchUpdateSpreadsheetRequest breq = new BatchUpdateSpreadsheetRequest();
+            breq.setRequests(reqList);
+
+            // Execute the request to update the sheet title
+            service.spreadsheets().batchUpdate(dstSpreadsheetId, breq).execute();
+        }
+    }
+
+    // Generates a list of all the protected ranges that need to be added to this sheet
+    private static List<ProtectedRange> getProtectedRanges(List<ProtectedRange> ranges,
+                                                           SheetProperties sheetProperties) throws Exception {
+        Set<String> columnsToProtect =
+                new TreeSet<String>(MaintainDictionary.getProtectedHeaders());
+
+        String sheetTitle = sheetProperties.getTitle();
+
+        // This returns a returns a map that maps a column header to a
+        // column index
+        Hashtable<String, Integer> headers = getDictionaryHeaders(sheetTitle);
+
+        // Create a map the maps a sheet index to
+        Hashtable<Integer, String> reverseLookup = new Hashtable<Integer, String>();
+        for(String header : headers.keySet()) {
+            reverseLookup.put(headers.get(header), header);
+        }
+
+        for(ProtectedRange range : ranges) {
+            // Extract the protection range
+            Integer startColumnIndex = range.getRange().getStartColumnIndex();
+            Integer endColumnIndex = range.getRange().getEndColumnIndex();
+            Integer startRowIndex = range.getRange().getStartRowIndex();
+            Integer endRowIndex = range.getRange().getEndRowIndex();
+            String columnTitle = null;
+
+            boolean unexpectedProtection = false;
+
+
+            // First, make sure that the protection does not span multiple rows
+            if((startColumnIndex == null) || (endColumnIndex == null)) {
+                unexpectedProtection = true;
+            } else if(endColumnIndex != (startColumnIndex + 1)) {
+                unexpectedProtection = true;
+            } else if(!reverseLookup.containsKey(startColumnIndex)) {
+                unexpectedProtection = true;
+            } else {
+                columnTitle = reverseLookup.get(startColumnIndex);
+                if(!columnsToProtect.contains(columnTitle) ||
+                        endRowIndex != null) {
+                    unexpectedProtection = true;
+                }
+            }
+
+            if( unexpectedProtection ) {
+                String quotedSheetTitle = "\"" + sheetTitle + "\"";
+                if(endColumnIndex == null) {
+                    if(startColumnIndex == null) {
+                        log.warning("Found unexpected protection from on row " +
+                                (startRowIndex + 1) + " on sheet " + quotedSheetTitle);
+                    } else {
+                        char startColumn = (char) ('A' + startColumnIndex);
+
+                        log.warning("Found unexpected protection from on row " +
+                                (startRowIndex + 1) + " starting from column " + startColumn +
+                                " on sheet " + quotedSheetTitle);
+                    }
+                } else if(endColumnIndex < 26) {
+                    char startColumn = (char) ('A' + startColumnIndex);
+                    char endColumn;
+
+                    if(endColumnIndex > startColumnIndex) {
+                        endColumn = (char) ('A' + endColumnIndex - 1);
+                    } else {
+                        endColumn = startColumn;
+                    }
+
+                    if(endRowIndex == null) {
+                        if(startRowIndex == null) {
+                            log.warning("Found unexpected protection from on column " +
+                                    startColumn + " on sheet " + sheetTitle);
+                        } else {
+                            log.warning("Found unexpected protection from on column " +
+                                    startColumn + " starting from row " + (startRowIndex + 1) +
+                                    " on sheet " + sheetTitle);
+                        }
+                    } else {
+                        log.warning("Found unexpected protection from " +
+                                startColumn + (startRowIndex + 1) +
+                                " to " + endColumn + endRowIndex +
+                                " on sheet " + sheetTitle);
+                    }
+                } else {
+                    log.warning("Found unexpected protection on sheet " +
+                                sheetTitle);
+                }
+                continue;
+            }
+
+            // Remove column from list of columns to protect since it
+            // is already protected
+            String columnName = reverseLookup.get(startColumnIndex);
+            columnsToProtect.remove(columnName);
+        }
+
+        // Create a list of all the protected ranges that need to be
+        // added to this document
+        List<ProtectedRange> protectedRanges = new ArrayList<ProtectedRange>();
+        for(String column : columnsToProtect) {
+            log.info("Adding protection to column \"" + column + "\" on tab \"" + sheetTitle + "\"");
+
+            ProtectedRange newRange = new ProtectedRange();
+
+            GridRange gridRange = new GridRange();
+            Integer startColumnIndex = headers.get(column);
+            gridRange.setStartColumnIndex(startColumnIndex);
+            gridRange.setEndColumnIndex(startColumnIndex + 1);
+            gridRange.setSheetId(sheetProperties.getSheetId());
+
+            newRange.setRange(gridRange);
+            protectedRanges.add(newRange);
+        }
+
+        return protectedRanges;
+    }
+
+    static void checkProtections() throws Exception {
+        // Get the list of tabs to process
+        Set<String> tabList = MaintainDictionary.tabs();
+
+        // Lookup the sheet properties and protected ranges on the source spreadsheet
+        Sheets.Spreadsheets.Get get = service.spreadsheets().get(spreadsheetId);
+        get.setFields("sheets.protectedRanges,sheets.properties");
+        Spreadsheet s = get.execute();
+        List<Sheet> sheets = s.getSheets();
+
+        // This list will contain requests to add new protected ranges to the
+        // spreadsheet
+        ArrayList<Request> updateRangeRequests = new ArrayList<Request>();
+
+        // Loop the sheets on the source source spreadsheet
+        for(Sheet sheet: sheets) {
+            // Get the sheet properties
+            SheetProperties sheetProperties = sheet.getProperties();
+
+            // Make sure the title is in the list of sheets we process
+            String sheetTitle = sheetProperties.getTitle();
+            if(!tabList.contains(sheetTitle)) {
+                continue;
+            }
+
+            // Get a list of existing protected ranges on this sheet
+            List<ProtectedRange> ranges = sheet.getProtectedRanges();
+            if(ranges == null) {
+                ranges = new ArrayList<ProtectedRange>();
+            }
+
+            // Determine the protected ranges that need to be added
+            // to the sheet
+            List<ProtectedRange> protectedRanges =
+                    getProtectedRanges(ranges, sheetProperties);
+
+            // Queue up requests for the new protected ranges
+            for(ProtectedRange protectedRange : protectedRanges) {
+                AddProtectedRangeRequest addProtectedRangeRequest =
+                        new AddProtectedRangeRequest();
+                addProtectedRangeRequest.setProtectedRange(protectedRange);
+
+                Request request = new Request();
+                request.setAddProtectedRange(addProtectedRangeRequest);
+                updateRangeRequests.add(request);
+            }
+        }
+
+        if(!updateRangeRequests.isEmpty()) {
+            // At this point we have a list of protected ranges.
+            // Create a request with all these protected ranges
+            BatchUpdateSpreadsheetRequest breq = new BatchUpdateSpreadsheetRequest();
+            breq.setRequests(updateRangeRequests);
+
+            try {
+                // Execute request to add new protected ranges
+                service.spreadsheets().batchUpdate(spreadsheetId, breq).execute();
+            } catch(Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
 //    public static void main(String... args) throws IOException, GeneralSecurityException {
 //        List<DictionaryEntry> entries = snapshotCurrentDictionary();
 //        if (entries.isEmpty()) {
