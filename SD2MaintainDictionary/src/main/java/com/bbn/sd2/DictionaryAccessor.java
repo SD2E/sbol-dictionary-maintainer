@@ -25,6 +25,7 @@ import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
 import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetResponse;
 import com.google.api.services.sheets.v4.model.CopySheetToAnotherSpreadsheetRequest;
 import com.google.api.services.sheets.v4.model.DuplicateSheetRequest;
+import com.google.api.services.sheets.v4.model.Editors;
 import com.google.api.services.sheets.v4.model.GridRange;
 import com.google.api.services.sheets.v4.model.ProtectedRange;
 import com.google.api.services.sheets.v4.model.Request;
@@ -468,6 +469,8 @@ public class DictionaryAccessor {
             reverseLookup.put(headers.get(header), header);
         }
 
+        final List<String> editorList = MaintainDictionary.editors;
+
         for(ProtectedRange range : ranges) {
             // Extract the protection range
             Integer startColumnIndex = range.getRange().getStartColumnIndex();
@@ -554,12 +557,17 @@ public class DictionaryAccessor {
             ProtectedRange newRange = new ProtectedRange();
 
             GridRange gridRange = new GridRange();
+
             Integer startColumnIndex = headers.get(column);
             gridRange.setStartColumnIndex(startColumnIndex);
             gridRange.setEndColumnIndex(startColumnIndex + 1);
             gridRange.setSheetId(sheetProperties.getSheetId());
-
             newRange.setRange(gridRange);
+
+            Editors editors = new Editors();
+            editors.setUsers(editorList);
+            newRange.setEditors(editors);
+
             protectedRanges.add(newRange);
         }
 

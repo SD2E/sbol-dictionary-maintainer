@@ -61,6 +61,10 @@ public final class MaintainDictionary {
     private static final Set<String> protectedColumns = new HashSet<>(Arrays.asList("SynBioHub URI",
                 "Stub Object?", "Status"));
 
+    public static final List<String> editors = Arrays.asList("bartleyba@sbolstandard.org",
+                                                             "nicholasroehner@gmail.com",
+                                                             "jakebeal@gmail.com");
+
     /** Classes of object that are implemented as a ComponentDefinition */
     private static Map<String,URI> componentTypes = new HashMap<String,URI>() {{
         put("Bead",URI.create("http://purl.obolibrary.org/obo/NCIT_C70671")); 
