@@ -21,7 +21,6 @@ public class DictionaryEntry {
     public String name = null;
     public String type = null;
     public URI uri = null;
-    public URI local_uri = null;
     public Map<String,String> labUIDs = new HashMap<>();
     public enum StubStatus { YES, NO, UNDEFINED };
     public StubStatus stub = StubStatus.UNDEFINED;
@@ -91,27 +90,6 @@ public class DictionaryEntry {
         }
         
         this.header_map = header_map;
-
-        // If the URI is null and the name is not, attempt to resolve:
-        if(uri==null && name!=null) {
-            try {
-                uri = SynBioHubAccessor.nameToURI(name);
-                if(uri!=null) {
-                    DictionaryAccessor.writeEntryURI(this,uri);
-                }
-            } catch (SynBioHubException e) {
-            	statusCode = StatusCode.SBH_CONNECTION_FAILED; // Don't try to make anything if we couldn't check if it exists
-                e.printStackTrace();
-                log.warning("SynBioHub connection failed in trying to resolve URI to name");
-            } catch (IOException e) {
-            	statusCode = StatusCode.GOOGLE_SHEETS_CONNECTION_FAILED; // Don't try to update anything if we couldn't report the URI
-                e.printStackTrace();
-                log.warning("Google Sheets connection failed in trying to report resolved URI");
-            }
-        }
-        if(uri!=null) {
-            local_uri = SynBioHubAccessor.translateURI(uri);
-        }
     }
 
 //    public boolean validType() {

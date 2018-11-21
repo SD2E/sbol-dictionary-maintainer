@@ -30,6 +30,8 @@ import org.sbolstandard.core2.TopLevel;
 import org.synbiohub.frontend.SynBioHubException;
 
 import com.bbn.sd2.DictionaryEntry.StubStatus;
+import com.google.api.services.sheets.v4.Sheets;
+import com.google.api.services.sheets.v4.model.ValueRange;
 
 /**
  * Helper class for importing SBOL into the working compilation.
@@ -239,30 +241,48 @@ public final class MaintainDictionary {
      * @return true if anything has been changed
      * @throws Exception 
      */
-    private static boolean update_entry(DictionaryEntry e) throws SBOLConversionException, IOException, SBOLValidationException, SynBioHubException {
+    private static boolean update_entry(DictionaryEntry e, List<ValueRange> valueUpdates) throws SBOLConversionException, IOException, SBOLValidationException, SynBioHubException {
         assert(e.statusCode == StatusCode.VALID);
         
         UpdateReport report = new UpdateReport();
         // This is never called unless the entry is known valid
         SBOLDocument document = null;
         boolean changed = false;
+        URI local_uri = null;
         
+        // If the URI is null and the name is not, attempt to resolve:
+        if(e.uri==null && e.name!=null) {
+            try {
+                e.uri = SynBioHubAccessor.nameToURI(e.name);
+                if(e.uri!=null) {
+                    // This is an update to the spreadsheet, but not to symBioHub,
+                    // so "changed" is not updated
+                    valueUpdates.add(DictionaryAccessor.writeEntryURI(e, e.uri));
+                }
+            } catch (SynBioHubException exception) {
+                e.statusCode = StatusCode.SBH_CONNECTION_FAILED; // Don't try to make anything if we couldn't check if it exists
+                exception.printStackTrace();
+                log.warning("SynBioHub connection failed in trying to resolve URI to name");
+                return changed;
+            }
+        }
+
         // if the entry has no URI, create per type
         if(e.uri==null) {
             document = createStubOfType(e.name, e.type);
             if(document==null) {
                 report.failure("Could not make object "+e.name, true);
-                DictionaryAccessor.writeEntryNotes(e, report.toString());
+                valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
                 return changed;
             }
             // pull out the first (and only) element to get the URI
-            e.local_uri = document.getTopLevels().iterator().next().getIdentity();
-            e.uri = SynBioHubAccessor.translateLocalURI(e.local_uri);
+            local_uri = document.getTopLevels().iterator().next().getIdentity();
+            e.uri = SynBioHubAccessor.translateLocalURI(local_uri);
             report.success("Created stub in SynBioHub",true);
-            DictionaryAccessor.writeEntryURI(e, e.uri);
-            DictionaryAccessor.writeEntryNotes(e, report.toString());
+            valueUpdates.add(DictionaryAccessor.writeEntryURI(e, e.uri));
             changed = true;
         } else { // otherwise get a copy from SynBioHub
+            local_uri = SynBioHubAccessor.translateURI(e.uri);
             try {
                 document = SynBioHubAccessor.retrieve(e.uri);
             } catch(SynBioHubException sbhe) {
@@ -274,14 +294,14 @@ public final class MaintainDictionary {
         }
         
         // Check if object belongs to the target Collection
-    	if(e.uri.equals(e.local_uri)) { // this condition occurs when the entry does not belong to the target collection, probably a more explicit and better way to check for it
+        if(e.uri.equals(local_uri)) { // this condition occurs when the entry does not belong to the target collection, probably a more explicit and better way to check for it
     		report.failure("Object does not belong to Dictionary collection " + SynBioHubAccessor.getCollectionID());
             DictionaryAccessor.writeEntryNotes(e, report.toString());
     		return changed;
     	}
     	
         // Make sure we've got the entity to update in our hands:
-        TopLevel entity = document.getTopLevel(e.local_uri);
+        TopLevel entity = document.getTopLevel(local_uri);
         if(entity==null) {
             report.failure("Could not find or make object", true);
             DictionaryAccessor.writeEntryNotes(e, report.toString());
@@ -345,15 +365,16 @@ public final class MaintainDictionary {
             replaceOldAnnotations(entity,MODIFIED,xmlDateTimeStamp());
             document.write(System.out);
             SynBioHubAccessor.update(document);
-            DictionaryAccessor.writeEntryNotes(e, report.toString());
+            valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
             if(!e.attribute) {
-                DictionaryAccessor.writeEntryStub(e, e.stub);
+                valueUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
             } else {
                 if(e.attributeDefinition!=null) {
-                    DictionaryAccessor.writeEntryDefinition(e, e.attributeDefinition);
+                    valueUpdates.add(DictionaryAccessor.writeEntryDefinition(e, e.attributeDefinition));
                 }
             }
         }
+
         return changed;
     }
     
@@ -370,9 +391,10 @@ public final class MaintainDictionary {
             }
             log.info("Beginning dictionary update");
             int mod_count = 0, bad_count = 0;
+            List<ValueRange> valueUpdates = new ArrayList<ValueRange>();
             for(DictionaryEntry e : entries) {
                 if (e.statusCode == StatusCode.VALID) {
-                    boolean modified = update_entry(e);
+                    boolean modified = update_entry(e, valueUpdates);
                     mod_count += modified?1:0;
                 }
                 else {
@@ -403,10 +425,16 @@ public final class MaintainDictionary {
 					default:
 						break;
                 	}
-                	DictionaryAccessor.writeEntryNotes(e, invalidReport.toString());
-                	bad_count++;
+                    valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, invalidReport.toString()));
+                    bad_count++;
                 }
             }
+
+            if(!valueUpdates.isEmpty()) {
+                log.info("Updating spreadsheet");
+                DictionaryAccessor.batchUpdateValues(valueUpdates);
+            }
+
             log.info("Completed certification of dictionary");
             report.success(entries.size()+" entries",true);
             report.success(mod_count+" modified",true);
