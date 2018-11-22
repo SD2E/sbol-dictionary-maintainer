@@ -33,6 +33,7 @@ import com.google.api.services.sheets.v4.model.Sheet;
 import com.google.api.services.sheets.v4.model.SheetProperties;
 import com.google.api.services.sheets.v4.model.Spreadsheet;
 import com.google.api.services.sheets.v4.model.SpreadsheetProperties;
+import com.google.api.services.sheets.v4.model.UpdateProtectedRangeRequest;
 import com.google.api.services.sheets.v4.model.ValueRange;
 import com.google.api.services.sheets.v4.model.UpdateSheetPropertiesRequest;
 import java.io.File;
@@ -117,6 +118,7 @@ public class DictionaryAccessor {
             service = new Sheets.Builder(HTTP_TRANSPORT, JSON_FACTORY, getCredentials(HTTP_TRANSPORT))
                     .setApplicationName(APPLICATION_NAME)
                     .build();
+
             log.info("Successfully logged into Google Sheets");
         } catch(Exception e) {
             e.printStackTrace();
@@ -452,8 +454,9 @@ public class DictionaryAccessor {
     }
 
     // Generates a list of all the protected ranges that need to be added to this sheet
-    private static List<ProtectedRange> getProtectedRanges(List<ProtectedRange> ranges,
-                                                           SheetProperties sheetProperties) throws Exception {
+    private static void getProtectedRanges(List<ProtectedRange> ranges,
+                                           SheetProperties sheetProperties,
+                                           List<Request> updateRangeRequests) throws Exception {
         Set<String> columnsToProtect =
                 new TreeSet<String>(MaintainDictionary.getProtectedHeaders());
 
@@ -469,7 +472,8 @@ public class DictionaryAccessor {
             reverseLookup.put(headers.get(header), header);
         }
 
-        final List<String> editorList = MaintainDictionary.editors;
+        List<String> editorList = new ArrayList<String>(MaintainDictionary.editors);
+        editorList.sort(String::compareTo);
 
         for(ProtectedRange range : ranges) {
             // Extract the protection range
@@ -522,12 +526,18 @@ public class DictionaryAccessor {
 
                     if(endRowIndex == null) {
                         if(startRowIndex == null) {
-                            log.warning("Found unexpected protection from on column " +
-                                    startColumn + " on sheet " + sheetTitle);
+                            if(startColumn == endColumn) {
+	                            log.warning("Found unexpected protection on column " +
+	                                    startColumn + " on sheet " + sheetTitle);
+                            } else {
+	                            log.warning("Found unexpected protection from column " +
+	                                        startColumn + " to column " + endColumn + " on sheet " +
+	                                        sheetTitle);
+                            }
                         } else {
                             log.warning("Found unexpected protection from on column " +
-                                    startColumn + " starting from row " + (startRowIndex + 1) +
-                                    " on sheet " + sheetTitle);
+                                        startColumn + " starting from row " + (startRowIndex + 1) +
+                                        " on sheet " + sheetTitle);
                         }
                     } else {
                         log.warning("Found unexpected protection from " +
@@ -546,19 +556,48 @@ public class DictionaryAccessor {
             // is already protected
             String columnName = reverseLookup.get(startColumnIndex);
             columnsToProtect.remove(columnName);
+
+            // Make sure the editors list is correct
+            Editors editors = range.getEditors();
+            if(editors == null) {
+                log.warning("Failed to get editors for sheet " + sheetTitle);
+                continue;
+            }
+            List<String> columnEditors = editors.getUsers();
+            if(columnEditors.size() > editorList.size()) {
+                // We assume the document owner is the last editor in the list.
+                // If the document has more editors than expected, remove the last
+                // element from the list
+                columnEditors.remove(columnEditors.size()-1);
+            }
+
+            columnEditors.sort(String::compareTo);
+            if(!columnEditors.equals(editorList)) {
+                // Update the editor list
+                range.getEditors().setUsers(editorList);
+                UpdateProtectedRangeRequest updateProtectedRange = new UpdateProtectedRangeRequest();
+                updateProtectedRange.setProtectedRange(range);
+                updateProtectedRange.setFields("editors.users");
+                Request request = new Request();
+                request.setUpdateProtectedRange(updateProtectedRange);
+                updateRangeRequests.add(request);
+            }
         }
 
         // Create a list of all the protected ranges that need to be
         // added to this document
-        List<ProtectedRange> protectedRanges = new ArrayList<ProtectedRange>();
         for(String column : columnsToProtect) {
-            log.info("Adding protection to column \"" + column + "\" on tab \"" + sheetTitle + "\"");
-
             ProtectedRange newRange = new ProtectedRange();
 
             GridRange gridRange = new GridRange();
 
             Integer startColumnIndex = headers.get(column);
+            if(startColumnIndex == null) {
+                // Don't try to protect a column that is not present in the sheet
+                continue;
+            }
+
+            log.info("Adding protection to column \"" + column + "\" on tab \"" + sheetTitle + "\"");
             gridRange.setStartColumnIndex(startColumnIndex);
             gridRange.setEndColumnIndex(startColumnIndex + 1);
             gridRange.setSheetId(sheetProperties.getSheetId());
@@ -568,13 +607,18 @@ public class DictionaryAccessor {
             editors.setUsers(editorList);
             newRange.setEditors(editors);
 
-            protectedRanges.add(newRange);
-        }
+            AddProtectedRangeRequest addProtectedRangeRequest =
+                    new AddProtectedRangeRequest();
+            addProtectedRangeRequest.setProtectedRange(newRange);
 
-        return protectedRanges;
+            Request request = new Request();
+            request.setAddProtectedRange(addProtectedRangeRequest);
+            updateRangeRequests.add(request);
+
+        }
     }
 
-    static void checkProtections() throws Exception {
+    public static void checkProtections() throws Exception {
         // Get the list of tabs to process
         Set<String> tabList = MaintainDictionary.tabs();
 
@@ -586,7 +630,7 @@ public class DictionaryAccessor {
 
         // This list will contain requests to add new protected ranges to the
         // spreadsheet
-        ArrayList<Request> updateRangeRequests = new ArrayList<Request>();
+        List<Request> updateRangeRequests = new ArrayList<Request>();
 
         // Loop the sheets on the source source spreadsheet
         for(Sheet sheet: sheets) {
@@ -607,19 +651,7 @@ public class DictionaryAccessor {
 
             // Determine the protected ranges that need to be added
             // to the sheet
-            List<ProtectedRange> protectedRanges =
-                    getProtectedRanges(ranges, sheetProperties);
-
-            // Queue up requests for the new protected ranges
-            for(ProtectedRange protectedRange : protectedRanges) {
-                AddProtectedRangeRequest addProtectedRangeRequest =
-                        new AddProtectedRangeRequest();
-                addProtectedRangeRequest.setProtectedRange(protectedRange);
-
-                Request request = new Request();
-                request.setAddProtectedRange(addProtectedRangeRequest);
-                updateRangeRequests.add(request);
-            }
+            getProtectedRanges(ranges, sheetProperties, updateRangeRequests);
         }
 
         if(!updateRangeRequests.isEmpty()) {
