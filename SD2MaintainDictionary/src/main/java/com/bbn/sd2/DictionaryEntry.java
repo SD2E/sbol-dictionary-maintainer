@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.logging.Logger;
 
+import org.sbolstandard.core2.SBOLDocument;
 import org.synbiohub.frontend.SynBioHubException;
 
 public class DictionaryEntry {
@@ -27,6 +28,8 @@ public class DictionaryEntry {
     public boolean attribute = false;
     public URI attributeDefinition = null;
     public Hashtable<String, Integer> header_map;
+    public boolean changed = false;
+    public SBOLDocument document = null;
     public static Map<String, String> labUIDMap =
         new TreeMap<String, String>() {
             private static final long serialVersionUID = 1L;

@@ -200,9 +200,6 @@ public final class MaintainDictionary {
         tl.setName(name);
         tl.createAnnotation(CREATED, xmlDateTimeStamp());
         
-        // push to create now
-        document.write(System.out);
-        SynBioHubAccessor.update(document);
         return document;
     }
     
@@ -246,8 +243,6 @@ public final class MaintainDictionary {
         
         UpdateReport report = new UpdateReport();
         // This is never called unless the entry is known valid
-        SBOLDocument document = null;
-        boolean changed = false;
         URI local_uri = null;
         
         // If the URI is null and the name is not, attempt to resolve:
@@ -263,49 +258,49 @@ public final class MaintainDictionary {
                 e.statusCode = StatusCode.SBH_CONNECTION_FAILED; // Don't try to make anything if we couldn't check if it exists
                 exception.printStackTrace();
                 log.warning("SynBioHub connection failed in trying to resolve URI to name");
-                return changed;
+                return e.changed;
             }
         }
 
         // if the entry has no URI, create per type
         if(e.uri==null) {
-            document = createStubOfType(e.name, e.type);
-            if(document==null) {
+            e.document = createStubOfType(e.name, e.type);
+            if(e.document==null) {
                 report.failure("Could not make object "+e.name, true);
                 valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
-                return changed;
+                return e.changed;
             }
             // pull out the first (and only) element to get the URI
-            local_uri = document.getTopLevels().iterator().next().getIdentity();
+            local_uri = e.document.getTopLevels().iterator().next().getIdentity();
             e.uri = SynBioHubAccessor.translateLocalURI(local_uri);
             report.success("Created stub in SynBioHub",true);
             valueUpdates.add(DictionaryAccessor.writeEntryURI(e, e.uri));
-            changed = true;
+            e.changed = true;
         } else { // otherwise get a copy from SynBioHub
             local_uri = SynBioHubAccessor.translateURI(e.uri);
             try {
-                document = SynBioHubAccessor.retrieve(e.uri);
+                e.document = SynBioHubAccessor.retrieve(e.uri);
             } catch(SynBioHubException sbhe) {
                 report.failure("Could not retrieve linked object from SynBioHub", true);
                 log.severe(sbhe.getMessage());
-                DictionaryAccessor.writeEntryNotes(e, report.toString());
-                return changed;
+                valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
+                return e.changed;
             }
         }
         
         // Check if object belongs to the target Collection
         if(e.uri.equals(local_uri)) { // this condition occurs when the entry does not belong to the target collection, probably a more explicit and better way to check for it
-    		report.failure("Object does not belong to Dictionary collection " + SynBioHubAccessor.getCollectionID());
-            DictionaryAccessor.writeEntryNotes(e, report.toString());
-    		return changed;
+            report.failure("Object does not belong to Dictionary collection " + SynBioHubAccessor.getCollectionID());
+            valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
+            return e.changed;
     	}
     	
         // Make sure we've got the entity to update in our hands:
-        TopLevel entity = document.getTopLevel(local_uri);
+        TopLevel entity = e.document.getTopLevel(local_uri);
         if(entity==null) {
             report.failure("Could not find or make object", true);
-            DictionaryAccessor.writeEntryNotes(e, report.toString());
-            return changed;
+            valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
+            return e.changed;
         }
         
         // Check if typing is valid
@@ -313,17 +308,26 @@ public final class MaintainDictionary {
             report.failure("Type does not match '"+e.type+"'", true);
         }
         
-        boolean entity_is_stub = (entity.getAnnotation(STUB_ANNOTATION) != null);
-        if((entity_is_stub && e.stub!=StubStatus.YES) || (!entity_is_stub && e.stub!=StubStatus.NO)) {
-            e.stub = entity_is_stub ? StubStatus.YES : StubStatus.NO;
-            report.note(entity_is_stub?"Stub object":"Linked with non-stub object", true);
-            changed = true;
+        if(e.attribute) {
+            if(e.stub != StubStatus.UNDEFINED) {
+                e.stub = StubStatus.UNDEFINED;
+                valueUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
+                e.changed = true;
+            }
+        } else {
+            boolean entity_is_stub = (entity.getAnnotation(STUB_ANNOTATION) != null);
+            if((entity_is_stub && e.stub!=StubStatus.YES) || (!entity_is_stub && e.stub!=StubStatus.NO)) {
+                e.stub = entity_is_stub ? StubStatus.YES : StubStatus.NO;
+                valueUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
+                report.note(entity_is_stub?"Stub object":"Linked with non-stub object", true);
+                e.changed = true;
+            }
         }
-        
+
         // update entity name if needed
         if(e.name!=null && !e.name.equals(entity.getName())) {
             entity.setName(e.name);
-            changed = true;
+            e.changed = true;
             report.success("Name changed to '"+e.name+"'",true);
         }
         
@@ -343,7 +347,7 @@ public final class MaintainDictionary {
             }
             if(!labIds.equals(currentIds)) {
                 replaceOldAnnotations(entity,labQKey,labIds);
-                changed = true;
+                e.changed = true;
                 if(labIds.size() > 0)
                 	report.success(labKey+" for "+e.name+" is "+String.join(", ", labIds),true);
                 else
@@ -356,26 +360,12 @@ public final class MaintainDictionary {
             if(derivations.size()==0 || !e.attributeDefinition.equals(derivations.iterator().next())) {
                 derivations.clear(); derivations.add(e.attributeDefinition);
                 entity.setWasDerivedFroms(derivations);
-                changed = true;
+                e.changed = true;
                 report.success("Definition for "+e.name+" is '"+e.attributeDefinition+"'",true);
             }
         }
         
-        if(changed) {
-            replaceOldAnnotations(entity,MODIFIED,xmlDateTimeStamp());
-            document.write(System.out);
-            SynBioHubAccessor.update(document);
-            valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
-            if(!e.attribute) {
-                valueUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
-            } else {
-                if(e.attributeDefinition!=null) {
-                    valueUpdates.add(DictionaryAccessor.writeEntryDefinition(e, e.attributeDefinition));
-                }
-            }
-        }
-
-        return changed;
+        return e.changed;
     }
     
     /**
@@ -399,37 +389,62 @@ public final class MaintainDictionary {
                 }
                 else {
                     // if the entry is not valid, ignore it
-                	UpdateReport invalidReport = new UpdateReport();
+                    UpdateReport invalidReport = new UpdateReport();
                     invalidReport.subsection("Cannot update");
-                	switch (e.statusCode) {
-                		case MISSING_NAME: 
-                			log.info("Invalid entry, missing name, skipping");
-                			invalidReport.failure("Common name is missing");
-                			break;
-                		case MISSING_TYPE: 
-                			log.info("Invalid entry for name "+e.name+", skipping");
-                			invalidReport.failure("Type is missing");
-                			break;
-                		case INVALID_TYPE: 
-                			log.info("Invalid entry for name "+e.name+", skipping");
-                			invalidReport.failure("Type must be one of "+ typeTabs.get(e.tab).toString());
-                			break;
-                		case DUPLICATE_VALUE: 
-                			log.info("Invalid entry for name "+e.name+", skipping");
-                			invalidReport.failure(e.statusLog);
-                			break;
-                		case SBH_CONNECTION_FAILED:
-                			break;
-                		case GOOGLE_SHEETS_CONNECTION_FAILED:
-                			break;
-					default:
-						break;
-                	}
-                    valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, invalidReport.toString()));
+                    switch (e.statusCode) {
+                    case MISSING_NAME:
+                        log.info("Invalid entry, missing name, skipping");
+                        invalidReport.failure("Common name is missing");
+                        break;
+                    case MISSING_TYPE:
+                        log.info("Invalid entry for name "+e.name+", skipping");
+                        invalidReport.failure("Type is missing");
+                        break;
+                    case INVALID_TYPE:
+                        log.info("Invalid entry for name "+e.name+", skipping");
+                        invalidReport.failure("Type must be one of "+ typeTabs.get(e.tab).toString());
+                        break;
+                    case DUPLICATE_VALUE:
+                        log.info("Invalid entry for name "+e.name+", skipping");
+                        invalidReport.failure(e.statusLog);
+                        break;
+                    case SBH_CONNECTION_FAILED:
+                        break;
+                    case GOOGLE_SHEETS_CONNECTION_FAILED:
+                        break;
+                    default:
+                        break;
+                    }
+
+                    if(invalidReport.condition < 0) {
+                        valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, invalidReport.toString()));
+                    }
                     bad_count++;
                 }
             }
 
+            // Commit changes to SynBioHub
+            for(DictionaryEntry e : entries) {
+                if(e.changed) {
+                    URI local_uri = e.document.getTopLevels().iterator().next().getIdentity();
+                    TopLevel entity = e.document.getTopLevel(local_uri);
+                    replaceOldAnnotations(entity, MODIFIED,xmlDateTimeStamp());
+                    e.document.write(System.out);
+                    SynBioHubAccessor.update(e.document);
+                    SBOLDocument document = SynBioHubAccessor.retrieve(e.uri);
+                    document.write(System.out);
+                    valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
+                    if(!e.attribute) {
+                        valueUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
+                    } else {
+                        if(e.attributeDefinition!=null) {
+                            valueUpdates.add(DictionaryAccessor.writeEntryDefinition(e, e.attributeDefinition));
+                        }
+                    }
+                }
+            }
+
+            // Commit updates to spreadsheet
             if(!valueUpdates.isEmpty()) {
                 log.info("Updating spreadsheet");
                 DictionaryAccessor.batchUpdateValues(valueUpdates);
