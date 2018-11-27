@@ -37,3 +37,11 @@ All work should be tested with the staging copy before being deployed live:
 * Deployment:
    * Sheet ID: `1oLJTTydL_5YPyk-wY-dspjIw_bPZ3oCiWiK0xtG8t3g`
 	* Server: `-S "https://hub.sd2e.org/"`
+
+## Tests
+
+Tests are run in an isolated testing environment. A scratch Google spreadsheet will be constructed and a scratch SBOL Collection object will be created on the staging instance of SD2 SynBioHub. Running tests requires passing the password argument to the JUnit test runner through a Java VM command line variable. In Eclipse, these can be configured in Run > Run Configurations > JUnit > TestMaintainDictionary under Arguments tab and VM arguments field.
+````
+-ea -Dp=password -Dc=true
+````
+The clean (c) argument will destroy the Google spreadsheet after tests complete. By default the spreadsheet is not destroyed so the developer can inspect its contents.

@@ -1,7 +1,7 @@
 package com.bbn.sd2;
 
-
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
@@ -9,6 +9,7 @@ import java.util.regex.Pattern;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
 import org.sbolstandard.core2.SBOLDocument;
 import org.sbolstandard.core2.SBOLValidationException;
 import org.synbiohub.frontend.IdentifiedMetadata;
@@ -32,26 +33,42 @@ public final class SynBioHubAccessor {
     private static String spoofingPrefix = null;
     
     private static SynBioHubFrontend repository = null;
+    private static int connectionTimeoutSeconds = 600;
     
     private SynBioHubAccessor() {} // static-only class
     
-    private static String collectionToCollectionName(String collectionPrefix) {
-        return collectionPrefix.substring(collectionPrefix.substring(0, collectionPrefix.length()-1).lastIndexOf('/') + 1,collectionPrefix.length()-1);
+    public static String collectionToCollectionName(String collectionPrefix) {
+        return collectionPrefix.substring(collectionPrefix.substring(0, collectionPrefix.length()-1).lastIndexOf('/') + 1,collectionPrefix.length() - 1);
     }
     
     /** Configure from command-line arguments */
     public static void configure(CommandLine cmd) {
         // get server to connect to
         synbiohubServer = cmd.getOptionValue("server","https://hub-staging.sd2e.org/");
-        if(cmd.hasOption("spoofing")) // for staging, should be: "https://hub.sd2e.org/"
-            spoofingPrefix = cmd.getOptionValue("spoofing");
-        
+        if(!synbiohubServer.endsWith("/")) synbiohubServer = synbiohubServer+"/";
+
+        if(cmd.hasOption("timeout")) {
+            String timeoutStr = cmd.getOptionValue("timeout");
+            try {
+                connectionTimeoutSeconds = Integer.parseInt(timeoutStr);
+            } catch(Exception e) {
+                log.warning("Failed to parse timeout \"" + timeoutStr + "\"");
+            }
+        }
+
         // get collection information
-        collectionPrefix = cmd.getOptionValue("collection","https://hub.sd2e.org/user/sd2e/design/");
-        if(!collectionPrefix.endsWith("/")) collectionPrefix = collectionPrefix+"/";
+        if(cmd.hasOption("spoofing")) {
+            spoofingPrefix = cmd.getOptionValue("spoofing");
+            if(!spoofingPrefix.endsWith("/")) spoofingPrefix = spoofingPrefix+"/";
+        	collectionPrefix = cmd.getOptionValue("collection", spoofingPrefix + "user/sd2e/scratch_test");
+        } else {
+            collectionPrefix = cmd.getOptionValue("collection", synbiohubServer + "user/sd2e/scratch_test");
+        }
+        if(!collectionPrefix.endsWith("/")) collectionPrefix = collectionPrefix + "/";
         String collectionName = collectionToCollectionName(collectionPrefix);
         // TODO: is there ever a case on SBH where our collection version is not 1 or collection name is not derivable?
         collectionID = URI.create(collectionPrefix+collectionName+"_collection/1");
+
         log.info("Synchronizing with collection: "+collectionID);
         
         // get login/password
@@ -74,9 +91,17 @@ public final class SynBioHubAccessor {
             log.info("Attempting to log into "+synbiohubServer);
             SynBioHubFrontend sbh;
             if(spoofingPrefix==null) {
-                sbh = new SynBioHubFrontend(synbiohubServer);
+                if(connectionTimeoutSeconds > 0) {
+                    sbh = new SynBioHubFrontend(synbiohubServer, connectionTimeoutSeconds);
+                } else {
+                    sbh = new SynBioHubFrontend(synbiohubServer);
+                }
             } else {
-                sbh = new SynBioHubFrontend(synbiohubServer,spoofingPrefix);
+                if(connectionTimeoutSeconds > 0) {
+                    sbh = new SynBioHubFrontend(synbiohubServer, spoofingPrefix, connectionTimeoutSeconds);
+                } else {
+                    sbh = new SynBioHubFrontend(synbiohubServer, spoofingPrefix);
+                }
             }
             sbh.login(login, password);
             repository = sbh;
@@ -85,6 +110,27 @@ public final class SynBioHubAccessor {
             e.printStackTrace();
             log.severe("SD2 SynBioHub login failed");
         }
+    }
+
+    /**
+     * Checks that the collection exists on the server
+     * @return true if the collection exists on the server
+     * @throws SynBioHubException
+     */
+    public static boolean collectionExists() throws SynBioHubException {
+        if(repository == null) {
+            return false;
+        }
+
+        ArrayList<IdentifiedMetadata> metaDataList = repository.getRootCollectionMetadata();
+        boolean foundCollectionPrefix = false;
+        for(IdentifiedMetadata md : metaDataList) {
+            if(md.getUri().equals(collectionID.toString())) {
+                foundCollectionPrefix = true;
+            }
+        }
+
+        return foundCollectionPrefix;
     }
 
     /**
@@ -157,8 +203,8 @@ public final class SynBioHubAccessor {
      */
     public static SBOLDocument retrieve(URI uri) throws SynBioHubException, SBOLValidationException {
         ensureSynBioHubConnection();
-        
-        SBOLDocument document = repository.getSBOL(uri);
+        SBOLDocument document = repository.getSBOL(uri, false);
+
         // convert to our own namespace:
         return document.changeURIPrefixVersion(localNamespace, null, "1");
     }
@@ -166,7 +212,7 @@ public final class SynBioHubAccessor {
     /**
      * Push a document to SynBioHub to be updated
      * @param document Object to be updated
-     * @throws SynBioHubException
+     * @throws SynBioHubException 
      */
     public static void update(SBOLDocument document) throws SynBioHubException {
         ensureSynBioHubConnection();
@@ -194,23 +240,57 @@ public final class SynBioHubAccessor {
         return URI.create(uri.toString().replace(localNamespace, collectionPrefix));
     }
 
+    public static String getCollectionPrefix() {
+    	return collectionPrefix;
+    }
+    
+    public static URI getCollectionID() {
+    	return collectionID;
+    }
+    
+    /** Used for clean-up after tests 
+     * @throws SynBioHubException 
+     * @throws URISyntaxException */
+    public static void clean() throws SynBioHubException, URISyntaxException {
+    	// Using removeSBOL method successfully deletes the object but throws SynBioHubException anyway. See SBH issue #671
+    	try {
+    		repository.removeSBOL(new URI("https://hub.sd2e.org/user/sd2e/scratch_test/scratch_test_collection/1"));
+    	} catch (SynBioHubException e) {
+    	}
+    }
+   
+    /**
+     * Creates a collection using the configured collection prefix on the server
+     */
+    public static void createCollection() {
+        try {
+            repository.createCollection(collectionToCollectionName(collectionPrefix), "1", "SD Dictionary Collection",
+                                                                   "A test Collection targeted by SD2 Dictionary Maintainer",
+                                                                   "", false);
+        } catch (SynBioHubException sbh_e) {
+            // Assume Collection already exists and that caused the error, though there could be another type of error
+        } catch (Exception e) {
+            System.err.println("Repository collection creation failed.");
+            e.printStackTrace();
+        }
+    }
+    
     /**
      * The main function here creates a scratch test collection
+     * @throws ParseException 
+     * @throws SynBioHubException 
      */
-    public static void main(String... args) {
+    public static void main(String... args) throws ParseException, SynBioHubException {
         Options options = new Options();
         options.addOption("l", "login", false, "login email account for SynBioHub maintainer account");
         options.addOption("p", "password", true, "login password for SynBioHub maintainer account");
         options.addOption("c", "collection", false, "URL for SynBioHub collection to be synchronized");
+        options.addOption("f", "spoofing", true, "URL prefix for a test SynBioHub server spoofing as another");
+        options.addOption("S", "server", true, "URL for SynBioHub server");
         
-        try {
-            configure(new DefaultParser().parse(options, args));
-            ensureSynBioHubConnection();
-            repository.createCollection(collectionToCollectionName(collectionPrefix), "1", "SD Dictionary Collection", "Collection targeted by SD2 Dictionary Maintainer", "", false);
-        } catch(Exception e) {
-            System.err.println("Repository collection creation failed.");
-            e.printStackTrace();
-        }
+        configure(new DefaultParser().parse(options, args));
+        ensureSynBioHubConnection();
+        createCollection();
     }
 
 

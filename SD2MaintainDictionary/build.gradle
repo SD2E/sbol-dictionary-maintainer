@@ -1,14 +1,43 @@
-apply plugin: 'java'
+plugins {
+  id "java"
+  id "com.github.johnrengelman.shadow" version "1.2.4"
+}
 
 repositories {
     mavenCentral()
+
+	maven {
+   		url 'https://oss.sonatype.org/content/repositories/snapshots/'
+	}
 }
 
 dependencies {
-	compile "org.sbolstandard:libSBOLj:2.3.1"
+	compile 'org.sbolstandard:libSBOLj:2.3.2-SNAPSHOT'
     compile 'com.google.api-client:google-api-client:1.23.0'
     compile 'com.google.oauth-client:google-oauth-client-jetty:1.23.0'
     compile 'com.google.apis:google-api-services-sheets:v4-rev516-1.23.0'
     compile 'commons-cli:commons-cli:1.4'
+    compile 'com.google.apis:google-api-services-drive:v3-rev124-1.24.1'
 	testCompile 'junit:junit:4.12'
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'com.bbn.sd2.DictionaryMaintainerApp'
+    }
+    from("tokens") {
+        into('tokens')
+    }
+}
+
+shadowJar {
+    zip64 true
+    from("tokens") {
+        into('tokens')
+    }
+}
+
+test {
+    systemProperty "p", System.getProperty("p")
+    systemProperty "c", System.getProperty("c")
 }

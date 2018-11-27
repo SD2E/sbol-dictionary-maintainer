@@ -1,60 +1,121 @@
 package com.bbn.sd2;
 
+import java.io.IOException;
+import java.net.URI;
+import java.security.GeneralSecurityException;
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
 import java.util.logging.Logger;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.cli.*;
+import org.synbiohub.frontend.SynBioHubException;
 
 public class DictionaryMaintainerApp {
     public static final String VERSION = "1.0.1-alpha";
     
     private static Logger log = Logger.getGlobal();
     private static int sleepMillis;
-    private static boolean oneShot = false;
+    private static boolean stopSignal = false;
+    private static Semaphore heartbeatSem = new Semaphore(0);
+    private static Semaphore backupSem = new Semaphore(0);
+    private static boolean stopWorkerThreads = false;
     
-    public static void main(String... args) {
+    public static void main(String... args) throws Exception {
         // Parse arguments and configure
         CommandLine cmd = parseArguments(args);
         sleepMillis = 1000*Integer.valueOf(cmd.getOptionValue("sleep","60"));
-        oneShot = cmd.hasOption("one-shot");
-        log.info("Dictionary Maintainer initializing "+(oneShot?"in single update mode":"for continuous operation"));
+        log.info("Dictionary Maintainer initializing "+(cmd.hasOption("test_mode")?"in single update mode":"for continuous operation"));
         DictionaryAccessor.configure(cmd);
         SynBioHubAccessor.configure(cmd);
-
+        stopWorkerThreads = false;
         kludge_heartbeat_reporter();
+
+        if(!cmd.hasOption("test_mode")) {
+            start_backup(1);
+        }
+
         // Run as an eternal loop, reporting errors but not crashing out
-        do {
+        while(!stopSignal) {
             DictionaryAccessor.restart();
             SynBioHubAccessor.restart();
             
-            do {
+            try {
+                if(!SynBioHubAccessor.collectionExists()) {
+                    URI collectionID = SynBioHubAccessor.getCollectionID();
+                    if(collectionID != null) {
+                        log.severe("Collection " + collectionID + " does not exist");
+                    } else {
+                        log.severe("Collection does not exist");
+                    }
+                    return;
+                }
+            } catch(SynBioHubException e) {
+                e.printStackTrace();
+                return;
+            }
+
+            while(!stopSignal) {
                 try {
+                	long start = System.currentTimeMillis();
                     MaintainDictionary.maintain_dictionary();
+                    long end = System.currentTimeMillis();
+                    NumberFormat formatter = new DecimalFormat("#0.00000");
+                    log.info("Dictionary update executed in " + formatter.format((end - start) / 1000d) + " seconds");
                 } catch(Exception e) {
                     log.severe("Exception while maintaining dictionary:");
                     e.printStackTrace();
                 }
-                try {
-                    if(!oneShot) Thread.sleep(sleepMillis);
-                } catch(InterruptedException e) {
-                    // ignore sleep interruptions
+                if (cmd.hasOption("test_mode"))
+                	setStopSignal();
+                else {
+                	try {
+                		Thread.sleep(sleepMillis);
+                	} catch(InterruptedException e) {
+                		// ignore sleep interruptions
+                	}
                 }
-            } while(!oneShot);
-        } while(!oneShot);
-        kludge_heartbeat_stop = true;
+            }
+        }
+        stopWorkerThreads = true;
+        heartbeatSem.release(1);
+        backupSem.release(1);
         log.info("Dictionary Maintainer run complete, shutting down.");
     }
-    
-    private static boolean kludge_heartbeat_stop = false;
+ 
+    private static void start_backup(int days) {
+    	
+    	new Thread() { 
+    		public void run() {
+                while(!stopWorkerThreads) {
+        			log.info("Executing Dictionary backup");
+					try {
+						DictionaryAccessor.backup();
+					} catch (IOException | GeneralSecurityException e) {
+						e.printStackTrace();
+					} 
+					try {
+						backupSem.tryAcquire(1, days*24*3600, TimeUnit.SECONDS);
+					}
+					catch(InterruptedException e) {}
+    			}
+                log.info("Stopping Dictionary backups");
+    		}
+    	}.start();
+    }   
+  
     private static void kludge_heartbeat_reporter() {
         new Thread() { public void run() {
             int count=0;
-            while(!kludge_heartbeat_stop) {
+            while(!stopWorkerThreads) {
                 System.out.println("[Still Running: "+(count++)+" minutes]");
-                try { Thread.sleep(60000); } catch(InterruptedException e) {}
+                try {
+                    heartbeatSem.tryAcquire(1, 60, TimeUnit.SECONDS);
+                } catch(InterruptedException e) {}
             }
             System.out.println("[Stopped]");
         }}.start();
-        
     }
 
     /**
@@ -71,8 +132,9 @@ public class DictionaryMaintainerApp {
         options.addOption("g", "gsheet_id", true, "Google Sheets ID of spreadsheet");
         options.addOption("S", "server", true, "URL for SynBioHub server");
         options.addOption("f", "spoofing", true, "URL prefix for a test SynBioHub server spoofing as another");
-        options.addOption("o", "one-shot", false, "run only once and then quit");
-        
+        options.addOption("t", "test_mode", false, "Run only one update for testing purposes, then terminate");
+        options.addOption("T", "timeout", true, "Connection timeout in seconds (zero to disable timeout)");
+
         // Parse arguments
         CommandLine cmd = null;
         try {
@@ -85,5 +147,12 @@ public class DictionaryMaintainerApp {
         }
         return cmd;
     }
-
+    
+    public static void setStopSignal() {
+    	stopSignal = true;
+    }
+    
+    public static void restart() {
+    	stopSignal = false;
+    }
 }

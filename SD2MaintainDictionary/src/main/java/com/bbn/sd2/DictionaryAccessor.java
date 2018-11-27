@@ -8,12 +8,19 @@ import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.http.HttpTransport;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.store.FileDataStoreFactory;
+import com.google.api.services.drive.Drive;
+import com.google.api.services.drive.DriveScopes;
 import com.google.api.services.sheets.v4.Sheets;
 import com.google.api.services.sheets.v4.SheetsScopes;
+import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
+import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetResponse;
+import com.google.api.services.sheets.v4.model.DuplicateSheetRequest;
+import com.google.api.services.sheets.v4.model.Request;
 import com.google.api.services.sheets.v4.model.Sheet;
 import com.google.api.services.sheets.v4.model.ValueRange;
 
@@ -28,17 +35,13 @@ import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.logging.Logger;
 
-import javax.xml.namespace.QName;
-
 import org.apache.commons.cli.CommandLine;
-import org.sbolstandard.core2.ComponentDefinition;
 
 public class DictionaryAccessor {
     private static Logger log = Logger.getGlobal();
@@ -51,8 +54,7 @@ public class DictionaryAccessor {
             
     /** Configure from command-line arguments */
     public static void configure(CommandLine cmd) {
-        spreadsheetId = cmd.getOptionValue("gsheet_id","1xyFH-QqYzoswvI3pPJRlBqw9PQdlp91ds3mZoPc3wCU");
-
+    	spreadsheetId = cmd.getOptionValue("gsheet_id", MaintainDictionary.defaultSpreadsheet());
     }
 
     /** Make a clean boot, tearing down old instance if needed */
@@ -111,24 +113,60 @@ public class DictionaryAccessor {
 
     // TODO: generalize the readRange
     private final static int row_offset = 2; // number of header rows
-    private final static String last_column = "G";
+    private final static char last_column = (char)('A' + MaintainDictionary.headers().size() - 1);
     public static List<DictionaryEntry> snapshotCurrentDictionary() throws Exception {
-        ensureSheetsService();
+        log.info("Taking snapshot");
+    	ensureSheetsService();
         // Go to each tab in turn, collecting entries
         List<DictionaryEntry> entries = new ArrayList<>();
         for(String tab : MaintainDictionary.tabs()) {
+            log.info("Scanning tab " + tab);
         	Hashtable<String, Integer> header_map = getDictionaryHeaders(tab);
-
-            // pull the current range
+        	
+            // Pull the current range
             String readRange = tab + "!A" + (row_offset+1) + ":" + last_column;
             ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
-            if(response.getValues()==null) continue; // skip empty sheets
+            if(response.getValues()==null) {
+            	log.info("No entries found on this tab");
+            	continue; // skip empty sheets
+            }
             int row_index = row_offset;
+            
             for(List<Object> value : response.getValues()) {
                 entries.add(new DictionaryEntry(tab, header_map, ++row_index, value));
             }
-        }        
+        }     
+        log.info("Read " + entries.size());
+
         return entries;
+    }
+
+    public static void backup() throws IOException, GeneralSecurityException {
+    	String GDRIVE_BACKUP_FOLDER = "1e3Lz-fzqZpEDKrH52Xso4bG0_y46Da1x";
+        ensureSheetsService();
+	    InputStream in = DictionaryAccessor.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
+	    GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
+		HttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
+		GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
+                HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, Arrays.asList(DriveScopes.DRIVE_FILE))
+                .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
+                .setAccessType("offline")
+                .build();
+		Credential credential = new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("owner");
+		Drive drive = new Drive.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential)
+                .setApplicationName(APPLICATION_NAME)
+                .build();
+			try {
+				String backup_filename = drive.files().get(spreadsheetId).execute().getName();
+				backup_filename += "_backup_" + MaintainDictionary.xmlDateTimeStamp();
+				com.google.api.services.drive.model.File copiedFile = new com.google.api.services.drive.model.File();
+				copiedFile.setName(backup_filename);
+				copiedFile.setParents(Collections.singletonList(GDRIVE_BACKUP_FOLDER));
+				drive.files().copy(spreadsheetId, copiedFile).execute();
+				System.out.println("Successfully wrote back-up to " + backup_filename);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}	
     }
     
     public static void exportCSV() throws IOException {
@@ -160,7 +198,7 @@ public class DictionaryAccessor {
         
     public static Hashtable<String, Integer> getDictionaryHeaders(String tab) throws Exception {
     	Hashtable<String, Integer> header_map = new Hashtable();
-        String headerRange = tab + "!A" + (row_offset) + ":" + last_column + (row_offset);
+        String headerRange = tab + "!A" + row_offset + ":" + last_column + row_offset;
         ValueRange response = service.spreadsheets().values().get(spreadsheetId, headerRange).execute();
         if(response.getValues()==null) return header_map; // skip empty sheets
         List<Object> headers = response.getValues().get(0);
@@ -197,62 +235,48 @@ public class DictionaryAccessor {
      * @throw GeneralSecurityException
      */
     public static void validateUniquenessOfEntries(String header_name, List<DictionaryEntry> entries) throws IOException, GeneralSecurityException {
+        final Map<String, String> uidMap = DictionaryEntry.labUIDMap;
+        Map<String, DictionaryEntry> headers = new TreeMap<String, DictionaryEntry>();
+        boolean commonName = false;
+        String uidTag = null;
+
+        if(header_name.equals("Common Name")) {
+            commonName = true;
+        } else {
+            uidTag = uidMap.get(header_name);
+            if(uidTag == null) {
+                return;
+            }
+        }
+
     	for(int e_i = 0; e_i < entries.size(); ++e_i) {
-    		DictionaryEntry entry_i = entries.get(e_i);
-    		String val_i = null;
-        	switch (header_name) {
-        		case "Common Name": 
-        			val_i = entry_i.name;
-        			break;
-        		case "BioFAB UID": 
-        			val_i = entry_i.labUIDs.get("BioFAB_UID");
-        			break;
-        		case "Ginkgo UID":
-        			val_i = entry_i.labUIDs.get("Ginkgo_UID");
-        			break;
-        		case "Transcriptic UID":
-        			val_i = entry_i.labUIDs.get("Transcriptic_UID");
-        			break;
-        		default:
-        			break;
-        	}
-        	if (val_i == null)  // Ignore empty cells
-        		continue;
-        	if (val_i.trim().isEmpty())  // Ignore blank cells and their duplicates
-        		continue;
-        	for(int e_j = 0; e_j < entries.size(); ++e_j) {
-        		DictionaryEntry entry_j = entries.get(e_j);
-        		String val_j = null;
-        		switch (header_name) {
-            		case "Common Name": 
-            			val_j = entry_j.name;
-            			break;
-            		case "BioFAB UID": 
-            			val_j = entry_j.labUIDs.get("BioFAB_UID");
-            			break;
-            		case "Ginkgo UID":
-            			val_j = entry_j.labUIDs.get("Ginkgo_UID");
-            			break;
-            		case "Transcriptic UID":
-            			val_j = entry_j.labUIDs.get("Transcriptic_UID");
-            			break;
-            		default:
-            			break;
-            	}
-        		if (e_i == e_j)  // Do not flag as a duplicate value when comparing a cell to itself
-        			continue;
-            	if (val_j == null)  // Ignore empty cells
-            		continue;
-            	if (val_j.trim().isEmpty())  // Ignore blank cells and their duplicates
-            		continue;
-            	if (val_i.equals(val_j)) {  // Found duplicate
-            		if (entry_i.uri == null) {  // If this entry already has a URI, then it is the original, not the duplicate
-            			entry_i.statusLog = "Duplicate entry. Also found " + val_i + " in row " + entry_j.row_index;
-            			entry_i.statusCode = StatusCode.DUPLICATE_VALUE;
-            		}
-            	}
-        	}
-    	}
+            DictionaryEntry entry_i = entries.get(e_i);
+            String val_i = null;
+            if(commonName) {
+                val_i = entry_i.name;
+            } else {
+                val_i = entry_i.labUIDs.get(uidTag);
+            }
+
+            if(val_i == null) {
+                continue;
+            }
+
+            val_i = val_i.trim();
+            if(val_i.isEmpty()) {
+                continue;
+            }
+
+            DictionaryEntry entry_j = headers.get(val_i);
+            if(entry_j != null) {
+                entry_i.statusLog =
+                    "Duplicate entry. Found " + val_i + " in row " + entry_j.row_index +
+                    " of " + entry_j.tab + " and row " + entry_i.row_index + " of " +
+                    entry_i.tab;
+                entry_i.statusCode = StatusCode.DUPLICATE_VALUE;
+            }
+            headers.put(val_i, entry_i);
+         }
     }
     
     /**
@@ -271,13 +295,33 @@ public class DictionaryAccessor {
     }
     
     /**
+     * Generate Cell location string
+     * @param e reference entry
+     * @param header_name column header name
+     * @throws IOException
+     */
+    public static String getCellLocation(DictionaryEntry e, String header_name) throws IOException {
+        Integer colInt = e.header_map.get(header_name);
+
+        if(colInt == null) {
+            throw new IOException("Tab " + e.tab + " is missing column \""
+                                  + header_name + "\"");
+        }
+        char col = (char) ('A' + (char)(int)colInt);
+
+        return e.tab + "!"  + col + e.row_index;
+    }
+
+    /**
      * Write the URI of the entry
      * @param e  entry to be written
      * @param uri definitive location for dictionary entry definition
      * @throws IOException
      */
     public static void writeEntryURI(DictionaryEntry e, URI uri) throws IOException {
-        writeLocationText(e.tab+"!C"+e.row_index, uri.toString());
+        String location = getCellLocation(e, "SynBioHub URI");
+
+        writeLocationText(location, uri.toString());
     }
     
     /**
@@ -293,7 +337,7 @@ public class DictionaryAccessor {
         case YES: value = "YES"; break;
         case NO: value = "NO"; break;
         }
-        writeLocationText(e.tab+"!G"+e.row_index, value);
+        writeLocationText(getCellLocation(e, "Stub Object?"), value);
     }
     
     /**
@@ -303,7 +347,9 @@ public class DictionaryAccessor {
      * @throws IOException
      */
     public static void writeEntryDefinition(DictionaryEntry e, URI attributeDefinition) throws IOException {
-        writeLocationText(e.tab+"!G"+e.row_index, attributeDefinition.toString());
+        String location = getCellLocation(e, "Definition URI");
+
+        writeLocationText(location, attributeDefinition.toString());
     }
     
     /**
@@ -313,7 +359,9 @@ public class DictionaryAccessor {
      * @throws IOException
      */
     public static void writeEntryNotes(DictionaryEntry e, String notes) throws IOException {
-        writeLocationText(e.tab+"!H"+e.row_index, notes);
+        String location = getCellLocation(e, "Status");
+
+        writeLocationText(location, notes);
     }
 
     /**
@@ -323,7 +371,19 @@ public class DictionaryAccessor {
      */
     public static void writeStatusUpdate(String status) throws IOException {
         for(String tab : MaintainDictionary.tabs()) {
-            writeLocationText(tab+"!I1", status);
+            Hashtable<String, Integer> header_map;
+            try {
+                header_map = getDictionaryHeaders(tab);
+            } catch (Exception e) {
+                throw new IOException("Failed to get dictionary headers for tab " + tab);
+            }
+
+            int colInt = header_map.get("Status");
+            char col = (char) ('A' + (char)colInt);
+
+            String location = tab + "!"  + col + "1";
+
+            writeLocationText(location, status);
         }
     }
 

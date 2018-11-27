@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.security.GeneralSecurityException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
@@ -18,6 +19,7 @@ import java.util.regex.Pattern;
 import javax.xml.namespace.QName;
 
 import org.sbolstandard.core2.Annotation;
+import org.sbolstandard.core2.Collection;
 import org.sbolstandard.core2.ComponentDefinition;
 import org.sbolstandard.core2.GenericTopLevel;
 import org.sbolstandard.core2.ModuleDefinition;
@@ -39,19 +41,23 @@ public final class MaintainDictionary {
     private static final QName CREATED = new QName("http://purl.org/dc/terms/","created","dcterms");
     private static final QName MODIFIED = new QName("http://purl.org/dc/terms/","modified","dcterms");
     
+    /** The ID for the default Dictionary Spreadsheet, currently the "staging instance" */
+    private static final String SD2E_DICTIONARY = "1xyFH-QqYzoswvI3pPJRlBqw9PQdlp91ds3mZoPc3wCU";
+    
     /** Each spreadsheet tab is only allowed to contain objects of certain types, as determined by this mapping */
     private static Map<String, Set<String>> typeTabs = new HashMap<String,Set<String>>() {{
     	put("Attribute", new HashSet<>(Arrays.asList("Attribute")));
     	put("Reagent", new HashSet<>(Arrays.asList("Bead", "CHEBI", "DNA", "Protein", "RNA", "Media", "Stain", "Buffer", "Solution")));
     	put("Genetic Construct", new HashSet<>(Arrays.asList("DNA", "RNA")));
-    	// Kludge: remove "strain" until SynBioHub issue #663 is fixed
-    	//put("Strain", new HashSet<>(Arrays.asList("Strain")));
+    	put("Strain", new HashSet<>(Arrays.asList("Strain")));
     	put("Protein", new HashSet<>(Arrays.asList("Protein")));
+    	put("Collections", new HashSet<>(Arrays.asList("Challenge Problem")));
     }};
 
     /** Expected headers */
-    private static final Set<String> validHeaders = new HashSet<>(Arrays.asList("Common Name", "Type", "SynBioHub URI", "BioFAB UID", "Ginkgo UID", "Transcriptic UID", "Stub Object?", "Definition URI")); 
-    
+    private static final Set<String> validHeaders = new HashSet<>(Arrays.asList("Common Name", "Type", "SynBioHub URI",
+                "Stub Object?", "Definition URI", "Status"));
+
     /** Classes of object that are implemented as a ComponentDefinition */
     private static Map<String,URI> componentTypes = new HashMap<String,URI>() {{
         put("Bead",URI.create("http://purl.obolibrary.org/obo/NCIT_C70671")); 
@@ -68,6 +74,13 @@ public final class MaintainDictionary {
         put("Stain",URI.create("http://purl.obolibrary.org/obo/NCIT_C841"));
         put("Buffer",URI.create("http://purl.obolibrary.org/obo/NCIT_C70815"));
         put("Solution",URI.create("http://purl.obolibrary.org/obo/NCIT_C70830"));
+    }};
+ 
+    /** Classes of object that are implemented as a Collection.
+     *  Currently no subtypes of Collections other than Challenge Problem are 
+     *  specified, though that may change in the future */
+    private static Map<String,URI> collectionTypes = new HashMap<String,URI>(){{
+        put("Challenge Problem",URI.create("")); 
     }};
     
     /** Classes of object that are not stored in SynBioHub, but are grounded in external definitions */
@@ -93,12 +106,26 @@ public final class MaintainDictionary {
     }
     
     public static Set<String> headers() {
-    	return validHeaders;
+        Set<String> allValidHeaders = new HashSet<String>();
+
+        allValidHeaders.addAll(validHeaders);
+        allValidHeaders.addAll(DictionaryEntry.labUIDMap.keySet());
+
+        return allValidHeaders;
     }
 
     public static Set<String> tabs() {
     	return typeTabs.keySet();
     }
+    
+    public static String defaultSpreadsheet() {
+    	return SD2E_DICTIONARY;
+    }
+    
+    public static Set<String> getAllowedTypesForTab(String tab) {
+    	return typeTabs.get(tab);
+    }
+    
     
     /** @return A string listing all valid types */
     private static String allTypes() {
@@ -124,6 +151,9 @@ public final class MaintainDictionary {
                 GenericTopLevel tl = (GenericTopLevel)entity;
                 return tl.getRDFType().equals(externalTypes.get(type));
             }
+        } else if(collectionTypes.containsKey(type)) {
+        	if (entity instanceof Collection)	
+        		return true;
         } else {
             log.info("Don't recognize type "+type);
         }
@@ -135,9 +165,7 @@ public final class MaintainDictionary {
      * @param name Name of the new object, which will also be converted to a displayID and URI
      * @param type 
      * @return
-     * @throws SBOLValidationException
-     * @throws SynBioHubException
-     * @throws SBOLConversionException 
+     * @throws Exception 
      */
     private static SBOLDocument createStubOfType(String name, String type) throws SBOLValidationException, SynBioHubException, SBOLConversionException {
         SBOLDocument document = SynBioHubAccessor.newBlankDocument();
@@ -154,6 +182,11 @@ public final class MaintainDictionary {
             m.addRole(moduleTypes.get(type));
             m.createAnnotation(STUB_ANNOTATION, "true");
             tl = m;
+        } else if(collectionTypes.containsKey(type)) {
+            log.info("Creating stub Collection for "+name);
+            Collection c = document.createCollection(displayId, "1");
+            c.createAnnotation(STUB_ANNOTATION, "true");
+            tl = c;
         } else if(externalTypes.containsKey(type)) {
             log.info("Creating definition placeholder for "+name);
             tl = document.createGenericTopLevel(displayId, "1", externalTypes.get(type));
@@ -172,7 +205,7 @@ public final class MaintainDictionary {
     }
     
     /** Get current date/time in standard XML format */
-    private static String xmlDateTimeStamp() {
+    public static String xmlDateTimeStamp() {
         // Standard XML date format
         SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX");
         // return current date/time
@@ -180,24 +213,31 @@ public final class MaintainDictionary {
     }
 
     /** 
-     * Remove all prior instances of an annotation and replace with the new one 
+     * Clear all prior instances of an annotation and replace with the new one 
      * @throws SBOLValidationException 
      */
-    private static void replaceOldAnnotations(TopLevel entity, QName key, String value) throws SBOLValidationException {
+    private static void replaceOldAnnotations(TopLevel entity, QName key, String new_value) throws SBOLValidationException {
+        Set<String> new_values = new HashSet<String>() {{ add(new_value); }};
+        replaceOldAnnotations(entity, key, new_values);
+    }
+    
+    /** 
+     * Clear all prior instances of an annotation and replace with a set of new annotations 
+     * @throws SBOLValidationException 
+     */
+    private static void replaceOldAnnotations(TopLevel entity, QName key, Set<String> new_values) throws SBOLValidationException {
         while(entity.getAnnotation(key)!=null) { 
             entity.removeAnnotation(entity.getAnnotation(key));
         }
-        entity.createAnnotation(key, value);
+        for (String value : new_values)
+        	entity.createAnnotation(key, value);
     }
 
     /**
      * Update a single dictionary entry, assumed to be valid
      * @param e entry to be updated
      * @return true if anything has been changed
-     * @throws SBOLConversionException
-     * @throws IOException
-     * @throws SBOLValidationException
-     * @throws SynBioHubException
+     * @throws Exception 
      */
     private static boolean update_entry(DictionaryEntry e) throws SBOLConversionException, IOException, SBOLValidationException, SynBioHubException {
         assert(e.statusCode == StatusCode.VALID);
@@ -206,6 +246,7 @@ public final class MaintainDictionary {
         // This is never called unless the entry is known valid
         SBOLDocument document = null;
         boolean changed = false;
+        
         // if the entry has no URI, create per type
         if(e.uri==null) {
             document = createStubOfType(e.name, e.type);
@@ -226,15 +267,23 @@ public final class MaintainDictionary {
                 document = SynBioHubAccessor.retrieve(e.uri);
             } catch(SynBioHubException sbhe) {
                 report.failure("Could not retrieve linked object from SynBioHub", true);
+                log.severe(sbhe.getMessage());
                 DictionaryAccessor.writeEntryNotes(e, report.toString());
                 return changed;
             }
         }
         
+        // Check if object belongs to the target Collection
+    	if(e.uri.equals(e.local_uri)) { // this condition occurs when the entry does not belong to the target collection, probably a more explicit and better way to check for it
+    		report.failure("Object does not belong to Dictionary collection " + SynBioHubAccessor.getCollectionID());
+            DictionaryAccessor.writeEntryNotes(e, report.toString());
+    		return changed;
+    	}
+    	
         // Make sure we've got the entity to update in our hands:
         TopLevel entity = document.getTopLevel(e.local_uri);
         if(entity==null) {
-            report.failure("Could not find or make object "+e.uri, true);
+            report.failure("Could not find or make object", true);
             DictionaryAccessor.writeEntryNotes(e, report.toString());
             return changed;
         }
@@ -259,19 +308,29 @@ public final class MaintainDictionary {
         }
         
         // if the entry has lab entries, check if they match and (re)annotate if different
-        if(!e.labUIDs.isEmpty()) {
-            for(String labKey : e.labUIDs.keySet()) {
-                String labValue = e.labUIDs.get(labKey);
-                QName labQKey = new QName("http://sd2e.org#",labKey,"sd2");
-                Annotation annotation = entity.getAnnotation(labQKey);
-                if(annotation==null || !labValue.equals(annotation.getStringValue())) {
-                    replaceOldAnnotations(entity,labQKey,labValue);
-                    changed = true;
-                    report.success(labKey+" for "+e.name+" is '"+labValue+"'",true);
-                }
+        for(String labKey : e.labUIDs.keySet()) {
+            QName labQKey = new QName("http://sd2e.org#",labKey,"sd2");
+            String labEntry = e.labUIDs.get(labKey);
+            Set<String> labIds = new HashSet<String>();
+            if(labEntry != null)
+            	labIds.addAll(Arrays.asList(labEntry.split("\\s*,\\s*")));  // Separate by comma and whitespace
+            Set<String> currentIds = new HashSet<String>();
+            List<Annotation> annotations = entity.getAnnotations();
+            for (Annotation ann : annotations) {
+            	if(ann.getQName().equals(labQKey)) {
+            		currentIds.add(ann.getStringValue());
+            	}
+            }
+            if(!labIds.equals(currentIds)) {
+                replaceOldAnnotations(entity,labQKey,labIds);
+                changed = true;
+                if(labIds.size() > 0)
+                	report.success(labKey+" for "+e.name+" is "+String.join(", ", labIds),true);
+                else
+                	report.success("Deleted lab UID", true);
             }
         }
-        
+       
         if(e.attribute && e.attributeDefinition!=null) {
             Set<URI> derivations = entity.getWasDerivedFroms();
             if(derivations.size()==0 || !e.attributeDefinition.equals(derivations.iterator().next())) {
@@ -284,8 +343,7 @@ public final class MaintainDictionary {
         
         if(changed) {
             replaceOldAnnotations(entity,MODIFIED,xmlDateTimeStamp());
-            // turn off update write until SynBioHub issue #663 is fixed
-            //document.write(System.out);
+            document.write(System.out);
             SynBioHubAccessor.update(document);
             DictionaryAccessor.writeEntryNotes(e, report.toString());
             if(!e.attribute) {
@@ -296,7 +354,6 @@ public final class MaintainDictionary {
                 }
             }
         }
-        
         return changed;
     }
     
@@ -308,9 +365,9 @@ public final class MaintainDictionary {
         try {
             List<DictionaryEntry> entries = DictionaryAccessor.snapshotCurrentDictionary();
             DictionaryAccessor.validateUniquenessOfEntries("Common Name", entries);
-            DictionaryAccessor.validateUniquenessOfEntries("BioFAB UID", entries);
-            DictionaryAccessor.validateUniquenessOfEntries("Ginkgo UID", entries);
-            DictionaryAccessor.validateUniquenessOfEntries("Transcriptic UID", entries);
+            for(String uidTag : DictionaryEntry.labUIDMap.keySet()) {
+                DictionaryAccessor.validateUniquenessOfEntries(uidTag, entries);
+            }
             log.info("Beginning dictionary update");
             int mod_count = 0, bad_count = 0;
             for(DictionaryEntry e : entries) {
@@ -359,5 +416,6 @@ public final class MaintainDictionary {
             report.failure("Dictionary update failed with exception of type "+e.getClass().getName(), true);
         }
         DictionaryAccessor.writeStatusUpdate("SD2 Dictionary ("+DictionaryMaintainerApp.VERSION+") "+report.toString());
+        //DictionaryAccessor.exportCSV();
     }
 }
