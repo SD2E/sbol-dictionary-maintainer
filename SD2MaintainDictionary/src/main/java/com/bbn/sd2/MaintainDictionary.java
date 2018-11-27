@@ -59,7 +59,7 @@ public final class MaintainDictionary {
                 "Stub Object?", "Definition URI", "Status"));
 
     private static final Set<String> protectedColumns = new HashSet<>(Arrays.asList("SynBioHub URI",
-                "Stub Object?", "Definition URI", "Status"));
+                "Stub Object?", "Status"));
 
     public static final List<String> editors = Arrays.asList("bartleyba@sbolstandard.org",
                                                              "nicholasroehner@gmail.com",
