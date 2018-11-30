@@ -351,14 +351,7 @@ public class DictionaryAccessor {
      * @throws IOException
      */
     public static ValueRange writeEntryStub(DictionaryEntry e, StubStatus stub) throws IOException {
-        String value = null;
-        switch(stub) {
-        case UNDEFINED: value = ""; break;
-        case YES: value = "YES"; break;
-        case NO: value = "NO"; break;
-        }
-
-        return writeLocationText(getCellLocation(e, "Stub Object?"), value);
+        return writeLocationText(getCellLocation(e, "Stub Object?"), e.stubString());
     }
     
     /**
