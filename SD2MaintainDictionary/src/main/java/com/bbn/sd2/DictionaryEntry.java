@@ -3,6 +3,7 @@ package com.bbn.sd2;
 import java.io.IOException;
 import java.net.URI;
 import java.security.GeneralSecurityException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
@@ -132,15 +133,35 @@ public class DictionaryEntry {
 
     public Map<String, String> generateFieldMap() {
         Map<String, String> fieldMap = new TreeMap<String, String>();
+        Map<String, String> reverseUIDMap = new TreeMap<String, String>();
 
+        for(String key : labUIDMap.keySet()) {
+            reverseUIDMap.put(labUIDMap.get(key), key);
+        }
+        
         // Add Lab UIDs
         for(String key : labUIDs.keySet()) {
             String uid = labUIDs.get(key);
             if(uid == null) {
                 uid = "";
+            } else {
+                // The uid string is a comma-separated list.
+                // Sort the list so the string can be compared later
+
+                String[] uidArray = uid.split("\\s*,\\s*");
+                Arrays.sort(uidArray);
+                uid = null;
+                for(String uidElement : uidArray) {
+                    if(uid == null) {
+                        uid = uidElement;
+                    } else {
+                        uid = uid + ", " + uidElement;
+                    }
+                }
             }
-            fieldMap.put(key, uid);
+            fieldMap.put(reverseUIDMap.get(key), uid);
         }
+
         fieldMap.put("Common Name", name);
         fieldMap.put("Stub Object?", stubString());
         fieldMap.put("Type", type);

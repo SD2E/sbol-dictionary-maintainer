@@ -47,13 +47,13 @@ import org.apache.commons.cli.CommandLine;
 
 public class DictionaryAccessor {
     private static Logger log = Logger.getGlobal();
-    
+
     private static String spreadsheetId = null;
-    
+
     private static Sheets service = null;
 
     private DictionaryAccessor() {} // static-only class
-            
+
     /** Configure from command-line arguments */
     public static void configure(CommandLine cmd) {
     	spreadsheetId = cmd.getOptionValue("gsheet_id", MaintainDictionary.defaultSpreadsheet());
@@ -96,10 +96,10 @@ public class DictionaryAccessor {
                 .build();
         return new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("user");
     }
-    
+
     private static void ensureSheetsService() {
         if(service!=null) return;
-        
+
         try {
             // Build a new authorized API client service.
             final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
@@ -123,7 +123,7 @@ public class DictionaryAccessor {
         for(String tab : MaintainDictionary.tabs()) {
             log.info("Scanning tab " + tab);
         	Hashtable<String, Integer> header_map = getDictionaryHeaders(tab);
-        	
+
             Collection<Integer> columns = header_map.values();
 
             char last_column = 'A';
@@ -142,11 +142,11 @@ public class DictionaryAccessor {
             	continue; // skip empty sheets
             }
             int row_index = row_offset;
-            
+
             for(List<Object> value : response.getValues()) {
                 entries.add(new DictionaryEntry(tab, header_map, ++row_index, value));
             }
-        }     
+        }
         log.info("Read " + entries.size());
 
         return entries;
@@ -177,9 +177,9 @@ public class DictionaryAccessor {
 				System.out.println("Successfully wrote back-up to " + backup_filename);
 			} catch (IOException e) {
 				e.printStackTrace();
-			}	
+			}
     }
-    
+
     public static void exportCSV() throws IOException {
         for(String tab : MaintainDictionary.tabs()) {
             String readRange = tab;
@@ -189,7 +189,7 @@ public class DictionaryAccessor {
     		if (!file.exists()) {
     			file.createNewFile();
     		}
-    		OutputStream outStream = new FileOutputStream(file); 
+    		OutputStream outStream = new FileOutputStream(file);
             for(List<Object> row : response.getValues()) {
             	String csv_row = "";
             	for (Object cell : row) {
@@ -206,7 +206,7 @@ public class DictionaryAccessor {
         }
     }
 
-        
+
     public static Hashtable<String, Integer> getDictionaryHeaders(String tab) throws Exception {
     	Hashtable<String, Integer> header_map = new Hashtable();
         String headerRange = tab + "!" + row_offset + ":" + row_offset;
@@ -220,7 +220,7 @@ public class DictionaryAccessor {
             if (MaintainDictionary.headers().contains(header)) {
                 header_map.put(header, i_h);
             }
-        }    	
+        }
     	return header_map;
     }
 
@@ -289,7 +289,7 @@ public class DictionaryAccessor {
             headers.put(val_i, entry_i);
          }
     }
-    
+
     /**
      * Write text to an arbitrary single cell
      * @param writeRange location of cell
@@ -312,6 +312,57 @@ public class DictionaryAccessor {
         req.setData(values);
         req.setValueInputOption("RAW");
         service.spreadsheets().values().batchUpdate(spreadsheetId, req).execute();
+    }
+
+    private static char columnNameToIndex(String tab, String colName) throws Exception {
+        Hashtable<String, Integer> header_map = getDictionaryHeaders(tab);
+
+        Integer colVal = header_map.get(colName);
+        if(colVal == null) {
+            throw new IOException("Column " + colName + " not found on tab " + tab);
+        }
+
+        return (char)('A' + colVal);
+    }
+
+    public static void deleteCellShiftUp(String tab, String colName, int row) throws Exception  {
+        char col = columnNameToIndex(tab, colName);
+
+        String readRange = tab + "!" + col + row + ":" + col;
+        ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
+
+        List<List<Object>> values = response.getValues();
+        if(values == null) {
+            throw new IOException("No data in column \"" + colName + "\" starting at row " + row
+                                  + " in tab " + tab);
+        }
+
+        for(int i=0; i<values.size()-1; ++i) {
+            // Copy value from row below
+            values.get(i).set(0, values.get(i+1).get(0));
+        }
+
+        values.get(values.size() - 1).set(0,  "");
+
+        int lastRow = row + values.size() - 1;
+
+        String writeRange = tab + "!" + col + row +
+                ":" + col + lastRow;
+
+        response.setRange(writeRange);
+        service.spreadsheets().values().update(spreadsheetId, writeRange, response)
+                                               .setValueInputOption("RAW")
+                                               .execute();
+    }
+
+    public static String getCellData(String tab, String colName, int row) throws Exception {
+        char col = columnNameToIndex(tab, colName);
+
+        String readRange = tab + "!" + col + row;
+
+        ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
+
+        return (String)response.getValues().get(0).get(0);
     }
 
     /**
@@ -343,7 +394,7 @@ public class DictionaryAccessor {
 
         return writeLocationText(location, uri.toString());
     }
-    
+
     /**
      * Write the URI of the entry
      * @param e  entry to be written
@@ -353,9 +404,9 @@ public class DictionaryAccessor {
     public static ValueRange writeEntryStub(DictionaryEntry e, StubStatus stub) throws IOException {
         return writeLocationText(getCellLocation(e, "Stub Object?"), e.stubString());
     }
-    
+
     /**
-     * Write the URI of the entry 
+     * Write the URI of the entry
      * @param e  entry to be written
      * @param uri definitive location for ontology source definition
      * @throws IOException
@@ -365,7 +416,7 @@ public class DictionaryAccessor {
 
         return writeLocationText(location, attributeDefinition.toString());
     }
-    
+
     /**
      * Write the URI of the entry
      * @param e  entry to be written

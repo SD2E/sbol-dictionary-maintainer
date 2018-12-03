@@ -436,7 +436,7 @@ public final class MaintainDictionary {
         // allShiftCheckColumns contains the headers of the columns that are
         // checked for value shifts (i.e. deleted cells)
         Set<String> allShiftCheckColumns = new HashSet<>(shiftCheckColumns);
-        for(String labUIDTag : DictionaryEntry.labUIDMap.values()) {
+        for(String labUIDTag : DictionaryEntry.labUIDMap.keySet()) {
             allShiftCheckColumns.add(labUIDTag);
         }
 
@@ -647,7 +647,8 @@ public final class MaintainDictionary {
             if(bad_count>0) report.failure(bad_count+" invalid",true);
         } catch(Exception e) {
             e.printStackTrace();
-            report.failure("Dictionary update failed with exception of type "+e.getClass().getName(), true);
+            //report.failure("Dictionary update failed with exception of type "+e.getClass().getName(), true);
+            report.failure("Dictionary update failed: " + e.getMessage());
         }
         DictionaryAccessor.writeStatusUpdate("SD2 Dictionary ("+DictionaryMaintainerApp.VERSION+") "+report.toString());
         //DictionaryAccessor.exportCSV();
