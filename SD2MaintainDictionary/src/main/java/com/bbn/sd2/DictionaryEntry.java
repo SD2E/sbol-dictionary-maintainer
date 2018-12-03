@@ -36,7 +36,7 @@ public class DictionaryEntry {
                 put("Ginkgo UID", "Ginkgo_UID");
                 put("Transcriptic UID", "Transcriptic_UID");
                 put("EmeraldCloud UID", "EmeraldCloud_UID");
-                put("LBNL UID", "LBNL UID");
+                put("LBNL UID", "LBNL_UID");
             }
         };
     
