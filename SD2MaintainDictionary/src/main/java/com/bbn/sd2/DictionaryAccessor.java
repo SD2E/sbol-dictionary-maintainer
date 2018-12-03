@@ -16,13 +16,9 @@ import com.google.api.client.util.store.FileDataStoreFactory;
 import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.DriveScopes;
 import com.google.api.services.sheets.v4.Sheets;
+import com.google.api.services.sheets.v4.Sheets.Spreadsheets.Values;
 import com.google.api.services.sheets.v4.SheetsScopes;
-import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
-import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetResponse;
 import com.google.api.services.sheets.v4.model.BatchUpdateValuesRequest;
-import com.google.api.services.sheets.v4.model.DuplicateSheetRequest;
-import com.google.api.services.sheets.v4.model.Request;
-import com.google.api.services.sheets.v4.model.Sheet;
 import com.google.api.services.sheets.v4.model.ValueRange;
 
 import java.io.File;
@@ -363,6 +359,27 @@ public class DictionaryAccessor {
         ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
 
         return (String)response.getValues().get(0).get(0);
+    }
+
+    public static void setCellData(String tab, String colName, int row, String value) throws Exception {
+        char col = columnNameToIndex(tab, colName);
+
+        String writeRange = tab + "!" + col + row;
+
+        ValueRange updatedValue = new ValueRange();
+        updatedValue.setRange(writeRange);
+
+        List<Object> rowValues = new ArrayList<>();
+        rowValues.add(value);
+
+        List<List<Object>> values = new ArrayList<>();
+        values.add(rowValues);
+
+        updatedValue.setValues(values);
+
+        Values.Update update = service.spreadsheets().values().update(spreadsheetId, writeRange, updatedValue);
+        update.setValueInputOption("RAW");
+        update.execute();
     }
 
     /**

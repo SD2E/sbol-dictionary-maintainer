@@ -6,6 +6,8 @@ import org.apache.commons.cli.CommandLine;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.sbolstandard.core2.SBOLDocument;
+import org.sbolstandard.core2.TopLevel;
 
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
@@ -34,6 +36,7 @@ import com.google.api.services.sheets.v4.model.ValueRange;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.URI;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -160,6 +163,32 @@ public class TestMaintainDictionary {
 
         // Run the dictionary application
         DictionaryTestShared.initializeTestEnvironment(sheetId);
+
+        // Change an object name
+        Integer updateRow = 4;
+        String updateTab = "Genetic Construct";
+        String updatedName = UUID.randomUUID().toString().substring(0,6);
+
+        // Fetch the URI for the row
+        String updateUri = DictionaryAccessor.getCellData(updateTab, "SynBioHub URI", updateRow);
+
+        // Update the value
+        DictionaryAccessor.setCellData(updateTab, "Common Name", updateRow, updatedName);
+
+        // Run the Dictionary
+        DictionaryTestShared.initializeTestEnvironment(sheetId);
+
+        // Translate the URI
+        URI local_uri = SynBioHubAccessor.translateURI(new URI(updateUri));
+
+        // Fetch the SBOL Document from SynBioHub
+        SBOLDocument document = SynBioHubAccessor.retrieve(new URI(updateUri));
+        TopLevel entity = document.getTopLevel(local_uri);
+
+        // Make sure name was updated in SynBioHub
+        if(!entity.getName().equals(updatedName)) {
+            throw new Exception("Update Value Test Failed");
+        }
 
         // Delete a cell
         String deleteColumn = "LBNL UID";
