@@ -16,12 +16,9 @@ import com.google.api.client.util.store.FileDataStoreFactory;
 import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.DriveScopes;
 import com.google.api.services.sheets.v4.Sheets;
+import com.google.api.services.sheets.v4.Sheets.Spreadsheets.Values;
 import com.google.api.services.sheets.v4.SheetsScopes;
-import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
-import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetResponse;
-import com.google.api.services.sheets.v4.model.DuplicateSheetRequest;
-import com.google.api.services.sheets.v4.model.Request;
-import com.google.api.services.sheets.v4.model.Sheet;
+import com.google.api.services.sheets.v4.model.BatchUpdateValuesRequest;
 import com.google.api.services.sheets.v4.model.ValueRange;
 
 import java.io.File;
@@ -34,6 +31,7 @@ import java.net.URI;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Hashtable;
 import java.util.List;
@@ -45,13 +43,13 @@ import org.apache.commons.cli.CommandLine;
 
 public class DictionaryAccessor {
     private static Logger log = Logger.getGlobal();
-    
+
     private static String spreadsheetId = null;
-    
+
     private static Sheets service = null;
 
     private DictionaryAccessor() {} // static-only class
-            
+
     /** Configure from command-line arguments */
     public static void configure(CommandLine cmd) {
     	spreadsheetId = cmd.getOptionValue("gsheet_id", MaintainDictionary.defaultSpreadsheet());
@@ -94,10 +92,10 @@ public class DictionaryAccessor {
                 .build();
         return new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("user");
     }
-    
+
     private static void ensureSheetsService() {
         if(service!=null) return;
-        
+
         try {
             // Build a new authorized API client service.
             final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
@@ -113,7 +111,6 @@ public class DictionaryAccessor {
 
     // TODO: generalize the readRange
     private final static int row_offset = 2; // number of header rows
-    private final static char last_column = (char)('A' + MaintainDictionary.headers().size() - 1);
     public static List<DictionaryEntry> snapshotCurrentDictionary() throws Exception {
         log.info("Taking snapshot");
     	ensureSheetsService();
@@ -122,7 +119,17 @@ public class DictionaryAccessor {
         for(String tab : MaintainDictionary.tabs()) {
             log.info("Scanning tab " + tab);
         	Hashtable<String, Integer> header_map = getDictionaryHeaders(tab);
-        	
+
+            Collection<Integer> columns = header_map.values();
+
+            char last_column = 'A';
+            for(Integer column : columns) {
+                char columnChar = (char)('A' + column);
+                if(columnChar > last_column) {
+                    last_column = columnChar;
+                }
+            }
+
             // Pull the current range
             String readRange = tab + "!A" + (row_offset+1) + ":" + last_column;
             ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
@@ -131,11 +138,11 @@ public class DictionaryAccessor {
             	continue; // skip empty sheets
             }
             int row_index = row_offset;
-            
+
             for(List<Object> value : response.getValues()) {
                 entries.add(new DictionaryEntry(tab, header_map, ++row_index, value));
             }
-        }     
+        }
         log.info("Read " + entries.size());
 
         return entries;
@@ -166,19 +173,19 @@ public class DictionaryAccessor {
 				System.out.println("Successfully wrote back-up to " + backup_filename);
 			} catch (IOException e) {
 				e.printStackTrace();
-			}	
+			}
     }
-    
+
     public static void exportCSV() throws IOException {
         for(String tab : MaintainDictionary.tabs()) {
-            String readRange = tab + "!A1:" + last_column;
+            String readRange = tab;
             ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
             if(response.getValues()==null) continue; // skip empty sheets
     		File file = new File("./" + tab + ".txt");
     		if (!file.exists()) {
     			file.createNewFile();
     		}
-    		OutputStream outStream = new FileOutputStream(file); 
+    		OutputStream outStream = new FileOutputStream(file);
             for(List<Object> row : response.getValues()) {
             	String csv_row = "";
             	for (Object cell : row) {
@@ -195,10 +202,10 @@ public class DictionaryAccessor {
         }
     }
 
-        
+
     public static Hashtable<String, Integer> getDictionaryHeaders(String tab) throws Exception {
     	Hashtable<String, Integer> header_map = new Hashtable();
-        String headerRange = tab + "!A" + row_offset + ":" + last_column + row_offset;
+        String headerRange = tab + "!" + row_offset + ":" + row_offset;
         ValueRange response = service.spreadsheets().values().get(spreadsheetId, headerRange).execute();
         if(response.getValues()==null) return header_map; // skip empty sheets
         List<Object> headers = response.getValues().get(0);
@@ -206,10 +213,10 @@ public class DictionaryAccessor {
         // TODO: if header cells aren't locked, might need to check for duplicate header entries
         for(int i_h = 0; i_h < headers.size(); ++i_h) {
         	String header = headers.get(i_h).toString();
-        	if (!MaintainDictionary.headers().contains(header))
-        		throw new Exception("Invalid header " + header + " found in table " + tab);
-        	header_map.put(header, i_h);
-        }    	
+            if (MaintainDictionary.headers().contains(header)) {
+                header_map.put(header, i_h);
+            }
+        }
     	return header_map;
     }
 
@@ -278,29 +285,110 @@ public class DictionaryAccessor {
             headers.put(val_i, entry_i);
          }
     }
-    
+
     /**
      * Write text to an arbitrary single cell
      * @param writeRange location of cell
      * @param value Text to be written
+     * @return The ValueRange json object to send to the Spreadsheets server
      * @throws IOException
      */
-    private static void writeLocationText(String writeRange, String value) throws IOException {
-        ensureSheetsService();
-        List<List<Object>> values = new ArrayList<>();
+    private static ValueRange writeLocationText(String writeRange, String value) throws IOException {
         List<Object> row = new ArrayList<>();
-        row.add(value); values.add(row);
-        ValueRange content = new ValueRange().setRange(writeRange).setValues(values);
-        service.spreadsheets().values().update(spreadsheetId, writeRange, content).setValueInputOption("RAW").execute();
+        row.add(value);
+
+        List<List<Object>> values = new ArrayList<>();
+        values.add(row);
+
+        return new ValueRange().setRange(writeRange).setValues(values);
     }
-    
+
+    public static void batchUpdateValues(List<ValueRange> values) throws IOException {
+        BatchUpdateValuesRequest req = new BatchUpdateValuesRequest();
+        req.setData(values);
+        req.setValueInputOption("RAW");
+        service.spreadsheets().values().batchUpdate(spreadsheetId, req).execute();
+    }
+
+    private static char columnNameToIndex(String tab, String colName) throws Exception {
+        Hashtable<String, Integer> header_map = getDictionaryHeaders(tab);
+
+        Integer colVal = header_map.get(colName);
+        if(colVal == null) {
+            throw new IOException("Column " + colName + " not found on tab " + tab);
+        }
+
+        return (char)('A' + colVal);
+    }
+
+    public static void deleteCellShiftUp(String tab, String colName, int row) throws Exception  {
+        char col = columnNameToIndex(tab, colName);
+
+        String readRange = tab + "!" + col + row + ":" + col;
+        ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
+
+        List<List<Object>> values = response.getValues();
+        if(values == null) {
+            throw new IOException("No data in column \"" + colName + "\" starting at row " + row
+                                  + " in tab " + tab);
+        }
+
+        for(int i=0; i<values.size()-1; ++i) {
+            // Copy value from row below
+            values.get(i).set(0, values.get(i+1).get(0));
+        }
+
+        values.get(values.size() - 1).set(0,  "");
+
+        int lastRow = row + values.size() - 1;
+
+        String writeRange = tab + "!" + col + row +
+                ":" + col + lastRow;
+
+        response.setRange(writeRange);
+        service.spreadsheets().values().update(spreadsheetId, writeRange, response)
+                                               .setValueInputOption("RAW")
+                                               .execute();
+    }
+
+    public static String getCellData(String tab, String colName, int row) throws Exception {
+        char col = columnNameToIndex(tab, colName);
+
+        String readRange = tab + "!" + col + row;
+
+        ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
+
+        return (String)response.getValues().get(0).get(0);
+    }
+
+    public static void setCellData(String tab, String colName, int row, String value) throws Exception {
+        char col = columnNameToIndex(tab, colName);
+
+        String writeRange = tab + "!" + col + row;
+
+        ValueRange updatedValue = new ValueRange();
+        updatedValue.setRange(writeRange);
+
+        List<Object> rowValues = new ArrayList<>();
+        rowValues.add(value);
+
+        List<List<Object>> values = new ArrayList<>();
+        values.add(rowValues);
+
+        updatedValue.setValues(values);
+
+        Values.Update update = service.spreadsheets().values().update(spreadsheetId, writeRange, updatedValue);
+        update.setValueInputOption("RAW");
+        update.execute();
+    }
+
     /**
      * Generate Cell location string
      * @param e reference entry
      * @param header_name column header name
      * @throws IOException
      */
-    public static String getCellLocation(DictionaryEntry e, String header_name) throws IOException {
+    private static String getCellLocation(DictionaryEntry e, String header_name) throws IOException {
         Integer colInt = e.header_map.get(header_name);
 
         if(colInt == null) {
@@ -318,50 +406,44 @@ public class DictionaryAccessor {
      * @param uri definitive location for dictionary entry definition
      * @throws IOException
      */
-    public static void writeEntryURI(DictionaryEntry e, URI uri) throws IOException {
+    public static ValueRange writeEntryURI(DictionaryEntry e, URI uri) throws IOException {
         String location = getCellLocation(e, "SynBioHub URI");
 
-        writeLocationText(location, uri.toString());
+        return writeLocationText(location, uri.toString());
     }
-    
+
     /**
      * Write the URI of the entry
      * @param e  entry to be written
      * @param uri definitive location for dictionary entry definition
      * @throws IOException
      */
-    public static void writeEntryStub(DictionaryEntry e, StubStatus stub) throws IOException {
-        String value = null;
-        switch(stub) {
-        case UNDEFINED: value = ""; break;
-        case YES: value = "YES"; break;
-        case NO: value = "NO"; break;
-        }
-        writeLocationText(getCellLocation(e, "Stub Object?"), value);
+    public static ValueRange writeEntryStub(DictionaryEntry e, StubStatus stub) throws IOException {
+        return writeLocationText(getCellLocation(e, "Stub Object?"), e.stubString());
     }
-    
+
     /**
-     * Write the URI of the entry 
+     * Write the URI of the entry
      * @param e  entry to be written
      * @param uri definitive location for ontology source definition
      * @throws IOException
      */
-    public static void writeEntryDefinition(DictionaryEntry e, URI attributeDefinition) throws IOException {
+    public static ValueRange writeEntryDefinition(DictionaryEntry e, URI attributeDefinition) throws IOException {
         String location = getCellLocation(e, "Definition URI");
 
-        writeLocationText(location, attributeDefinition.toString());
+        return writeLocationText(location, attributeDefinition.toString());
     }
-    
+
     /**
      * Write the URI of the entry
      * @param e  entry to be written
      * @param notes string to be written
      * @throws IOException
      */
-    public static void writeEntryNotes(DictionaryEntry e, String notes) throws IOException {
+    public static ValueRange writeEntryNotes(DictionaryEntry e, String notes) throws IOException {
         String location = getCellLocation(e, "Status");
 
-        writeLocationText(location, notes);
+        return writeLocationText(location, notes);
     }
 
     /**
@@ -370,6 +452,8 @@ public class DictionaryAccessor {
      * @throws IOException
      */
     public static void writeStatusUpdate(String status) throws IOException {
+        List<ValueRange> updates = new ArrayList<ValueRange>();
+
         for(String tab : MaintainDictionary.tabs()) {
             Hashtable<String, Integer> header_map;
             try {
@@ -383,8 +467,10 @@ public class DictionaryAccessor {
 
             String location = tab + "!"  + col + "1";
 
-            writeLocationText(location, status);
+            updates.add(writeLocationText(location, status));
         }
+
+        batchUpdateValues(updates);
     }
 
 //    public static void main(String... args) throws IOException, GeneralSecurityException {

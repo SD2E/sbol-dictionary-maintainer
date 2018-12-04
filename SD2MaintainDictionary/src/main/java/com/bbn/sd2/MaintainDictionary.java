@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
@@ -30,6 +31,8 @@ import org.sbolstandard.core2.TopLevel;
 import org.synbiohub.frontend.SynBioHubException;
 
 import com.bbn.sd2.DictionaryEntry.StubStatus;
+import com.google.api.services.sheets.v4.Sheets;
+import com.google.api.services.sheets.v4.model.ValueRange;
 
 /**
  * Helper class for importing SBOL into the working compilation.
@@ -57,6 +60,11 @@ public final class MaintainDictionary {
     /** Expected headers */
     private static final Set<String> validHeaders = new HashSet<>(Arrays.asList("Common Name", "Type", "SynBioHub URI",
                 "Stub Object?", "Definition URI", "Status"));
+
+    /** These columns, along with the lab UID columns, will be checked for deleted cells that
+     *  cause other cells to shift up */
+    private static final Set<String> shiftCheckColumns = new HashSet<>(Arrays.asList("Common Name",
+                "Definition URI"));
 
     /** Classes of object that are implemented as a ComponentDefinition */
     private static Map<String,URI> componentTypes = new HashMap<String,URI>() {{
@@ -198,9 +206,6 @@ public final class MaintainDictionary {
         tl.setName(name);
         tl.createAnnotation(CREATED, xmlDateTimeStamp());
         
-        // push to create now
-        document.write(System.out);
-        SynBioHubAccessor.update(document);
         return document;
     }
     
@@ -239,53 +244,71 @@ public final class MaintainDictionary {
      * @return true if anything has been changed
      * @throws Exception 
      */
-    private static boolean update_entry(DictionaryEntry e) throws SBOLConversionException, IOException, SBOLValidationException, SynBioHubException {
+    private static DictionaryEntry update_entry(DictionaryEntry e, List<ValueRange> valueUpdates) throws SBOLConversionException, IOException, SBOLValidationException, SynBioHubException {
         assert(e.statusCode == StatusCode.VALID);
         
         UpdateReport report = new UpdateReport();
         // This is never called unless the entry is known valid
-        SBOLDocument document = null;
-        boolean changed = false;
-        
+        URI local_uri = null;
+        DictionaryEntry originalEntry = null;
+
+        // If the URI is null and the name is not, attempt to resolve:
+        if(e.uri==null && e.name!=null) {
+            try {
+                e.uri = SynBioHubAccessor.nameToURI(e.name);
+                if(e.uri!=null) {
+                    // This is an update to the spreadsheet, but not to symBioHub,
+                    // so "changed" is not updated
+                    valueUpdates.add(DictionaryAccessor.writeEntryURI(e, e.uri));
+                }
+            } catch (SynBioHubException exception) {
+                e.statusCode = StatusCode.SBH_CONNECTION_FAILED; // Don't try to make anything if we couldn't check if it exists
+                exception.printStackTrace();
+                log.warning("SynBioHub connection failed in trying to resolve URI to name");
+                return originalEntry;
+            }
+        }
+
         // if the entry has no URI, create per type
         if(e.uri==null) {
-            document = createStubOfType(e.name, e.type);
-            if(document==null) {
+            e.document = createStubOfType(e.name, e.type);
+            if(e.document==null) {
                 report.failure("Could not make object "+e.name, true);
-                DictionaryAccessor.writeEntryNotes(e, report.toString());
-                return changed;
+                valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
+                return originalEntry;
             }
             // pull out the first (and only) element to get the URI
-            e.local_uri = document.getTopLevels().iterator().next().getIdentity();
-            e.uri = SynBioHubAccessor.translateLocalURI(e.local_uri);
+            local_uri = e.document.getTopLevels().iterator().next().getIdentity();
+            e.uri = SynBioHubAccessor.translateLocalURI(local_uri);
             report.success("Created stub in SynBioHub",true);
-            DictionaryAccessor.writeEntryURI(e, e.uri);
-            DictionaryAccessor.writeEntryNotes(e, report.toString());
-            changed = true;
+            valueUpdates.add(DictionaryAccessor.writeEntryURI(e, e.uri));
+            e.changed = true;
         } else { // otherwise get a copy from SynBioHub
+            local_uri = SynBioHubAccessor.translateURI(e.uri);
             try {
-                document = SynBioHubAccessor.retrieve(e.uri);
+                e.document = SynBioHubAccessor.retrieve(e.uri);
+                originalEntry = new DictionaryEntry(e);
             } catch(SynBioHubException sbhe) {
                 report.failure("Could not retrieve linked object from SynBioHub", true);
                 log.severe(sbhe.getMessage());
-                DictionaryAccessor.writeEntryNotes(e, report.toString());
-                return changed;
+                valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
+                return originalEntry;
             }
         }
-        
+
         // Check if object belongs to the target Collection
-    	if(e.uri.equals(e.local_uri)) { // this condition occurs when the entry does not belong to the target collection, probably a more explicit and better way to check for it
-    		report.failure("Object does not belong to Dictionary collection " + SynBioHubAccessor.getCollectionID());
-            DictionaryAccessor.writeEntryNotes(e, report.toString());
-    		return changed;
-    	}
-    	
+        if(e.uri.equals(local_uri)) { // this condition occurs when the entry does not belong to the target collection, probably a more explicit and better way to check for it
+            report.failure("Object does not belong to Dictionary collection " + SynBioHubAccessor.getCollectionID());
+            valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
+            return originalEntry;
+        }
+
         // Make sure we've got the entity to update in our hands:
-        TopLevel entity = document.getTopLevel(e.local_uri);
+        TopLevel entity = e.document.getTopLevel(local_uri);
         if(entity==null) {
             report.failure("Could not find or make object", true);
-            DictionaryAccessor.writeEntryNotes(e, report.toString());
-            return changed;
+            valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
+            return originalEntry;
         }
         
         // Check if typing is valid
@@ -293,17 +316,31 @@ public final class MaintainDictionary {
             report.failure("Type does not match '"+e.type+"'", true);
         }
         
-        boolean entity_is_stub = (entity.getAnnotation(STUB_ANNOTATION) != null);
-        if((entity_is_stub && e.stub!=StubStatus.YES) || (!entity_is_stub && e.stub!=StubStatus.NO)) {
-            e.stub = entity_is_stub ? StubStatus.YES : StubStatus.NO;
-            report.note(entity_is_stub?"Stub object":"Linked with non-stub object", true);
-            changed = true;
+        // Note that the "stub" field is defined by the SynBioHub document.
+        // The spreadsheet is updated to be consistent with the SynBioHub
+        // document, but "changed" flag is not updated since the SynBioHub
+        // document is not updated.
+        if(e.attribute) {
+            if(e.stub != StubStatus.UNDEFINED) {
+                e.stub = StubStatus.UNDEFINED;
+                valueUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
+            }
+        } else {
+            boolean entity_is_stub = (entity.getAnnotation(STUB_ANNOTATION) != null);
+            if((entity_is_stub && e.stub!=StubStatus.YES) || (!entity_is_stub && e.stub!=StubStatus.NO)) {
+                e.stub = entity_is_stub ? StubStatus.YES : StubStatus.NO;
+                valueUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
+                report.note(entity_is_stub?"Stub object":"Linked with non-stub object", true);
+            }
         }
-        
+
         // update entity name if needed
         if(e.name!=null && !e.name.equals(entity.getName())) {
+            if(originalEntry != null) {
+                originalEntry.name = entity.getName();
+            }
             entity.setName(e.name);
-            changed = true;
+            e.changed = true;
             report.success("Name changed to '"+e.name+"'",true);
         }
         
@@ -313,48 +350,185 @@ public final class MaintainDictionary {
             String labEntry = e.labUIDs.get(labKey);
             Set<String> labIds = new HashSet<String>();
             if(labEntry != null)
-            	labIds.addAll(Arrays.asList(labEntry.split("\\s*,\\s*")));  // Separate by comma and whitespace
+                labIds.addAll(Arrays.asList(labEntry.split("\\s*,\\s*")));  // Separate by comma and whitespace
             Set<String> currentIds = new HashSet<String>();
             List<Annotation> annotations = entity.getAnnotations();
             for (Annotation ann : annotations) {
-            	if(ann.getQName().equals(labQKey)) {
-            		currentIds.add(ann.getStringValue());
-            	}
+                if(ann.getQName().equals(labQKey)) {
+                    currentIds.add(ann.getStringValue());
+                }
             }
+
             if(!labIds.equals(currentIds)) {
+                if(originalEntry != null) {
+                    // Extract lab IDs from document
+                    String originalLabIDs = null;
+                    for(String labId : currentIds) {
+                        if(originalLabIDs == null) {
+                            originalLabIDs = labId;
+                        } else {
+                            originalLabIDs = originalLabIDs + "," + labId;
+                        }
+                    }
+
+                    if(originalLabIDs == null) {
+                        originalEntry.labUIDs.remove(labKey);
+                    } else {
+                        originalEntry.labUIDs.put(labKey, originalLabIDs);
+                    }
+                }
+
                 replaceOldAnnotations(entity,labQKey,labIds);
-                changed = true;
+                e.changed = true;
                 if(labIds.size() > 0)
-                	report.success(labKey+" for "+e.name+" is "+String.join(", ", labIds),true);
+                    report.success(labKey+" for "+e.name+" is "+String.join(", ", labIds),true);
                 else
-                	report.success("Deleted lab UID", true);
+                    report.success("Deleted lab UID", true);
             }
         }
        
         if(e.attribute && e.attributeDefinition!=null) {
             Set<URI> derivations = entity.getWasDerivedFroms();
+            if(originalEntry != null) {
+                if(derivations.size() == 0) {
+                    originalEntry.attributeDefinition = null;
+                } else {
+                    originalEntry.attributeDefinition =
+                            derivations.iterator().next();
+                }
+            }
+
             if(derivations.size()==0 || !e.attributeDefinition.equals(derivations.iterator().next())) {
                 derivations.clear(); derivations.add(e.attributeDefinition);
                 entity.setWasDerivedFroms(derivations);
-                changed = true;
+                e.changed = true;
                 report.success("Definition for "+e.name+" is '"+e.attributeDefinition+"'",true);
             }
         }
         
-        if(changed) {
-            replaceOldAnnotations(entity,MODIFIED,xmlDateTimeStamp());
-            document.write(System.out);
-            SynBioHubAccessor.update(document);
-            DictionaryAccessor.writeEntryNotes(e, report.toString());
-            if(!e.attribute) {
-                DictionaryAccessor.writeEntryStub(e, e.stub);
-            } else {
-                if(e.attributeDefinition!=null) {
-                    DictionaryAccessor.writeEntryDefinition(e, e.attributeDefinition);
-                }
+        // Update the spreadsheet with the entry notes
+        valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
+
+        return originalEntry;
+    }
+
+    private static Map< String, Map<String, String>> generateFieldMap(List<DictionaryEntry> entries) {
+        Map<String, Map<String, String>> retVal = new TreeMap< String, Map<String, String>>();
+
+        for(DictionaryEntry entry : entries) {
+            if(entry.uri == null) {
+                continue;
             }
+            String uri = entry.uri.toString();
+
+            Map<String, String> fieldMap = entry.generateFieldMap();
+            retVal.put(uri, fieldMap);
         }
-        return changed;
+
+        return retVal;
+    }
+
+    private static void checkShifts(List<DictionaryEntry> currentEntries,
+                                    List<DictionaryEntry> originalEntries) throws Exception {
+        // Extract spreadsheet data into a map
+        Map< String, Map<String, String>> originalEntryMap = generateFieldMap(originalEntries);
+
+        // allShiftCheckColumns contains the headers of the columns that are
+        // checked for value shifts (i.e. deleted cells)
+        Set<String> allShiftCheckColumns = new HashSet<>(shiftCheckColumns);
+        for(String labUIDTag : DictionaryEntry.labUIDMap.keySet()) {
+            allShiftCheckColumns.add(labUIDTag);
+        }
+
+        // This code looks for deleted cells that caused the remaining
+        // cells in the column to shift up.  For each column,
+        // "maxShifts" defines the minimum number of cell value shifts
+        // that prevent updates from being committed
+        final int maxShifts = 3;
+        Map<String, Integer> upShiftCounts = null;
+        String tab = null;
+
+        // Loop through spreadsheet rows
+        Map<String, String> previousRowValues = null;
+        for(DictionaryEntry e : currentEntries) {
+            if(e.tab != tab) {
+                // Starting a new tab
+                tab = e.tab;
+                // Keeps track of shift counts for each column in this tab
+                upShiftCounts = new HashMap<String, Integer>();
+                previousRowValues = null;
+            }
+
+            if(e.uri == null) {
+                log.severe("Row " + e.row_index + " in tab \"" + e.tab
+                                   + " is missing a uri ");
+                continue;
+            }
+
+            // Find field values from last SynBioHub update
+            Map<String, String> originalValues = originalEntryMap.get(e.uri.toString());
+            if(originalValues == null) {
+                continue;
+            }
+
+            // Generate map of field values in this spreadsheet row
+            Map<String, String> currentValues = e.generateFieldMap();
+
+            // Ensure we have the field values from the row above
+            // the current row
+            if(previousRowValues == null) {
+                // No information about the value in the row above
+                previousRowValues = currentValues;
+                continue;
+            }
+
+            // Loop through columns in this row to check for value shifts
+            for(String key : allShiftCheckColumns) {
+                String currentValue = currentValues.get(key);
+                if(currentValue == null) {
+                    // This row does not contain a value in column "key"
+                    continue;
+                }
+
+                String originalValue = originalValues.get(key);
+                if(originalValue == null) {
+                    // The value in this cell was just created, and therefore
+                    // does not have previous value it changed from
+                    continue;
+                }
+
+                if(originalValue.equals(currentValue)) {
+                    // This value in this cell is consistent with SynBioHub
+                    continue;
+                }
+
+                String previousRowValue = previousRowValues.get(key);
+                if(previousRowValue == null) {
+                    // No value for cell directly above
+                    continue;
+                }
+
+                if(previousRowValue.equals(originalValue)) {
+                    // The value has shifted up a row
+                    Integer count = upShiftCounts.get(key);
+                    if(count == null) {
+                        upShiftCounts.put(key, 1);
+                    } else {
+                        upShiftCounts.put(key, count + 1);
+                    }
+                    count = upShiftCounts.get(key);
+                    if(count == maxShifts) {
+                        String errMsg = "Found potential shift in column \"" +
+                                    key + "\" of tab \"" + tab + "\"";
+                        log.severe(errMsg);
+                        throw new Exception(errMsg);
+                    }
+                }
+
+            }
+
+            previousRowValues = currentValues;
+        }
     }
     
     /**
@@ -363,57 +537,118 @@ public final class MaintainDictionary {
     public static void maintain_dictionary() throws IOException, GeneralSecurityException, SBOLValidationException, SynBioHubException, SBOLConversionException {
         UpdateReport report = new UpdateReport();
         try {
-            List<DictionaryEntry> entries = DictionaryAccessor.snapshotCurrentDictionary();
-            DictionaryAccessor.validateUniquenessOfEntries("Common Name", entries);
+            List<DictionaryEntry> currentEntries = DictionaryAccessor.snapshotCurrentDictionary();
+            DictionaryAccessor.validateUniquenessOfEntries("Common Name", currentEntries);
             for(String uidTag : DictionaryEntry.labUIDMap.keySet()) {
-                DictionaryAccessor.validateUniquenessOfEntries(uidTag, entries);
+                DictionaryAccessor.validateUniquenessOfEntries(uidTag, currentEntries);
             }
+
             log.info("Beginning dictionary update");
             int mod_count = 0, bad_count = 0;
-            for(DictionaryEntry e : entries) {
+
+            // This will contain updates to be made to the spreadsheet
+            List<ValueRange> spreadsheetUpdates = new ArrayList<ValueRange>();
+
+            // This will contain the spreadsheet information according to what is
+            // currently in SynBioHub
+            List<DictionaryEntry> originalEntries = new ArrayList<DictionaryEntry>();
+
+            // Loop through the spreadsheet rows
+            for(DictionaryEntry e : currentEntries) {
+                DictionaryEntry originalEntry = null;
+
                 if (e.statusCode == StatusCode.VALID) {
-                    boolean modified = update_entry(e);
-                    mod_count += modified?1:0;
+                    // At this point the spreadsheet row has passed some rudimentary
+                    // sanity checks.  The following method fetches or creates the
+                    // corresponding SBOL Document and updates the document according
+                    // to the spreadsheet row.  The method returns the "original"
+                    // spreadsheet row, based on data in SynBioHub
+                    originalEntry = update_entry(e, spreadsheetUpdates);
                 }
-                else {
-                    // if the entry is not valid, ignore it
-                	UpdateReport invalidReport = new UpdateReport();
+
+                if(e.statusCode == StatusCode.VALID) {
+                    // This row looks good
+                    if(originalEntry != null) {
+                        // Save original (SynBioHub) entry
+                        originalEntries.add(originalEntry);
+                    }
+
+                    if(e.changed) {
+                        ++mod_count;
+                    }
+                } else {
+                    // There is a problem with this row
+                    UpdateReport invalidReport = new UpdateReport();
                     invalidReport.subsection("Cannot update");
-                	switch (e.statusCode) {
-                		case MISSING_NAME: 
-                			log.info("Invalid entry, missing name, skipping");
-                			invalidReport.failure("Common name is missing");
-                			break;
-                		case MISSING_TYPE: 
-                			log.info("Invalid entry for name "+e.name+", skipping");
-                			invalidReport.failure("Type is missing");
-                			break;
-                		case INVALID_TYPE: 
-                			log.info("Invalid entry for name "+e.name+", skipping");
-                			invalidReport.failure("Type must be one of "+ typeTabs.get(e.tab).toString());
-                			break;
-                		case DUPLICATE_VALUE: 
-                			log.info("Invalid entry for name "+e.name+", skipping");
-                			invalidReport.failure(e.statusLog);
-                			break;
-                		case SBH_CONNECTION_FAILED:
-                			break;
-                		case GOOGLE_SHEETS_CONNECTION_FAILED:
-                			break;
-					default:
-						break;
-                	}
-                	DictionaryAccessor.writeEntryNotes(e, invalidReport.toString());
-                	bad_count++;
+                    switch (e.statusCode) {
+                    case MISSING_NAME:
+                        log.info("Invalid entry, missing name, skipping");
+                        invalidReport.failure("Common name is missing");
+                        break;
+                    case MISSING_TYPE:
+                        log.info("Invalid entry for name "+e.name+", skipping");
+                        invalidReport.failure("Type is missing");
+                        break;
+                    case INVALID_TYPE:
+                        log.info("Invalid entry for name "+e.name+", skipping");
+                        invalidReport.failure("Type must be one of "+ typeTabs.get(e.tab).toString());
+                        break;
+                    case DUPLICATE_VALUE:
+                        log.info("Invalid entry for name "+e.name+", skipping");
+                        invalidReport.failure(e.statusLog);
+                        break;
+                    case SBH_CONNECTION_FAILED:
+                        break;
+                    case GOOGLE_SHEETS_CONNECTION_FAILED:
+                        break;
+                    default:
+                        break;
+                    }
+
+                    if(invalidReport.condition < 0) {
+                        spreadsheetUpdates.add(DictionaryAccessor.writeEntryNotes(e, invalidReport.toString()));
+                    }
+                    bad_count++;
                 }
             }
+
+            // Check for deleted cells that caused column values to shift up
+            // If a deleted cell if found, an exception will be thrown
+            checkShifts(currentEntries, originalEntries);
+
+            // Commit changes to SynBioHub
+            for(DictionaryEntry e : currentEntries) {
+                if(e.changed) {
+                    URI local_uri = e.document.getTopLevels().iterator().next().getIdentity();
+                    TopLevel entity = e.document.getTopLevel(local_uri);
+                    replaceOldAnnotations(entity, MODIFIED,xmlDateTimeStamp());
+                    //e.document.write(System.out);
+                    SynBioHubAccessor.update(e.document);
+                    spreadsheetUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
+                    if(!e.attribute) {
+                        spreadsheetUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
+                    } else {
+                        if(e.attributeDefinition!=null) {
+                            spreadsheetUpdates.add(DictionaryAccessor.writeEntryDefinition(e, e.attributeDefinition));
+                        }
+                    }
+                }
+            }
+
+            // Commit updates to spreadsheet
+            if(!spreadsheetUpdates.isEmpty()) {
+                log.info("Updating spreadsheet");
+                DictionaryAccessor.batchUpdateValues(spreadsheetUpdates);
+            }
+
             log.info("Completed certification of dictionary");
-            report.success(entries.size()+" entries",true);
+            report.success(currentEntries.size()+" entries",true);
             report.success(mod_count+" modified",true);
             if(bad_count>0) report.failure(bad_count+" invalid",true);
         } catch(Exception e) {
             e.printStackTrace();
-            report.failure("Dictionary update failed with exception of type "+e.getClass().getName(), true);
+            //report.failure("Dictionary update failed with exception of type "+e.getClass().getName(), true);
+            report.failure("Dictionary update failed: " + e.getMessage());
         }
         DictionaryAccessor.writeStatusUpdate("SD2 Dictionary ("+DictionaryMaintainerApp.VERSION+") "+report.toString());
         //DictionaryAccessor.exportCSV();

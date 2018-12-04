@@ -6,6 +6,8 @@ import org.apache.commons.cli.CommandLine;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.sbolstandard.core2.SBOLDocument;
+import org.sbolstandard.core2.TopLevel;
 
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
@@ -34,6 +36,7 @@ import com.google.api.services.sheets.v4.model.ValueRange;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.URI;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -48,7 +51,7 @@ import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.DriveScopes;
 
 public class TestMaintainDictionary {
-	
+
     private static final String APPLICATION_NAME = "SD2 Scratch Dictionary";
     private static final String CREDENTIALS_FILE_PATH = "/credentials.json";
     private static final String TOKENS_DIRECTORY_PATH = "tokens";
@@ -62,14 +65,14 @@ public class TestMaintainDictionary {
     public static Spreadsheet getSratchSheet() throws IOException {
 	    return sheetsService.spreadsheets().get(sheetId).execute();
     }
-    
+
 	@BeforeClass
 	public static void setUpBeforeClass() throws Exception {
 		// Create scratch spreadsheet
 		// Load credentials
 	    InputStream in = DictionaryAccessor.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
 	    GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
-	        
+
 	    // Build flow and trigger user authorization request
 	    HttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
 	    GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
@@ -78,10 +81,10 @@ public class TestMaintainDictionary {
 	                .setAccessType("offline")
 	                .build();
 	    credential = new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("owner");
-	    
+
 	    sheetsService = new Sheets.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential).setApplicationName(APPLICATION_NAME).build();
 	    Sheets.Spreadsheets.Create create_sheet_request = sheetsService.spreadsheets().create(new Spreadsheet());
-	    Spreadsheet SCRATCH_SHEET = create_sheet_request.execute();	    
+	    Spreadsheet SCRATCH_SHEET = create_sheet_request.execute();
 	    sheetId = SCRATCH_SHEET.getSpreadsheetId();
 	    log.info("Created " + SCRATCH_SHEET.getSpreadsheetId());
 
@@ -94,7 +97,7 @@ public class TestMaintainDictionary {
 	    BatchUpdateSpreadsheetRequest update_sheet_request =
 	            new BatchUpdateSpreadsheetRequest().setRequests(add_sheet_requests);
 	    sheetsService.spreadsheets().batchUpdate(sheetId, update_sheet_request).execute();
-	    
+
 	    // Write headers to tabs
 		List<Object> headers = new ArrayList<Object>();
 		for (String header : MaintainDictionary.headers()) {
@@ -111,58 +114,108 @@ public class TestMaintainDictionary {
 			                .setValueInputOption("RAW")
 			                .execute();
 		}
-	    
+
 	    DictionaryTestShared.initializeTestEnvironment(sheetId);
 //		DictionaryMaintainerApp.main(options);
 
 	}
 
 	@Test
-	public void testEntries() throws Exception {
-		// Form entries
-		List<List<Object>> values = new ArrayList<List<Object>>();
-		
-		// Populate each tab with objects
-		for (String tab : MaintainDictionary.tabs()) {
-        	Hashtable<String, Integer> header_map = DictionaryAccessor.getDictionaryHeaders(tab);
+    public void testEntries() throws Exception {
+        List<ValueRange> valueUpdates = new ArrayList<ValueRange>();
 
-        	// Populate a dummy object for each allowed type
-        	for (String type : MaintainDictionary.getAllowedTypesForTab(tab)) {
-				String[] row_entries = new String[header_map.keySet().size()];
-				for (String header : header_map.keySet()) {
-					String entry = null;
-					if (header.equals("Type"))
-						entry = type;
-					else if (header.equals("Common Name"))
-						entry = UUID.randomUUID().toString().substring(0,6);
-					else
-						entry = "";  // Fill empty cells, null value won't work
-					row_entries[header_map.get(header)] = entry;
-				}
-				List<Object> row = new ArrayList<Object>(Arrays.asList(row_entries));
-				values.add(row);
-			}
-			
-			// Write entries to spreadsheet range
-			String target_range = tab + "!A3";
-			ValueRange body = new ValueRange()
-			        .setValues(values);
-			AppendValuesResponse result =
-					sheetsService.spreadsheets().values().append(sheetId, target_range, body)
-			                .setValueInputOption("RAW")
-			                .execute();
-			System.out.printf("%d cells appended.", result.getUpdates().getUpdatedCells());
-			values.clear();
-		}
-	    DictionaryTestShared.initializeTestEnvironment(sheetId);
+        // Populate each tab with objects
+        for (String tab : MaintainDictionary.tabs()) {
+            // Form entries
+            List<List<Object>> values = new ArrayList<List<Object>>();
 
-	}
+            Hashtable<String, Integer> header_map = DictionaryAccessor.getDictionaryHeaders(tab);
+
+            // Populate a dummy object for each allowed type
+            for (String type : MaintainDictionary.getAllowedTypesForTab(tab)) {
+                String[] row_entries = new String[header_map.keySet().size()];
+                for (String header : header_map.keySet()) {
+                    String entry = null;
+                    if (header.equals("Type"))
+                        entry = type;
+                    else if (header.equals("Common Name"))
+                        entry = UUID.randomUUID().toString().substring(0,6);
+                    else if (header.equals("LBNL UID") && tab.equals("Reagent"))
+                        entry = UUID.randomUUID().toString().substring(0,6) +
+                            ", " + UUID.randomUUID().toString().substring(0,6);
+                    else
+                        entry = "";  // Fill empty cells, null value won't work
+                    row_entries[header_map.get(header)] = entry;
+                }
+                List<Object> row = new ArrayList<Object>(Arrays.asList(row_entries));
+                values.add(row);
+            }
+
+            // Write entries to spreadsheet range
+            String target_range = tab + "!A3";
+            ValueRange body = new ValueRange()
+                    .setValues(values).setRange(target_range);
+            valueUpdates.add(body);
+        }
+
+        // Update the spreadsheet
+        DictionaryAccessor.batchUpdateValues(valueUpdates);
+
+        // Run the dictionary application
+        DictionaryTestShared.initializeTestEnvironment(sheetId);
+
+        // Change an object name
+        Integer updateRow = 4;
+        String updateTab = "Genetic Construct";
+        String updatedName = UUID.randomUUID().toString().substring(0,6);
+
+        // Fetch the URI for the row
+        String updateUri = DictionaryAccessor.getCellData(updateTab, "SynBioHub URI", updateRow);
+
+        // Update the value
+        DictionaryAccessor.setCellData(updateTab, "Common Name", updateRow, updatedName);
+
+        // Run the Dictionary
+        DictionaryTestShared.initializeTestEnvironment(sheetId);
+
+        // Translate the URI
+        URI local_uri = SynBioHubAccessor.translateURI(new URI(updateUri));
+
+        // Fetch the SBOL Document from SynBioHub
+        SBOLDocument document = SynBioHubAccessor.retrieve(new URI(updateUri));
+        TopLevel entity = document.getTopLevel(local_uri);
+
+        // Make sure name was updated in SynBioHub
+        if(!entity.getName().equals(updatedName)) {
+            throw new Exception("Update Value Test Failed");
+        }
+
+        // Delete a cell
+        String deleteColumn = "LBNL UID";
+
+        DictionaryAccessor.deleteCellShiftUp("Reagent", deleteColumn, 5);
+
+        // Run Dictionary update
+        DictionaryTestShared.initializeTestEnvironment(sheetId);
+
+        // Get sheet status
+        String status = DictionaryAccessor.getCellData("Reagent", "Status", 1);
+
+        // Look for column shift error message in sheet status
+        String errMsg = "Found potential shift in column \"" +
+                        deleteColumn + "\" of tab \"Reagent\"";
+
+        if(status.indexOf(errMsg) == -1) {
+            System.err.println("Cell Delete Test Failed");
+            throw new Exception("Cell Delete Test Failed");
+        }
+    }
 
 	@AfterClass
 	public static void tearDownAfterClass() throws Exception {
 		// Delete scratch sheet
 		if (System.getProperty("c") != null && System.getProperty("c").toLowerCase().equals("true")) {
-			log.info("Tearing down test Dictionary");		
+			log.info("Tearing down test Dictionary");
 		    InputStream in = DictionaryAccessor.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
 		    GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
 			HttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
@@ -180,7 +233,7 @@ public class TestMaintainDictionary {
 					log.info("Successfully deleted scratch sheet " + sheetId);
 				} catch (IOException e) {
 					log.info("An error tearing down scratch sheet occurred: " + e);
-				}	
+				}
 		}
 	}
 }
