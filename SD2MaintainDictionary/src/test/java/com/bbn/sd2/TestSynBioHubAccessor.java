@@ -87,7 +87,7 @@ public class TestSynBioHubAccessor {
 
         Log.info("SynBioHub access time was " + accessTime + " milliseconds");
         assert(fetchFailed);
-        assert(accessTime > 5000);
+        assert(accessTime >= 5000);
         assert(accessTime < 6000);
     }
 
