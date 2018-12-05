@@ -182,7 +182,7 @@ public class TestMaintainDictionary {
         URI local_uri = SynBioHubAccessor.translateURI(new URI(updateUri));
 
         // Fetch the SBOL Document from SynBioHub
-        SBOLDocument document = SynBioHubAccessor.retrieve(new URI(updateUri));
+        SBOLDocument document = SynBioHubAccessor.retrieve(new URI(updateUri), false);
         TopLevel entity = document.getTopLevel(local_uri);
 
         // Make sure name was updated in SynBioHub

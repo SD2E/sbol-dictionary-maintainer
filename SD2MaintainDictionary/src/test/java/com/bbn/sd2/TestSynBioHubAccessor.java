@@ -34,25 +34,60 @@ public class TestSynBioHubAccessor {
 
 	private static final String test_collection = "scratch-test";
 	
-	public void initializeTestInstance() throws ParseException, SynBioHubException {
-		// Do not initiate tests if password for SBH instance is not provided
-		String password = System.getProperty("p");
-    	if (password == null) {
-			fail("Unable to initialize test environment. Password for SynBioHub staging instance was not provided.");
-		}
-    	String[] options = new String[] {"-S", "https://hub-staging.sd2e.org", "-f", "https://hub.sd2e.org", "-p", ""};
-//    	String[] options = new String[] {"-S", "https://hub.sd2e.org", "-p", ""};
+    public void initializeTestInstance() throws ParseException, SynBioHubException {
+        // Do not initiate tests if password for SBH instance is not provided
+        String password = System.getProperty("p");
+        if (password == null) {
+            fail("Unable to initialize test environment. Password for SynBioHub staging instance was not provided.");
+        }
+        String[] options = new String[] {"-S", "https://hub-staging.sd2e.org", "-f", "https://hub.sd2e.org", "-p", ""};
+//      String[] options = new String[] {"-S", "https://hub.sd2e.org", "-p", ""};
 
-    	options[options.length - 1] = password;  // Add password to command line
-		SynBioHubAccessor.main(options);		
-	}
+        options[options.length - 1] = password;  // Add password to command line
+        SynBioHubAccessor.logout();
+        SynBioHubAccessor.main(options);
+    }
 	
 	@Test
 	public void testSanitize() {
         String name = "scratch-test";
         assert(SynBioHubAccessor.sanitizeNameToDisplayID(name).equals("scratch0x2Dtest"));
 	}
-	
+
+    @Test
+    public void timeoutTest() throws Exception {
+        // Do not initiate tests if password for SBH instance is not provided
+        String password = System.getProperty("p");
+        if (password == null) {
+            fail("Unable to initialize test environment. Password for SynBioHub staging instance was not provided.");
+        }
+        String[] options = new String[] {"-S", "https://hub-staging.sd2e.org", "-t", "5", "-p", ""};
+
+        options[options.length - 1] = password;  // Add password to command line
+        SynBioHubAccessor.main(options);
+
+        URI docURI = new URI("https://hub-staging.sd2e.org/user/sd2e/design/Strain_1_MG1655_WT/1");
+        long startTime = System.currentTimeMillis();
+
+        boolean fetchFailed = false;
+
+        // Attempt to trigger a timeout
+        try {
+            SynBioHubAccessor.retrieve(docURI, true).write(System.out);
+        } catch(SynBioHubException e) {
+            Log.info("SynBioHub fetch failed in timeout test (expected)");
+            fetchFailed = true;
+        }
+        long endTime = System.currentTimeMillis();
+
+        long accessTime = endTime - startTime;
+
+        Log.info("SynBioHub access time was " + accessTime + " milliseconds");
+        assert(fetchFailed);
+        assert(accessTime > 5000);
+        assert(accessTime < 6000);
+    }
+
     @Test
     public void testAccess() throws Exception {
     	initializeTestInstance();
@@ -63,7 +98,7 @@ public class TestSynBioHubAccessor {
         m.setDescription(description);
         SynBioHubAccessor.update(document);
         final URI testURI = URI.create(SynBioHubAccessor.getCollectionPrefix() + m.getDisplayId() + "/1");
-        SBOLDocument doc = SynBioHubAccessor.retrieve(testURI);
+        SBOLDocument doc = SynBioHubAccessor.retrieve(testURI, false);
 
         // This assertion only works if the clean method is enabled and each test runs on a fresh scratch_collection Collection
         // otherwise the user must manually delete the scratch_collection prior to each run
@@ -91,7 +126,7 @@ public class TestSynBioHubAccessor {
         SynBioHubAccessor.update(document);
         final URI testURI = URI.create(SynBioHubAccessor.getCollectionPrefix() + m.getDisplayId() + "/1");
         assert(document.getTopLevels().size() == 6);
-        document = SynBioHubAccessor.retrieve(testURI);
+        document = SynBioHubAccessor.retrieve(testURI, false);
         assert(document.getTopLevels().size() == 1);      
     }
 
@@ -107,7 +142,7 @@ public class TestSynBioHubAccessor {
     	SynBioHubAccessor.update(doc);
     	URI m_uri = m.getIdentity();
     	System.out.println(SynBioHubAccessor.translateLocalURI(m_uri));
-    	doc = SynBioHubAccessor.retrieve(SynBioHubAccessor.translateLocalURI(m_uri));
+        doc = SynBioHubAccessor.retrieve(SynBioHubAccessor.translateLocalURI(m_uri), false);
     	m = doc.getModuleDefinitions().iterator().next();
 
     	assert(m.getIdentity().equals(m_uri));
@@ -118,7 +153,7 @@ public class TestSynBioHubAccessor {
     		m.removeAnnotation(m.getAnnotation(DUMMY_ANNOTATION));
     	}
     	SynBioHubAccessor.update(doc);
-    	doc = SynBioHubAccessor.retrieve(SynBioHubAccessor.translateLocalURI(m_uri));
+        doc = SynBioHubAccessor.retrieve(SynBioHubAccessor.translateLocalURI(m_uri), false);
     	m = doc.getModuleDefinitions().iterator().next();
     	doc.write(System.out);
     	assert(m.getAnnotation(DUMMY_ANNOTATION) == null);
@@ -139,10 +174,10 @@ public class TestSynBioHubAccessor {
         SynBioHubAccessor.update(doc);
         URI m1_uri = SynBioHubAccessor.translateLocalURI(m1.getIdentity());
         URI m2_uri = SynBioHubAccessor.translateLocalURI(m2.getIdentity());
-        doc = SynBioHubAccessor.retrieve(m1_uri);
+        doc = SynBioHubAccessor.retrieve(m1_uri, false);
         m1 = doc.getModuleDefinition(m1.getIdentity());
         assert(m1 != null);
-        doc = SynBioHubAccessor.retrieve(m2_uri);
+        doc = SynBioHubAccessor.retrieve(m2_uri, false);
         m2 = doc.getModuleDefinition(m2.getIdentity());        
         assert(m2 != null);
     }    
