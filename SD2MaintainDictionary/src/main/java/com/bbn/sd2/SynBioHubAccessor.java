@@ -49,6 +49,7 @@ public final class SynBioHubAccessor {
 
         repository.logout();
         repository = null;
+        spoofingPrefix = null;
         connectionTimeoutSeconds = defaultConnectionTimeoutSeconds;
     }
 
@@ -73,6 +74,7 @@ public final class SynBioHubAccessor {
             if(!spoofingPrefix.endsWith("/")) spoofingPrefix = spoofingPrefix+"/";
         	collectionPrefix = cmd.getOptionValue("collection", spoofingPrefix + "user/sd2e/scratch_test");
         } else {
+            spoofingPrefix = null;
             collectionPrefix = cmd.getOptionValue("collection", synbiohubServer + "user/sd2e/scratch_test");
         }
         if(!collectionPrefix.endsWith("/")) collectionPrefix = collectionPrefix + "/";
