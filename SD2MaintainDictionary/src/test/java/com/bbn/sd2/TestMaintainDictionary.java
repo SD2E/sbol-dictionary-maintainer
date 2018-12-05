@@ -235,5 +235,6 @@ public class TestMaintainDictionary {
 					log.info("An error tearing down scratch sheet occurred: " + e);
 				}
 		}
+		SynBioHubAccessor.logout();
 	}
 }

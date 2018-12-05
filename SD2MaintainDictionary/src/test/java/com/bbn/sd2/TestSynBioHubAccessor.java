@@ -56,6 +56,8 @@ public class TestSynBioHubAccessor {
 
     @Test
     public void timeoutTest() throws Exception {
+        SynBioHubAccessor.logout();
+
         // Do not initiate tests if password for SBH instance is not provided
         String password = System.getProperty("p");
         if (password == null) {
@@ -73,9 +75,10 @@ public class TestSynBioHubAccessor {
 
         // Attempt to trigger a timeout
         try {
-            SynBioHubAccessor.retrieve(docURI, true).write(System.out);
+            SynBioHubAccessor.retrieve(docURI, true);
         } catch(SynBioHubException e) {
             Log.info("SynBioHub fetch failed in timeout test (expected)");
+            e.printStackTrace();
             fetchFailed = true;
         }
         long endTime = System.currentTimeMillis();
@@ -187,6 +190,7 @@ public class TestSynBioHubAccessor {
 	public static void tearDownAfterClass() throws Exception {
 		if (System.getProperty("c") != null && System.getProperty("c").toLowerCase().equals("true"))	
 			SynBioHubAccessor.clean();
+		SynBioHubAccessor.logout();
 	}
 
     
