@@ -24,6 +24,7 @@ import com.google.api.services.sheets.v4.model.AddProtectedRangeRequest;
 import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
 import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetResponse;
 import com.google.api.services.sheets.v4.model.CopySheetToAnotherSpreadsheetRequest;
+import com.google.api.services.sheets.v4.model.DeleteProtectedRangeRequest;
 import com.google.api.services.sheets.v4.model.DuplicateSheetRequest;
 import com.google.api.services.sheets.v4.model.Editors;
 import com.google.api.services.sheets.v4.model.GridRange;
@@ -598,12 +599,12 @@ public class DictionaryAccessor {
                 String quotedSheetTitle = "\"" + sheetTitle + "\"";
                 if(endColumnIndex == null) {
                     if(startColumnIndex == null) {
-                        log.warning("Found unexpected protection from on row " +
+                        log.warning("Deleting unexpected protection from on row " +
                                 (startRowIndex + 1) + " on sheet " + quotedSheetTitle);
                     } else {
                         char startColumn = (char) ('A' + startColumnIndex);
 
-                        log.warning("Found unexpected protection from on row " +
+                        log.warning("Deleting unexpected protection from on row " +
                                 (startRowIndex + 1) + " starting from column " + startColumn +
                                 " on sheet " + quotedSheetTitle);
                     }
@@ -620,28 +621,33 @@ public class DictionaryAccessor {
                     if(endRowIndex == null) {
                         if(startRowIndex == null) {
                             if(startColumn == endColumn) {
-	                            log.warning("Found unexpected protection on column " +
+	                            log.warning("Deleting unexpected protection on column " +
 	                                    startColumn + " on sheet " + sheetTitle);
                             } else {
-	                            log.warning("Found unexpected protection from column " +
+	                            log.warning("Deleting unexpected protection from column " +
 	                                        startColumn + " to column " + endColumn + " on sheet " +
 	                                        sheetTitle);
                             }
                         } else {
-                            log.warning("Found unexpected protection from on column " +
+                            log.warning("Deleting unexpected protection from on column " +
                                         startColumn + " starting from row " + (startRowIndex + 1) +
                                         " on sheet " + sheetTitle);
                         }
                     } else {
-                        log.warning("Found unexpected protection from " +
+                        log.warning("Deleting unexpected protection from " +
                                 startColumn + (startRowIndex + 1) +
                                 " to " + endColumn + endRowIndex +
                                 " on sheet " + sheetTitle);
                     }
                 } else {
-                    log.warning("Found unexpected protection on sheet " +
+                    log.warning("Deleting unexpected protection on sheet " +
                                 sheetTitle);
                 }
+
+                // Create a request to delete the protected range
+                DeleteProtectedRangeRequest deleteRequest = new DeleteProtectedRangeRequest();
+                deleteRequest.setProtectedRangeId(range.getProtectedRangeId());
+                updateRangeRequests.add(new Request().setDeleteProtectedRange(deleteRequest));
                 continue;
             }
 
@@ -709,6 +715,54 @@ public class DictionaryAccessor {
             updateRangeRequests.add(request);
 
         }
+    }
+
+    public static Sheet getSheetProperties(String tab) throws Exception {
+        // Lookup the sheet properties and protected ranges on the source spreadsheet
+        Sheets.Spreadsheets.Get get = service.spreadsheets().get(spreadsheetId);
+        get.setFields("sheets.properties");
+        Spreadsheet s = get.execute();
+        List<Sheet> sheets = s.getSheets();
+
+        for(Sheet sheet: sheets) {
+            // Get the sheet properties
+            SheetProperties sheetProperties = sheet.getProperties();
+
+            // Make sure the title is in the list of sheets we process
+            String sheetTitle = sheetProperties.getTitle();
+            if(!tab.equals(sheetTitle)) {
+                continue;
+            }
+
+            // Get a list of existing protected ranges on this sheet
+            return sheet;
+        }
+
+        return null;
+    }
+
+    public static List<ProtectedRange> getProtectedRanges(String tab) throws Exception {
+        // Lookup the sheet properties and protected ranges on the source spreadsheet
+        Sheets.Spreadsheets.Get get = service.spreadsheets().get(spreadsheetId);
+        get.setFields("sheets.protectedRanges,sheets.properties");
+        Spreadsheet s = get.execute();
+        List<Sheet> sheets = s.getSheets();
+
+        for(Sheet sheet: sheets) {
+            // Get the sheet properties
+            SheetProperties sheetProperties = sheet.getProperties();
+
+            // Make sure the title is in the list of sheets we process
+            String sheetTitle = sheetProperties.getTitle();
+            if(!tab.equals(sheetTitle)) {
+                continue;
+            }
+
+            // Get a list of existing protected ranges on this sheet
+            return sheet.getProtectedRanges();
+        }
+
+        return null;
     }
 
     public static void checkProtections() throws Exception {
