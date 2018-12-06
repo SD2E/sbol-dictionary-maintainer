@@ -25,6 +25,7 @@ import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
 import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetResponse;
 import com.google.api.services.sheets.v4.model.CopySheetToAnotherSpreadsheetRequest;
 import com.google.api.services.sheets.v4.model.DeleteProtectedRangeRequest;
+import com.google.api.services.sheets.v4.model.DeleteSheetRequest;
 import com.google.api.services.sheets.v4.model.DuplicateSheetRequest;
 import com.google.api.services.sheets.v4.model.Editors;
 import com.google.api.services.sheets.v4.model.GridRange;
@@ -502,12 +503,40 @@ public class DictionaryAccessor {
         CopySheetToAnotherSpreadsheetRequest requestBody = new CopySheetToAnotherSpreadsheetRequest();
         requestBody.setDestinationSpreadsheetId(dstSpreadsheetId);
 
-        // Lookup the sheet properties on the source spreadsheet
-        Sheets.Spreadsheets.Get get = service.spreadsheets().get(srcSpreadsheetId).setFields("sheets.properties");
+        // List of requests to send to Google
+        ArrayList<Request> reqList = new ArrayList<Request>();
+
+        // Lookup the sheet properties on the destination spreadsheet
+        Sheets.Spreadsheets.Get get = service.spreadsheets().get(dstSpreadsheetId).setFields("sheets.properties");
         Spreadsheet s = get.execute();
         List<Sheet> sheets = s.getSheets();
 
-        // Loop the sheets on the source source spreadshet
+        // Loop the sheets on the source source spreadsheet
+        for(Sheet sheet: sheets) {
+            // Get the sheet properties
+            SheetProperties dstProperties = sheet.getProperties();
+
+            // Make sure the title is in the list to be copied
+            String dstSheetTitle = dstProperties.getTitle();
+            if(!tabList.contains(dstSheetTitle)) {
+                continue;
+            }
+
+            // This sheet on the destination spreadsheet needs to be replaced, so
+            // create a request to delete it
+            DeleteSheetRequest deleteSheet = new DeleteSheetRequest();
+            deleteSheet.setSheetId(sheet.getProperties().getSheetId());
+            Request req = new Request().setDeleteSheet(deleteSheet);
+            reqList.add(req);
+        }
+
+        // Lookup the sheet properties on the source spreadsheet
+        get = service.spreadsheets().get(srcSpreadsheetId).setFields("sheets.properties");
+        s = get.execute();
+        sheets = s.getSheets();
+
+        // Loop the sheets on the source source spreadsheet
+
         for(Sheet sheet: sheets) {
             // Get the sheet properties
             SheetProperties srcProperties = sheet.getProperties();
@@ -536,13 +565,14 @@ public class DictionaryAccessor {
             // Create a higher level request object
             Request req = new Request().setUpdateSheetProperties(changeTitle);
 
-            // Add the lower level request object
-            ArrayList<Request> reqList = new ArrayList<Request>();
+            // Queue the lower level request object
             reqList.add(req);
+        }
+
+        // Execute queued up sheet requests
+        if(!reqList.isEmpty()) {
             BatchUpdateSpreadsheetRequest breq = new BatchUpdateSpreadsheetRequest();
             breq.setRequests(reqList);
-
-            // Execute the request to update the sheet title
             service.spreadsheets().batchUpdate(dstSpreadsheetId, breq).execute();
         }
     }

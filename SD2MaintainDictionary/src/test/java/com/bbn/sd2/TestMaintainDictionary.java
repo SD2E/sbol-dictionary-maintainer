@@ -204,6 +204,30 @@ public class TestMaintainDictionary {
         log.info("Protections Validated.");
     }
 
+    private void testCopyTab() throws Exception {
+        log.info("Testing tab copy...");
+
+        String tabToCopy = "Reagent";
+
+        // Get the tab properties to extract the sheet id
+        Sheet sheet = DictionaryAccessor.getSheetProperties(tabToCopy);
+        int originalSheetId = sheet.getProperties().getSheetId();
+
+        // Make a copy of the tab on the scratch sheet
+        Set<String> tabSet = new HashSet<>();
+        tabSet.add(tabToCopy);
+
+        DictionaryAccessor.copyTabsFromOtherSpreadSheet(sheetId, sheetId, tabSet);
+
+        sheet = DictionaryAccessor.getSheetProperties(tabToCopy);
+        int newSheetId = sheet.getProperties().getSheetId();
+
+        // If the tab copy worked, the sheet id should have changed
+        assert(originalSheetId != newSheetId);
+
+        log.info("Tab copy test succeeded");
+    }
+
     @Test
     public void testEntries() throws Exception {
         List<ValueRange> valueUpdates = new ArrayList<ValueRange>();
@@ -245,6 +269,11 @@ public class TestMaintainDictionary {
 
         // Update the spreadsheet
         DictionaryAccessor.batchUpdateValues(valueUpdates);
+
+        // Give Google a break
+        Thread.sleep(20000);
+
+        testCopyTab();
 
         // Give Google a break
         Thread.sleep(20000);
