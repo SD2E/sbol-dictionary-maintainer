@@ -44,8 +44,10 @@ public final class MaintainDictionary {
     private static final QName CREATED = new QName("http://purl.org/dc/terms/","created","dcterms");
     private static final QName MODIFIED = new QName("http://purl.org/dc/terms/","modified","dcterms");
     
+    private static final String STAGING_DICTIONARY = "1xyFH-QqYzoswvI3pPJRlBqw9PQdlp91ds3mZoPc3wCU";
+
     /** The ID for the default Dictionary Spreadsheet, currently the "staging instance" */
-    private static final String SD2E_DICTIONARY = "1xyFH-QqYzoswvI3pPJRlBqw9PQdlp91ds3mZoPc3wCU";
+    private static final String SD2E_DICTIONARY = STAGING_DICTIONARY;
     
     /** Each spreadsheet tab is only allowed to contain objects of certain types, as determined by this mapping */
     private static Map<String, Set<String>> typeTabs = new HashMap<String,Set<String>>() {{
@@ -143,6 +145,10 @@ public final class MaintainDictionary {
     	return SD2E_DICTIONARY;
     }
     
+    public static String stagingSpreadsheet() {
+        return STAGING_DICTIONARY;
+    }
+
     public static Set<String> getAllowedTypesForTab(String tab) {
     	return typeTabs.get(tab);
     }

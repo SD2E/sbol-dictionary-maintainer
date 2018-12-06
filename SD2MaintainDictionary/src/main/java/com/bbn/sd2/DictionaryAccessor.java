@@ -845,6 +845,10 @@ public class DictionaryAccessor {
             }
         }
     }
+
+    static final String getSpreadsheetId() {
+        return spreadsheetId;
+    }
 //    public static void main(String... args) throws IOException, GeneralSecurityException {
 //        List<DictionaryEntry> entries = snapshotCurrentDictionary();
 //        if (entries.isEmpty()) {
