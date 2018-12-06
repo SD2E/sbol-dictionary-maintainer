@@ -247,19 +247,13 @@ public class TestMaintainDictionary {
         DictionaryAccessor.batchUpdateValues(valueUpdates);
 
         // Give Google a break
-        Thread.sleep(2000);
+        Thread.sleep(20000);
 
         // Run the dictionary application
         DictionaryTestShared.initializeTestEnvironment(sheetId);
 
-        // Give Google a break
-        Thread.sleep(2000);
-
         // Check the protections
         validateProtections();
-
-        // Give Google a break
-        Thread.sleep(2000);
 
         // Add an extra protection
         addExtraProtection("Strain");
@@ -276,13 +270,10 @@ public class TestMaintainDictionary {
         DictionaryAccessor.setCellData(updateTab, "Common Name", updateRow, updatedName);
 
         // Give Google a break
-        Thread.sleep(2000);
+        Thread.sleep(20000);
 
         // Run the Dictionary
         DictionaryTestShared.initializeTestEnvironment(sheetId);
-
-        // Give Google a break
-        Thread.sleep(3000);
 
         // Check the protections
         validateProtections();
@@ -305,7 +296,7 @@ public class TestMaintainDictionary {
         DictionaryAccessor.deleteCellShiftUp("Reagent", deleteColumn, 5);
 
         // Give Google a break
-        Thread.sleep(2000);
+        Thread.sleep(20000);
 
         // Run Dictionary update
         DictionaryTestShared.initializeTestEnvironment(sheetId);

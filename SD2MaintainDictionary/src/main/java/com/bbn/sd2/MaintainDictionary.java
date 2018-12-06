@@ -659,7 +659,13 @@ public final class MaintainDictionary {
             report.success(mod_count+" modified",true);
             if(bad_count>0) report.failure(bad_count+" invalid",true);
 
+            // Delay to throttle Google requests
+            Thread.sleep(30000);
+
             DictionaryAccessor.checkProtections();
+
+            // Delay to throttle Google requests
+            Thread.sleep(30000);
         } catch(Exception e) {
             e.printStackTrace();
             //report.failure("Dictionary update failed with exception of type "+e.getClass().getName(), true);
