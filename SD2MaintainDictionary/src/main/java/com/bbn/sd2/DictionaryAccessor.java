@@ -10,35 +10,33 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.http.javanet.NetHttpTransport;
-import com.google.api.client.json.GenericJson;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.store.FileDataStoreFactory;
 import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.DriveScopes;
 import com.google.api.services.sheets.v4.Sheets;
-import com.google.api.services.sheets.v4.Sheets.Spreadsheets.Values.Update;
-import com.google.api.services.sheets.v4.SheetsRequest;
 import com.google.api.services.sheets.v4.SheetsScopes;
 import com.google.api.services.sheets.v4.model.AddProtectedRangeRequest;
 import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
-import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetResponse;
 import com.google.api.services.sheets.v4.model.CopySheetToAnotherSpreadsheetRequest;
 import com.google.api.services.sheets.v4.model.DeleteProtectedRangeRequest;
 import com.google.api.services.sheets.v4.model.DeleteSheetRequest;
-import com.google.api.services.sheets.v4.model.DuplicateSheetRequest;
 import com.google.api.services.sheets.v4.model.Editors;
 import com.google.api.services.sheets.v4.model.GridRange;
 import com.google.api.services.sheets.v4.model.ProtectedRange;
+import com.google.api.services.sheets.v4.model.RepeatCellRequest;
 import com.google.api.services.sheets.v4.model.Request;
 import com.google.api.services.sheets.v4.model.Sheet;
 import com.google.api.services.sheets.v4.model.SheetProperties;
 import com.google.api.services.sheets.v4.model.Spreadsheet;
-import com.google.api.services.sheets.v4.model.SpreadsheetProperties;
+import com.google.api.services.sheets.v4.model.TextFormat;
 import com.google.api.services.sheets.v4.model.UpdateProtectedRangeRequest;
 import com.google.api.services.sheets.v4.Sheets.Spreadsheets.Values;
-import com.google.api.services.sheets.v4.SheetsScopes;
 import com.google.api.services.sheets.v4.model.BatchUpdateValuesRequest;
+import com.google.api.services.sheets.v4.model.CellData;
+import com.google.api.services.sheets.v4.model.CellFormat;
+import com.google.api.services.sheets.v4.model.Color;
 import com.google.api.services.sheets.v4.model.ValueRange;
 import com.google.api.services.sheets.v4.model.UpdateSheetPropertiesRequest;
 import java.io.File;
@@ -72,9 +70,11 @@ public class DictionaryAccessor {
 
     private DictionaryAccessor() {} // static-only class
 
+    private static Map<String, Sheet> cachedSheetProperties = null;
+
     /** Configure from command-line arguments */
     public static void configure(CommandLine cmd) {
-    	spreadsheetId = cmd.getOptionValue("gsheet_id", MaintainDictionary.defaultSpreadsheet());
+        spreadsheetId = cmd.getOptionValue("gsheet_id", MaintainDictionary.defaultSpreadsheet());
     }
 
     /** Make a clean boot, tearing down old instance if needed */
@@ -136,12 +136,12 @@ public class DictionaryAccessor {
     private final static int row_offset = 2; // number of header rows
     public static List<DictionaryEntry> snapshotCurrentDictionary() throws Exception {
         log.info("Taking snapshot");
-    	ensureSheetsService();
+        ensureSheetsService();
         // Go to each tab in turn, collecting entries
         List<DictionaryEntry> entries = new ArrayList<>();
         for(String tab : MaintainDictionary.tabs()) {
             log.info("Scanning tab " + tab);
-        	Hashtable<String, Integer> header_map = getDictionaryHeaders(tab);
+            Hashtable<String, Integer> header_map = getDictionaryHeaders(tab);
 
             Collection<Integer> columns = header_map.values();
 
@@ -157,8 +157,8 @@ public class DictionaryAccessor {
             String readRange = tab + "!A" + (row_offset+1) + ":" + last_column;
             ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
             if(response.getValues()==null) {
-            	log.info("No entries found on this tab");
-            	continue; // skip empty sheets
+                log.info("No entries found on this tab");
+                continue; // skip empty sheets
             }
             int row_index = row_offset;
 
@@ -172,31 +172,31 @@ public class DictionaryAccessor {
     }
 
     public static void backup() throws IOException, GeneralSecurityException {
-    	String GDRIVE_BACKUP_FOLDER = "1e3Lz-fzqZpEDKrH52Xso4bG0_y46Da1x";
+        String GDRIVE_BACKUP_FOLDER = "1e3Lz-fzqZpEDKrH52Xso4bG0_y46Da1x";
         ensureSheetsService();
-	    InputStream in = DictionaryAccessor.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
-	    GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
-		HttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
-		GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
+        InputStream in = DictionaryAccessor.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
+        GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
+        HttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
+        GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
                 HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, Arrays.asList(DriveScopes.DRIVE_FILE))
                 .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
                 .setAccessType("offline")
                 .build();
-		Credential credential = new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("owner");
-		Drive drive = new Drive.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential)
+        Credential credential = new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("owner");
+        Drive drive = new Drive.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential)
                 .setApplicationName(APPLICATION_NAME)
                 .build();
-			try {
-				String backup_filename = drive.files().get(spreadsheetId).execute().getName();
-				backup_filename += "_backup_" + MaintainDictionary.xmlDateTimeStamp();
-				com.google.api.services.drive.model.File copiedFile = new com.google.api.services.drive.model.File();
-				copiedFile.setName(backup_filename);
-				copiedFile.setParents(Collections.singletonList(GDRIVE_BACKUP_FOLDER));
-				drive.files().copy(spreadsheetId, copiedFile).execute();
-				System.out.println("Successfully wrote back-up to " + backup_filename);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
+            try {
+                String backup_filename = drive.files().get(spreadsheetId).execute().getName();
+                backup_filename += "_backup_" + MaintainDictionary.xmlDateTimeStamp();
+                com.google.api.services.drive.model.File copiedFile = new com.google.api.services.drive.model.File();
+                copiedFile.setName(backup_filename);
+                copiedFile.setParents(Collections.singletonList(GDRIVE_BACKUP_FOLDER));
+                drive.files().copy(spreadsheetId, copiedFile).execute();
+                System.out.println("Successfully wrote back-up to " + backup_filename);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
     }
 
     public static void exportCSV() throws IOException {
@@ -204,21 +204,21 @@ public class DictionaryAccessor {
             String readRange = tab;
             ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
             if(response.getValues()==null) continue; // skip empty sheets
-    		File file = new File("./" + tab + ".txt");
-    		if (!file.exists()) {
-    			file.createNewFile();
-    		}
-    		OutputStream outStream = new FileOutputStream(file);
+            File file = new File("./" + tab + ".txt");
+            if (!file.exists()) {
+                file.createNewFile();
+            }
+            OutputStream outStream = new FileOutputStream(file);
 
             for(List<Object> row : response.getValues()) {
-            	String csv_row = "";
-            	for (Object cell : row) {
-            		csv_row += cell.toString() + ",";
-            	}
-            	if (csv_row.length() > 1)
-            		csv_row = csv_row.substring(0, csv_row.length() - 1);
-            	csv_row += "\r\n";
-            	outStream.write(csv_row.getBytes());
+                String csv_row = "";
+                for (Object cell : row) {
+                    csv_row += cell.toString() + ",";
+                }
+                if (csv_row.length() > 1)
+                    csv_row = csv_row.substring(0, csv_row.length() - 1);
+                csv_row += "\r\n";
+                outStream.write(csv_row.getBytes());
             }
             outStream.flush();
             outStream.close();
@@ -228,7 +228,7 @@ public class DictionaryAccessor {
 
 
     public static Hashtable<String, Integer> getDictionaryHeaders(String tab) throws Exception {
-    	Hashtable<String, Integer> header_map = new Hashtable();
+        Hashtable<String, Integer> header_map = new Hashtable<>();
         String headerRange = tab + "!" + row_offset + ":" + row_offset;
         ValueRange response = service.spreadsheets().values().get(spreadsheetId, headerRange).execute();
         if(response.getValues()==null) return header_map; // skip empty sheets
@@ -236,26 +236,26 @@ public class DictionaryAccessor {
         // TODO: validate required headers Type, Common Name, etc.
         // TODO: if header cells aren't locked, might need to check for duplicate header entries
         for(int i_h = 0; i_h < headers.size(); ++i_h) {
-        	String header = headers.get(i_h).toString();
+            String header = headers.get(i_h).toString();
             if (MaintainDictionary.headers().contains(header)) {
                 header_map.put(header, i_h);
             }
         }
-    	return header_map;
+        return header_map;
     }
 
     //    // Reads one column
 //    public static List<String> snapshotColumn(char column_id) throws IOException, GeneralSecurityException {
-//    	String column_range = "!" + column_id + (row_offset+1) + ":" + (char)(column_id+1);
-//    	List<String> cell_vals = new ArrayList<>();
-//    	Sheets.Spreadsheets.Values.Get request = service.spreadsheets().values().get(spreadsheetId, column_range);
-//    	request.setMajorDimension("COLUMNS");
-//    	ValueRange result = request.execute();
+//      String column_range = "!" + column_id + (row_offset+1) + ":" + (char)(column_id+1);
+//      List<String> cell_vals = new ArrayList<>();
+//      Sheets.Spreadsheets.Values.Get request = service.spreadsheets().values().get(spreadsheetId, column_range);
+//      request.setMajorDimension("COLUMNS");
+//      ValueRange result = request.execute();
 //        List<Object> column = result.getValues().get(0);
 //        for (Object cell : column) {
-//        	cell_vals.add(cell.toString());
+//          cell_vals.add(cell.toString());
 //        }
-//    	return cell_vals;
+//      return cell_vals;
 //    }
 
     /**
@@ -280,7 +280,7 @@ public class DictionaryAccessor {
             }
         }
 
-    	for(int e_i = 0; e_i < entries.size(); ++e_i) {
+        for(int e_i = 0; e_i < entries.size(); ++e_i) {
             DictionaryEntry entry_i = entries.get(e_i);
             String val_i = null;
             if(commonName) {
@@ -332,6 +332,12 @@ public class DictionaryAccessor {
         req.setData(values);
         req.setValueInputOption("RAW");
         service.spreadsheets().values().batchUpdate(spreadsheetId, req).execute();
+    }
+
+    public static void submitRequests(List<Request> requests) throws IOException {
+        BatchUpdateSpreadsheetRequest update_sheet_request =
+                new BatchUpdateSpreadsheetRequest().setRequests(requests);
+        service.spreadsheets().batchUpdate(spreadsheetId, update_sheet_request).execute();
     }
 
     private static char columnNameToIndex(String tab, String colName) throws Exception {
@@ -651,12 +657,12 @@ public class DictionaryAccessor {
                     if(endRowIndex == null) {
                         if(startRowIndex == null) {
                             if(startColumn == endColumn) {
-	                            log.warning("Deleting unexpected protection on column " +
-	                                    startColumn + " on sheet " + sheetTitle);
+                                log.warning("Deleting unexpected protection on column " +
+                                        startColumn + " on sheet " + sheetTitle);
                             } else {
-	                            log.warning("Deleting unexpected protection from column " +
-	                                        startColumn + " to column " + endColumn + " on sheet " +
-	                                        sheetTitle);
+                                log.warning("Deleting unexpected protection from column " +
+                                            startColumn + " to column " + endColumn + " on sheet " +
+                                            sheetTitle);
                             }
                         } else {
                             log.warning("Deleting unexpected protection from on column " +
@@ -747,12 +753,18 @@ public class DictionaryAccessor {
         }
     }
 
-    public static Sheet getSheetProperties(String tab) throws Exception {
+    public static void cacheSheetProperties() throws Exception {
         // Lookup the sheet properties and protected ranges on the source spreadsheet
         Sheets.Spreadsheets.Get get = service.spreadsheets().get(spreadsheetId);
         get.setFields("sheets.properties");
         Spreadsheet s = get.execute();
         List<Sheet> sheets = s.getSheets();
+
+        if(cachedSheetProperties == null) {
+            cachedSheetProperties = new TreeMap<String, Sheet>();
+        } else {
+            cachedSheetProperties.clear();
+        }
 
         for(Sheet sheet: sheets) {
             // Get the sheet properties
@@ -760,15 +772,18 @@ public class DictionaryAccessor {
 
             // Make sure the title is in the list of sheets we process
             String sheetTitle = sheetProperties.getTitle();
-            if(!tab.equals(sheetTitle)) {
-                continue;
-            }
-
-            // Get a list of existing protected ranges on this sheet
-            return sheet;
+            cachedSheetProperties.put(sheetTitle, sheet);
         }
+    }
 
-        return null;
+    public static Sheet getSheetProperties(String tab) throws Exception {
+        cacheSheetProperties();
+
+        return cachedSheetProperties.get(tab);
+    }
+
+    public static Sheet getCachedSheetProperties(String tab) throws Exception {
+        return cachedSheetProperties.get(tab);
     }
 
     public static List<ProtectedRange> getProtectedRanges(String tab) throws Exception {
@@ -793,6 +808,36 @@ public class DictionaryAccessor {
         }
 
         return null;
+    }
+
+    public static Request setStatusColor(int row, char column, Integer sheetId, Color color) {
+        Request req = new Request();
+        RepeatCellRequest repeatCellRequest = new RepeatCellRequest();
+        CellData cellData = new CellData();
+        CellFormat cellFormat = new CellFormat();
+        TextFormat textFormat = new TextFormat();
+        GridRange range = new GridRange();
+
+        textFormat.setForegroundColor(color);
+        textFormat.setItalic(true);
+        textFormat.setFontSize(8);
+
+        cellFormat.setTextFormat(textFormat);
+
+        cellData.setUserEnteredFormat(cellFormat);
+        range.setStartColumnIndex((int)column - (int)'A');
+        range.setEndColumnIndex((int)column - (char)'A' + 1);
+        range.setStartRowIndex(row);
+        range.setEndRowIndex(row + 1);
+        range.setSheetId(sheetId);
+
+        repeatCellRequest.setCell(cellData);
+        repeatCellRequest.setFields("userEnteredFormat(textFormat)");
+        repeatCellRequest.setRange(range);
+
+        req.setRepeatCell(repeatCellRequest);
+
+        return req;
     }
 
     public static void checkProtections() throws Exception {

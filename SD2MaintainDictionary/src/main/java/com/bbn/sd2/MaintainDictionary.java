@@ -32,6 +32,9 @@ import org.synbiohub.frontend.SynBioHubException;
 
 import com.bbn.sd2.DictionaryEntry.StubStatus;
 import com.google.api.services.sheets.v4.Sheets;
+import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
+import com.google.api.services.sheets.v4.model.Color;
+import com.google.api.services.sheets.v4.model.Request;
 import com.google.api.services.sheets.v4.model.ValueRange;
 
 /**
@@ -39,24 +42,24 @@ import com.google.api.services.sheets.v4.model.ValueRange;
  */
 public final class MaintainDictionary {
     private static Logger log = Logger.getGlobal();
-    
+
     private static final QName STUB_ANNOTATION = new QName("http://sd2e.org#","stub_object","sd2");
     private static final QName CREATED = new QName("http://purl.org/dc/terms/","created","dcterms");
     private static final QName MODIFIED = new QName("http://purl.org/dc/terms/","modified","dcterms");
-    
+
     private static final String STAGING_DICTIONARY = "1xyFH-QqYzoswvI3pPJRlBqw9PQdlp91ds3mZoPc3wCU";
 
     /** The ID for the default Dictionary Spreadsheet, currently the "staging instance" */
     private static final String SD2E_DICTIONARY = STAGING_DICTIONARY;
-    
+
     /** Each spreadsheet tab is only allowed to contain objects of certain types, as determined by this mapping */
     private static Map<String, Set<String>> typeTabs = new HashMap<String,Set<String>>() {{
-    	put("Attribute", new HashSet<>(Arrays.asList("Attribute")));
-    	put("Reagent", new HashSet<>(Arrays.asList("Bead", "CHEBI", "DNA", "Protein", "RNA", "Media", "Stain", "Buffer", "Solution")));
-    	put("Genetic Construct", new HashSet<>(Arrays.asList("DNA", "RNA")));
-    	put("Strain", new HashSet<>(Arrays.asList("Strain")));
-    	put("Protein", new HashSet<>(Arrays.asList("Protein")));
-    	put("Collections", new HashSet<>(Arrays.asList("Challenge Problem")));
+        put("Attribute", new HashSet<>(Arrays.asList("Attribute")));
+        put("Reagent", new HashSet<>(Arrays.asList("Bead", "CHEBI", "DNA", "Protein", "RNA", "Media", "Stain", "Buffer", "Solution")));
+        put("Genetic Construct", new HashSet<>(Arrays.asList("DNA", "RNA")));
+        put("Strain", new HashSet<>(Arrays.asList("Strain")));
+        put("Protein", new HashSet<>(Arrays.asList("Protein")));
+        put("Collections", new HashSet<>(Arrays.asList("Challenge Problem")));
     }};
 
     /** Expected headers */
@@ -79,51 +82,51 @@ public final class MaintainDictionary {
 
     /** Classes of object that are implemented as a ComponentDefinition */
     private static Map<String,URI> componentTypes = new HashMap<String,URI>() {{
-        put("Bead",URI.create("http://purl.obolibrary.org/obo/NCIT_C70671")); 
-        put("CHEBI",URI.create("http://identifiers.org/chebi/CHEBI:24431")); 
-        put("DNA",ComponentDefinition.DNA); 
+        put("Bead",URI.create("http://purl.obolibrary.org/obo/NCIT_C70671"));
+        put("CHEBI",URI.create("http://identifiers.org/chebi/CHEBI:24431"));
+        put("DNA",ComponentDefinition.DNA);
         put("Protein",ComponentDefinition.PROTEIN);
-        put("RNA",ComponentDefinition.RNA); 
+        put("RNA",ComponentDefinition.RNA);
     }};
-    
+
     /** Classes of object that are implemented as a ModuleDefinition */
     private static Map<String,URI> moduleTypes = new HashMap<String,URI>(){{
-        put("Strain",URI.create("http://purl.obolibrary.org/obo/NCIT_C14419")); 
-        put("Media",URI.create("http://purl.obolibrary.org/obo/NCIT_C85504")); 
+        put("Strain",URI.create("http://purl.obolibrary.org/obo/NCIT_C14419"));
+        put("Media",URI.create("http://purl.obolibrary.org/obo/NCIT_C85504"));
         put("Stain",URI.create("http://purl.obolibrary.org/obo/NCIT_C841"));
         put("Buffer",URI.create("http://purl.obolibrary.org/obo/NCIT_C70815"));
         put("Solution",URI.create("http://purl.obolibrary.org/obo/NCIT_C70830"));
     }};
- 
+
     /** Classes of object that are implemented as a Collection.
-     *  Currently no subtypes of Collections other than Challenge Problem are 
+     *  Currently no subtypes of Collections other than Challenge Problem are
      *  specified, though that may change in the future */
     private static Map<String,URI> collectionTypes = new HashMap<String,URI>(){{
-        put("Challenge Problem",URI.create("")); 
+        put("Challenge Problem",URI.create(""));
     }};
-    
+
     /** Classes of object that are not stored in SynBioHub, but are grounded in external definitions */
     private static Map<String,QName> externalTypes = new HashMap<String,QName>(){{
         put("Attribute",new QName("http://sd2e.org/types/#","attribute","sd2"));
     }};
-        
+
     /**
      * @param tab String name of a spreadsheet tab
      * @param type String naming a type
      * @return true if we know how to handle entries of this type
      */
     public static boolean validType(String tab, String type) {
-    	return typeTabs.get(tab).contains(type);
+        return typeTabs.get(tab).contains(type);
     }
-    
+
     /**
      * @param tab String name of a spreadsheet tab
      * @return true if the given spreadsheet tab belongs to a predetermined set
      */
     public static boolean validTab(String tab) {
-    	return typeTabs.keySet().contains(tab);
+        return typeTabs.keySet().contains(tab);
     }
-    
+
     public static final Set<String> headers() {
         Set<String> allValidHeaders = new HashSet<String>();
 
@@ -138,22 +141,22 @@ public final class MaintainDictionary {
     }
 
     public static Set<String> tabs() {
-    	return typeTabs.keySet();
+        return typeTabs.keySet();
     }
-    
+
     public static String defaultSpreadsheet() {
-    	return SD2E_DICTIONARY;
+        return SD2E_DICTIONARY;
     }
-    
+
     public static String stagingSpreadsheet() {
         return STAGING_DICTIONARY;
     }
 
     public static Set<String> getAllowedTypesForTab(String tab) {
-    	return typeTabs.get(tab);
+        return typeTabs.get(tab);
     }
-    
-    
+
+
     /** @return A string listing all valid types */
     private static String allTypes() {
         Set<String> s = new HashSet<>(componentTypes.keySet());
@@ -161,7 +164,7 @@ public final class MaintainDictionary {
         s.addAll(externalTypes.keySet());
         return s.toString();
     }
-    
+
     private static boolean validateEntityType(TopLevel entity, String type) {
         if(componentTypes.containsKey(type)) {
             if(entity instanceof ComponentDefinition) {
@@ -179,20 +182,20 @@ public final class MaintainDictionary {
                 return tl.getRDFType().equals(externalTypes.get(type));
             }
         } else if(collectionTypes.containsKey(type)) {
-        	if (entity instanceof Collection)	
-        		return true;
+            if (entity instanceof Collection)
+                return true;
         } else {
             log.info("Don't recognize type "+type);
         }
         return false;
     }
- 
+
     /**
      * Create a new dummy object
      * @param name Name of the new object, which will also be converted to a displayID and URI
-     * @param type 
+     * @param type
      * @return
-     * @throws Exception 
+     * @throws Exception
      */
     private static SBOLDocument createStubOfType(String name, String type) throws SBOLValidationException, SynBioHubException, SBOLConversionException {
         SBOLDocument document = SynBioHubAccessor.newBlankDocument();
@@ -224,10 +227,10 @@ public final class MaintainDictionary {
         // annotate with stub and creation information
         tl.setName(name);
         tl.createAnnotation(CREATED, xmlDateTimeStamp());
-        
+
         return document;
     }
-    
+
     /** Get current date/time in standard XML format */
     public static String xmlDateTimeStamp() {
         // Standard XML date format
@@ -236,36 +239,36 @@ public final class MaintainDictionary {
         return sdfDate.format(new Date());
     }
 
-    /** 
-     * Clear all prior instances of an annotation and replace with the new one 
-     * @throws SBOLValidationException 
+    /**
+     * Clear all prior instances of an annotation and replace with the new one
+     * @throws SBOLValidationException
      */
     private static void replaceOldAnnotations(TopLevel entity, QName key, String new_value) throws SBOLValidationException {
         Set<String> new_values = new HashSet<String>() {{ add(new_value); }};
         replaceOldAnnotations(entity, key, new_values);
     }
-    
-    /** 
-     * Clear all prior instances of an annotation and replace with a set of new annotations 
-     * @throws SBOLValidationException 
+
+    /**
+     * Clear all prior instances of an annotation and replace with a set of new annotations
+     * @throws SBOLValidationException
      */
     private static void replaceOldAnnotations(TopLevel entity, QName key, Set<String> new_values) throws SBOLValidationException {
-        while(entity.getAnnotation(key)!=null) { 
+        while(entity.getAnnotation(key)!=null) {
             entity.removeAnnotation(entity.getAnnotation(key));
         }
         for (String value : new_values)
-        	entity.createAnnotation(key, value);
+            entity.createAnnotation(key, value);
     }
 
     /**
      * Update a single dictionary entry, assumed to be valid
      * @param e entry to be updated
      * @return true if anything has been changed
-     * @throws Exception 
+     * @throws Exception
      */
     private static DictionaryEntry update_entry(DictionaryEntry e, List<ValueRange> valueUpdates) throws SBOLConversionException, IOException, SBOLValidationException, SynBioHubException {
         assert(e.statusCode == StatusCode.VALID);
-        
+
         UpdateReport report = new UpdateReport();
         // This is never called unless the entry is known valid
         URI local_uri = null;
@@ -329,12 +332,12 @@ public final class MaintainDictionary {
             valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
             return originalEntry;
         }
-        
+
         // Check if typing is valid
         if(!validateEntityType(entity,e.type)) {
             report.failure("Type does not match '"+e.type+"'", true);
         }
-        
+
         // Note that the "stub" field is defined by the SynBioHub document.
         // The spreadsheet is updated to be consistent with the SynBioHub
         // document, but "changed" flag is not updated since the SynBioHub
@@ -362,7 +365,7 @@ public final class MaintainDictionary {
             e.changed = true;
             report.success("Name changed to '"+e.name+"'",true);
         }
-        
+
         // if the entry has lab entries, check if they match and (re)annotate if different
         for(String labKey : e.labUIDs.keySet()) {
             QName labQKey = new QName("http://sd2e.org#",labKey,"sd2");
@@ -405,7 +408,7 @@ public final class MaintainDictionary {
                     report.success("Deleted lab UID", true);
             }
         }
-       
+
         if(e.attribute && e.attributeDefinition!=null) {
             Set<URI> derivations = entity.getWasDerivedFroms();
             if(originalEntry != null) {
@@ -424,7 +427,7 @@ public final class MaintainDictionary {
                 report.success("Definition for "+e.name+" is '"+e.attributeDefinition+"'",true);
             }
         }
-        
+
         // Update the spreadsheet with the entry notes
         valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
 
@@ -549,13 +552,30 @@ public final class MaintainDictionary {
             previousRowValues = currentValues;
         }
     }
-    
+
+    public static Color makeColor(int red, int green, int blue) {
+        Color newColor = new Color();
+
+        newColor.setAlpha(1.0f);
+        newColor.setRed((float)red / 255.0f);
+        newColor.setGreen((float)green / 255.0f);
+        newColor.setBlue((float)blue / 255.0f);
+
+        return newColor;
+    }
+
     /**
      * Run one pass through the dictionary, updating all entries as needed
      */
     public static void maintain_dictionary() throws IOException, GeneralSecurityException, SBOLValidationException, SynBioHubException, SBOLConversionException {
+        Color green = makeColor(0, 144, 81);
+        Color red = makeColor(148, 17, 0);
+        Color gray = makeColor(146, 146, 146);
+
         UpdateReport report = new UpdateReport();
         try {
+            DictionaryAccessor.cacheSheetProperties();
+
             List<DictionaryEntry> currentEntries = DictionaryAccessor.snapshotCurrentDictionary();
             DictionaryAccessor.validateUniquenessOfEntries("Common Name", currentEntries);
             for(String uidTag : DictionaryEntry.labUIDMap.keySet()) {
@@ -567,6 +587,9 @@ public final class MaintainDictionary {
 
             // This will contain updates to be made to the spreadsheet
             List<ValueRange> spreadsheetUpdates = new ArrayList<ValueRange>();
+
+            // This will contain the status column formatting updates
+            List<Request> statusFormattingUpdates = new ArrayList<>();
 
             // This will contain the spreadsheet information according to what is
             // currently in SynBioHub
@@ -585,6 +608,7 @@ public final class MaintainDictionary {
                     originalEntry = update_entry(e, spreadsheetUpdates);
                 }
 
+                Color statusColor;
                 if(e.statusCode == StatusCode.VALID) {
                     // This row looks good
                     if(originalEntry != null) {
@@ -595,6 +619,7 @@ public final class MaintainDictionary {
                     if(e.changed) {
                         ++mod_count;
                     }
+                    statusColor = green;
                 } else {
                     // There is a problem with this row
                     UpdateReport invalidReport = new UpdateReport();
@@ -603,24 +628,31 @@ public final class MaintainDictionary {
                     case MISSING_NAME:
                         log.info("Invalid entry, missing name, skipping");
                         invalidReport.failure("Common name is missing");
+                        statusColor = red;
                         break;
                     case MISSING_TYPE:
                         log.info("Invalid entry for name "+e.name+", skipping");
                         invalidReport.failure("Type is missing");
+                        statusColor = red;
                         break;
                     case INVALID_TYPE:
                         log.info("Invalid entry for name "+e.name+", skipping");
                         invalidReport.failure("Type must be one of "+ typeTabs.get(e.tab).toString());
+                        statusColor = red;
                         break;
                     case DUPLICATE_VALUE:
                         log.info("Invalid entry for name "+e.name+", skipping");
                         invalidReport.failure(e.statusLog);
+                        statusColor = red;
                         break;
                     case SBH_CONNECTION_FAILED:
+                        statusColor = gray;
                         break;
                     case GOOGLE_SHEETS_CONNECTION_FAILED:
+                        statusColor = gray;
                         break;
                     default:
+                        statusColor = red;
                         break;
                     }
 
@@ -629,6 +661,8 @@ public final class MaintainDictionary {
                     }
                     bad_count++;
                 }
+
+                statusFormattingUpdates.add( e.setColor("Status", statusColor) );
             }
 
             // Check for deleted cells that caused column values to shift up
@@ -658,6 +692,10 @@ public final class MaintainDictionary {
             if(!spreadsheetUpdates.isEmpty()) {
                 log.info("Updating spreadsheet");
                 DictionaryAccessor.batchUpdateValues(spreadsheetUpdates);
+            }
+
+            if(!statusFormattingUpdates.isEmpty()) {
+                DictionaryAccessor.submitRequests(statusFormattingUpdates);
             }
 
             log.info("Completed certification of dictionary");
