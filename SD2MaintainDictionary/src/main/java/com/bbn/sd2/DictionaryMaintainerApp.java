@@ -23,7 +23,7 @@ public class DictionaryMaintainerApp {
     private static Semaphore heartbeatSem = new Semaphore(0);
     private static Semaphore backupSem = new Semaphore(0);
     private static boolean stopWorkerThreads = false;
-    
+
     public static void main(String... args) throws Exception {
         // Parse arguments and configure
         CommandLine cmd = parseArguments(args);
@@ -40,6 +40,24 @@ public class DictionaryMaintainerApp {
                 start_backup(1);
             }
         }
+
+        // Number of milliseconds in one hour
+        long hourMillis = 3600000;
+
+        // Number of milliseconds in one day
+        long dayMillis = hourMillis * 24;
+
+        // Get time, in milliseconds since 1970 UTC
+        long now = System.currentTimeMillis();
+
+        // Calculate time of next midnight (UTC)
+        long nextMidnightUTC = now - (now % dayMillis) + dayMillis;
+
+        // Backup time in hours after midnight UTC.
+        long backTimeHoursAM_UTC = 8;
+
+        // This keeps track of the next time to run a backup
+        long nextBackupTime = nextMidnightUTC + (backTimeHoursAM_UTC * hourMillis);
 
         // Run as an eternal loop, reporting errors but not crashing out
         while(!stopSignal) {
@@ -79,8 +97,15 @@ public class DictionaryMaintainerApp {
                         try {
                             Thread.sleep(sleepMillis);
 
-                            // Back up spreadsheet
-                            DictionaryAccessor.backup();
+                            if(System.currentTimeMillis() > nextBackupTime) {
+                                // Back up spreadsheet
+                                DictionaryAccessor.backup();
+
+                                while(System.currentTimeMillis() > nextBackupTime) {
+                                    nextBackupTime += dayMillis;
+                                }
+                            }
+
                             copyTabsToStagingSpreadsheet();
                         } catch(Exception e) {
                             e.printStackTrace();
@@ -168,11 +193,11 @@ public class DictionaryMaintainerApp {
     }
 
     public static void setStopSignal() {
-    	stopSignal = true;
+        stopSignal = true;
     }
 
     public static void restart() {
-    	stopSignal = false;
+        stopSignal = false;
     }
 
     private static void copyTabsToStagingSpreadsheet() throws IOException {
