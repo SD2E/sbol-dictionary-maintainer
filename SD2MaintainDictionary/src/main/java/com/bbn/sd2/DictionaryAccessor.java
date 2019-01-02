@@ -23,10 +23,12 @@ import com.google.api.services.sheets.v4.model.CopySheetToAnotherSpreadsheetRequ
 import com.google.api.services.sheets.v4.model.DeleteProtectedRangeRequest;
 import com.google.api.services.sheets.v4.model.DeleteSheetRequest;
 import com.google.api.services.sheets.v4.model.Editors;
+import com.google.api.services.sheets.v4.model.GridData;
 import com.google.api.services.sheets.v4.model.GridRange;
 import com.google.api.services.sheets.v4.model.ProtectedRange;
 import com.google.api.services.sheets.v4.model.RepeatCellRequest;
 import com.google.api.services.sheets.v4.model.Request;
+import com.google.api.services.sheets.v4.model.RowData;
 import com.google.api.services.sheets.v4.model.Sheet;
 import com.google.api.services.sheets.v4.model.SheetProperties;
 import com.google.api.services.sheets.v4.model.Spreadsheet;
@@ -227,7 +229,7 @@ public class DictionaryAccessor {
     }
 
 
-    public static Hashtable<String, Integer> getDictionaryHeaders(String tab) throws Exception {
+    public static Hashtable<String, Integer> getDictionaryHeaders(String tab) throws IOException {
         Hashtable<String, Integer> header_map = new Hashtable<>();
         String headerRange = tab + "!" + row_offset + ":" + row_offset;
         ValueRange response = service.spreadsheets().values().get(spreadsheetId, headerRange).execute();
@@ -340,7 +342,7 @@ public class DictionaryAccessor {
         service.spreadsheets().batchUpdate(spreadsheetId, update_sheet_request).execute();
     }
 
-    private static char columnNameToIndex(String tab, String colName) throws Exception {
+    private static char columnNameToIndex(String tab, String colName) throws IOException {
         Hashtable<String, Integer> header_map = getDictionaryHeaders(tab);
 
         Integer colVal = header_map.get(colName);
@@ -584,9 +586,9 @@ public class DictionaryAccessor {
     }
 
     // Generates a list of all the protected ranges that need to be added to this sheet
-    private static void getProtectedRanges(List<ProtectedRange> ranges,
-                                           SheetProperties sheetProperties,
-                                           List<Request> updateRangeRequests) throws Exception {
+    private static void updateProtectedRanges(List<ProtectedRange> ranges,
+                                              SheetProperties sheetProperties,
+                                              List<Request> updateRangeRequests) throws Exception {
         Set<String> columnsToProtect =
                 new TreeSet<String>(MaintainDictionary.getProtectedHeaders());
 
@@ -749,7 +751,6 @@ public class DictionaryAccessor {
             Request request = new Request();
             request.setAddProtectedRange(addProtectedRangeRequest);
             updateRangeRequests.add(request);
-
         }
     }
 
@@ -786,13 +787,59 @@ public class DictionaryAccessor {
         return cachedSheetProperties.get(tab);
     }
 
-    public static List<ProtectedRange> getProtectedRanges(String tab) throws Exception {
-        // Lookup the sheet properties and protected ranges on the source spreadsheet
+    public static List<CellFormat> getColumnFormatting(String tab, String columnName) throws IOException {
+        char column = columnNameToIndex(tab, columnName);
         Sheets.Spreadsheets.Get get = service.spreadsheets().get(spreadsheetId);
-        get.setFields("sheets.protectedRanges,sheets.properties");
+        get.setFields("sheets.data.rowData.values.userEnteredFormat");
+        get.setRanges(new ArrayList<String>(Arrays.asList("Reagent!" + column + ":" + column)));
         Spreadsheet s = get.execute();
         List<Sheet> sheets = s.getSheets();
 
+        // Only one sheet should be returned since the specified range
+        // only included one sheet
+        if(sheets.size() == 0) {
+            throw new IOException("Failed to retrieve formatting for " +
+                                  get.getRanges().get(0));
+        }
+
+        Sheet sheet = sheets.get(0);
+
+        // There should be at most one set of grid data
+        List<GridData> sheetData = sheet.getData();
+        if(sheetData == null) {
+            throw new IOException("No sheet data in request for " +
+                                  get.getRanges().get(0));
+        }
+
+        if(sheetData.size() == 0) {
+            throw new IOException("No grid data in request for " +
+                                  get.getRanges().get(0));
+        }
+
+        List<CellFormat> formatList = new ArrayList<CellFormat>();
+
+        do {
+            GridData gridData = sheetData.get(0);
+
+            if(gridData.size() == 0) {
+                // No data was returned
+                break;
+            }
+
+            List<RowData> rowDataList = gridData.getRowData();
+
+            if(rowDataList == null) {
+                // No data was returned
+                break;
+            }
+
+            for(RowData rowData : rowDataList) {
+                formatList.add(rowData.getValues().get(0).getUserEnteredFormat());
+            }
+        } while( false );
+        
+        return formatList;
+        /*
         for(Sheet sheet: sheets) {
             // Get the sheet properties
             SheetProperties sheetProperties = sheet.getProperties();
@@ -803,12 +850,38 @@ public class DictionaryAccessor {
                 continue;
             }
 
-            // Get a list of existing protected ranges on this sheet
-            return sheet.getProtectedRanges();
+            List<GridData> glist = sheet.getData();
+            System.out.println("glist size is " + glist.size());
+            GridData rowData = glist.get(0);
+            System.out.println("Rowdata size is " + rowData.size());
+            List<RowData> rList = rowData.getRowData();
+            System.out.println("rlist size is " + rList.size());
+            List<CellData> cData = rList.get(5).getValues();
+            System.out.println("cData size is " + cData.size());
+
+            sheet.getData().get(0).getRowData().get(0).getValues().get(0).getUserEnteredFormat();
+        }
+        */
+    }
+
+    public static List<ProtectedRange> getProtectedRanges(String tab) throws IOException {
+        // Lookup the sheet properties and protected ranges on the source spreadsheet
+        Sheets.Spreadsheets.Get get = service.spreadsheets().get(spreadsheetId);
+        get.setFields("sheets.protectedRanges");
+        get.setRanges(new ArrayList<String>(Arrays.asList(tab)));
+        Spreadsheet s = get.execute();
+        List<Sheet> sheets = s.getSheets();
+
+        if(sheets == null) {
+            return null;
         }
 
-        return null;
-    }
+        if(sheets.size() < 1) {
+            return null;
+        }
+
+        return sheets.get(0).getProtectedRanges();
+     }
 
     public static Request setStatusColor(int row, char column, Integer sheetId, Color color) {
         Request req = new Request();
@@ -873,7 +946,7 @@ public class DictionaryAccessor {
 
             // Determine the protected ranges that need to be added
             // to the sheet
-            getProtectedRanges(ranges, sheetProperties, updateRangeRequests);
+            updateProtectedRanges(ranges, sheetProperties, updateRangeRequests);
         }
 
         if(!updateRangeRequests.isEmpty()) {
