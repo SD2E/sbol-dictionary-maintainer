@@ -12,6 +12,7 @@ import com.google.api.client.http.HttpTransport;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
+import com.google.api.client.util.Base64;
 import com.google.api.client.util.store.FileDataStoreFactory;
 import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.DriveScopes;
@@ -41,6 +42,11 @@ import com.google.api.services.sheets.v4.model.CellFormat;
 import com.google.api.services.sheets.v4.model.Color;
 import com.google.api.services.sheets.v4.model.ValueRange;
 import com.google.api.services.sheets.v4.model.UpdateSheetPropertiesRequest;
+import com.google.api.services.gmail.Gmail;
+import com.google.api.services.gmail.GmailScopes;
+import com.google.api.services.gmail.model.Message;
+
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -56,10 +62,16 @@ import java.util.Collections;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.logging.Logger;
+
+import javax.mail.MessagingException;
+import javax.mail.Session;
+import javax.mail.internet.InternetAddress;
+import javax.mail.internet.MimeMessage;
 
 import org.apache.commons.cli.CommandLine;
 
@@ -68,7 +80,9 @@ public class DictionaryAccessor {
 
     private static String spreadsheetId = null;
 
-    private static Sheets service = null;
+    private static Sheets sheetsService = null;
+
+    private static Gmail gmailService = null;
 
     private DictionaryAccessor() {} // static-only class
 
@@ -81,8 +95,9 @@ public class DictionaryAccessor {
 
     /** Make a clean boot, tearing down old instance if needed */
     public static void restart() {
-        service = null;
+        sheetsService = null;
         ensureSheetsService();
+        ensureGmailService();
     }
 
     // GSheets Variables:
@@ -94,7 +109,10 @@ public class DictionaryAccessor {
      * Global instance of the scopes required by this application
      * If modifying these scopes, delete your previously saved credentials/ folder.
      */
-    private static final List<String> SCOPES = Collections.singletonList(SheetsScopes.SPREADSHEETS);
+    private static final List<String> SCOPES =
+                Arrays.asList(SheetsScopes.SPREADSHEETS, GmailScopes.GMAIL_COMPOSE,
+                                GmailScopes.GMAIL_SEND);
+
     private static final String CREDENTIALS_FILE_PATH = "/credentials.json";
 
     /**
@@ -118,12 +136,12 @@ public class DictionaryAccessor {
     }
 
     private static void ensureSheetsService() {
-        if(service!=null) return;
+        if(sheetsService!=null) return;
 
         try {
             // Build a new authorized API client service.
             final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
-            service = new Sheets.Builder(HTTP_TRANSPORT, JSON_FACTORY, getCredentials(HTTP_TRANSPORT))
+            sheetsService = new Sheets.Builder(HTTP_TRANSPORT, JSON_FACTORY, getCredentials(HTTP_TRANSPORT))
                     .setApplicationName(APPLICATION_NAME)
                     .build();
 
@@ -131,6 +149,72 @@ public class DictionaryAccessor {
         } catch(Exception e) {
             e.printStackTrace();
             log.severe("Google Sheets connection failed");
+        }
+    }
+
+    /**
+     * Sends an email message using the parameters provided.
+     *
+     * @param to email address of the receiver
+     * @param from email address of the sender, the mailbox account
+     * @param subject subject of the email
+     * @param bodyText body text of the email
+     * @return the MimeMessage to be used to send email
+     * @throws MessagingException
+     */
+    public static void sendEmail(String to,
+                                 String from,
+                                 String subject,
+                                 String bodyText)
+            throws MessagingException, IOException {
+        Properties props = new Properties();
+        Session session = Session.getDefaultInstance(props, null);
+
+        MimeMessage email = new MimeMessage(session);
+
+        email.setFrom(new InternetAddress(from));
+        email.addRecipient(javax.mail.Message.RecipientType.TO,
+                new InternetAddress(to));
+        email.setSubject(subject);
+        email.setText(bodyText);
+
+        Message message = createMessageWithEmail(email);
+        gmailService.users().messages().send("me", message).execute();
+    }
+
+    /**
+     * Create a message from an email.
+     *
+     * @param emailContent Email to be set to raw of message
+     * @return a message containing a base64url encoded email
+     * @throws IOException
+     * @throws MessagingException
+     */
+    private static Message createMessageWithEmail(MimeMessage emailContent)
+            throws MessagingException, IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        emailContent.writeTo(buffer);
+        byte[] bytes = buffer.toByteArray();
+        String encodedEmail = Base64.encodeBase64URLSafeString(bytes);
+        Message message = new Message();
+        message.setRaw(encodedEmail);
+        return message;
+    }
+
+    private static void ensureGmailService() {
+        if(gmailService!=null) return;
+
+        try {
+            // Build a new authorized API client service.
+            final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
+            gmailService = new Gmail.Builder(HTTP_TRANSPORT, JSON_FACTORY, getCredentials(HTTP_TRANSPORT))
+                    .setApplicationName(APPLICATION_NAME)
+                    .build();
+
+            log.info("Successfully logged into Google Gmail");
+        } catch(Exception e) {
+            e.printStackTrace();
+            log.severe("Google Gmail connection failed");
         }
     }
 
@@ -157,7 +241,7 @@ public class DictionaryAccessor {
 
             // Pull the current range
             String readRange = tab + "!A" + (row_offset+1) + ":" + last_column;
-            ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
+            ValueRange response = sheetsService.spreadsheets().values().get(spreadsheetId, readRange).execute();
             if(response.getValues()==null) {
                 log.info("No entries found on this tab");
                 continue; // skip empty sheets
@@ -204,7 +288,7 @@ public class DictionaryAccessor {
     public static void exportCSV() throws IOException {
         for(String tab : MaintainDictionary.tabs()) {
             String readRange = tab;
-            ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
+            ValueRange response = sheetsService.spreadsheets().values().get(spreadsheetId, readRange).execute();
             if(response.getValues()==null) continue; // skip empty sheets
             File file = new File("./" + tab + ".txt");
             if (!file.exists()) {
@@ -232,7 +316,7 @@ public class DictionaryAccessor {
     public static Hashtable<String, Integer> getDictionaryHeaders(String tab) throws IOException {
         Hashtable<String, Integer> header_map = new Hashtable<>();
         String headerRange = tab + "!" + row_offset + ":" + row_offset;
-        ValueRange response = service.spreadsheets().values().get(spreadsheetId, headerRange).execute();
+        ValueRange response = sheetsService.spreadsheets().values().get(spreadsheetId, headerRange).execute();
         if(response.getValues()==null) return header_map; // skip empty sheets
         List<Object> headers = response.getValues().get(0);
         // TODO: validate required headers Type, Common Name, etc.
@@ -333,13 +417,13 @@ public class DictionaryAccessor {
         BatchUpdateValuesRequest req = new BatchUpdateValuesRequest();
         req.setData(values);
         req.setValueInputOption("RAW");
-        service.spreadsheets().values().batchUpdate(spreadsheetId, req).execute();
+        sheetsService.spreadsheets().values().batchUpdate(spreadsheetId, req).execute();
     }
 
     public static void submitRequests(List<Request> requests) throws IOException {
         BatchUpdateSpreadsheetRequest update_sheet_request =
                 new BatchUpdateSpreadsheetRequest().setRequests(requests);
-        service.spreadsheets().batchUpdate(spreadsheetId, update_sheet_request).execute();
+        sheetsService.spreadsheets().batchUpdate(spreadsheetId, update_sheet_request).execute();
     }
 
     private static char columnNameToIndex(String tab, String colName) throws IOException {
@@ -357,7 +441,7 @@ public class DictionaryAccessor {
         char col = columnNameToIndex(tab, colName);
 
         String readRange = tab + "!" + col + row + ":" + col;
-        ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
+        ValueRange response = sheetsService.spreadsheets().values().get(spreadsheetId, readRange).execute();
 
         List<List<Object>> values = response.getValues();
         if(values == null) {
@@ -378,7 +462,7 @@ public class DictionaryAccessor {
                 ":" + col + lastRow;
 
         response.setRange(writeRange);
-        service.spreadsheets().values().update(spreadsheetId, writeRange, response)
+        sheetsService.spreadsheets().values().update(spreadsheetId, writeRange, response)
                                                .setValueInputOption("RAW")
                                                .execute();
     }
@@ -388,7 +472,7 @@ public class DictionaryAccessor {
 
         String readRange = tab + "!" + col + row;
 
-        ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
+        ValueRange response = sheetsService.spreadsheets().values().get(spreadsheetId, readRange).execute();
 
         return (String)response.getValues().get(0).get(0);
     }
@@ -409,7 +493,7 @@ public class DictionaryAccessor {
 
         updatedValue.setValues(values);
 
-        Values.Update update = service.spreadsheets().values().update(spreadsheetId, writeRange, updatedValue);
+        Values.Update update = sheetsService.spreadsheets().values().update(spreadsheetId, writeRange, updatedValue);
         update.setValueInputOption("RAW");
         update.execute();
     }
@@ -515,7 +599,7 @@ public class DictionaryAccessor {
         ArrayList<Request> reqList = new ArrayList<Request>();
 
         // Lookup the sheet properties on the destination spreadsheet
-        Sheets.Spreadsheets.Get get = service.spreadsheets().get(dstSpreadsheetId).setFields("sheets.properties");
+        Sheets.Spreadsheets.Get get = sheetsService.spreadsheets().get(dstSpreadsheetId).setFields("sheets.properties");
         Spreadsheet s = get.execute();
         List<Sheet> sheets = s.getSheets();
 
@@ -539,7 +623,7 @@ public class DictionaryAccessor {
         }
 
         // Lookup the sheet properties on the source spreadsheet
-        get = service.spreadsheets().get(srcSpreadsheetId).setFields("sheets.properties");
+        get = sheetsService.spreadsheets().get(srcSpreadsheetId).setFields("sheets.properties");
         s = get.execute();
         sheets = s.getSheets();
 
@@ -556,7 +640,7 @@ public class DictionaryAccessor {
             }
 
             // Copy the sheet from the source spreadsheet to the destination spreadsheet
-            SheetProperties sp = service.spreadsheets().sheets().copyTo(srcSpreadsheetId,
+            SheetProperties sp = sheetsService.spreadsheets().sheets().copyTo(srcSpreadsheetId,
                     srcProperties.getSheetId(), requestBody).execute();
 
             // At this point the sheet as been copied, but the title is prepended with
@@ -581,7 +665,7 @@ public class DictionaryAccessor {
         if(!reqList.isEmpty()) {
             BatchUpdateSpreadsheetRequest breq = new BatchUpdateSpreadsheetRequest();
             breq.setRequests(reqList);
-            service.spreadsheets().batchUpdate(dstSpreadsheetId, breq).execute();
+            sheetsService.spreadsheets().batchUpdate(dstSpreadsheetId, breq).execute();
         }
     }
 
@@ -756,7 +840,7 @@ public class DictionaryAccessor {
 
     public static void cacheSheetProperties() throws Exception {
         // Lookup the sheet properties and protected ranges on the source spreadsheet
-        Sheets.Spreadsheets.Get get = service.spreadsheets().get(spreadsheetId);
+        Sheets.Spreadsheets.Get get = sheetsService.spreadsheets().get(spreadsheetId);
         get.setFields("sheets.properties");
         Spreadsheet s = get.execute();
         List<Sheet> sheets = s.getSheets();
@@ -789,7 +873,7 @@ public class DictionaryAccessor {
 
     public static List<CellFormat> getColumnFormatting(String tab, String columnName) throws IOException {
         char column = columnNameToIndex(tab, columnName);
-        Sheets.Spreadsheets.Get get = service.spreadsheets().get(spreadsheetId);
+        Sheets.Spreadsheets.Get get = sheetsService.spreadsheets().get(spreadsheetId);
         get.setFields("sheets.data.rowData.values.userEnteredFormat");
         get.setRanges(new ArrayList<String>(Arrays.asList("Reagent!" + column + ":" + column)));
         Spreadsheet s = get.execute();
@@ -837,7 +921,7 @@ public class DictionaryAccessor {
                 formatList.add(rowData.getValues().get(0).getUserEnteredFormat());
             }
         } while( false );
-        
+
         return formatList;
         /*
         for(Sheet sheet: sheets) {
@@ -866,7 +950,7 @@ public class DictionaryAccessor {
 
     public static List<ProtectedRange> getProtectedRanges(String tab) throws IOException {
         // Lookup the sheet properties and protected ranges on the source spreadsheet
-        Sheets.Spreadsheets.Get get = service.spreadsheets().get(spreadsheetId);
+        Sheets.Spreadsheets.Get get = sheetsService.spreadsheets().get(spreadsheetId);
         get.setFields("sheets.protectedRanges");
         get.setRanges(new ArrayList<String>(Arrays.asList(tab)));
         Spreadsheet s = get.execute();
@@ -918,7 +1002,7 @@ public class DictionaryAccessor {
         Set<String> tabList = MaintainDictionary.tabs();
 
         // Lookup the sheet properties and protected ranges on the source spreadsheet
-        Sheets.Spreadsheets.Get get = service.spreadsheets().get(spreadsheetId);
+        Sheets.Spreadsheets.Get get = sheetsService.spreadsheets().get(spreadsheetId);
         get.setFields("sheets.protectedRanges,sheets.properties");
         Spreadsheet s = get.execute();
         List<Sheet> sheets = s.getSheets();
@@ -957,7 +1041,7 @@ public class DictionaryAccessor {
 
             try {
                 // Execute request to add new protected ranges
-                service.spreadsheets().batchUpdate(spreadsheetId, breq).execute();
+                sheetsService.spreadsheets().batchUpdate(spreadsheetId, breq).execute();
             } catch(Exception e) {
                 e.printStackTrace();
             }
