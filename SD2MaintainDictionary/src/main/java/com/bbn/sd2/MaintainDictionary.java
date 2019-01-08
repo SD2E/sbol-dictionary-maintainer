@@ -308,7 +308,7 @@ public final class MaintainDictionary {
         } else { // otherwise get a copy from SynBioHub
             local_uri = SynBioHubAccessor.translateURI(e.uri);
             try {
-                e.document = SynBioHubAccessor.retrieve(e.uri);
+                e.document = SynBioHubAccessor.retrieve(e.uri, false);
                 originalEntry = new DictionaryEntry(e);
             } catch(SynBioHubException sbhe) {
                 report.failure("Could not retrieve linked object from SynBioHub", true);
