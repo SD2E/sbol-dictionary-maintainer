@@ -33,7 +33,8 @@ public final class SynBioHubAccessor {
     private static String spoofingPrefix = null;
     
     private static SynBioHubFrontend repository = null;
-    private static int connectionTimeoutSeconds = 600;
+    private static final int defaultConnectionTimeoutSeconds = 600;
+    private static int connectionTimeoutSeconds = defaultConnectionTimeoutSeconds;
     
     private SynBioHubAccessor() {} // static-only class
     
@@ -41,6 +42,17 @@ public final class SynBioHubAccessor {
         return collectionPrefix.substring(collectionPrefix.substring(0, collectionPrefix.length()-1).lastIndexOf('/') + 1,collectionPrefix.length() - 1);
     }
     
+    public static void logout() {
+        if(repository == null) {
+                return;
+        }
+
+        repository.logout();
+        repository = null;
+        spoofingPrefix = null;
+        connectionTimeoutSeconds = defaultConnectionTimeoutSeconds;
+    }
+
     /** Configure from command-line arguments */
     public static void configure(CommandLine cmd) {
         // get server to connect to
@@ -62,6 +74,7 @@ public final class SynBioHubAccessor {
             if(!spoofingPrefix.endsWith("/")) spoofingPrefix = spoofingPrefix+"/";
         	collectionPrefix = cmd.getOptionValue("collection", spoofingPrefix + "user/sd2e/scratch_test");
         } else {
+            spoofingPrefix = null;
             collectionPrefix = cmd.getOptionValue("collection", synbiohubServer + "user/sd2e/scratch_test");
         }
         if(!collectionPrefix.endsWith("/")) collectionPrefix = collectionPrefix + "/";
@@ -127,6 +140,7 @@ public final class SynBioHubAccessor {
         for(IdentifiedMetadata md : metaDataList) {
             if(md.getUri().equals(collectionID.toString())) {
                 foundCollectionPrefix = true;
+                break;
             }
         }
 
@@ -201,9 +215,9 @@ public final class SynBioHubAccessor {
      * @throws SynBioHubException
      * @throws SBOLValidationException
      */
-    public static SBOLDocument retrieve(URI uri) throws SynBioHubException, SBOLValidationException {
+    public static SBOLDocument retrieve(URI uri, boolean recursive) throws SynBioHubException, SBOLValidationException {
         ensureSynBioHubConnection();
-        SBOLDocument document = repository.getSBOL(uri, false);
+        SBOLDocument document = repository.getSBOL(uri, recursive);
 
         // convert to our own namespace:
         return document.changeURIPrefixVersion(localNamespace, null, "1");
@@ -287,6 +301,7 @@ public final class SynBioHubAccessor {
         options.addOption("c", "collection", false, "URL for SynBioHub collection to be synchronized");
         options.addOption("f", "spoofing", true, "URL prefix for a test SynBioHub server spoofing as another");
         options.addOption("S", "server", true, "URL for SynBioHub server");
+        options.addOption("t", "timeout", true, "connection timeout in seconds");
         
         configure(new DefaultParser().parse(options, args));
         ensureSynBioHubConnection();
