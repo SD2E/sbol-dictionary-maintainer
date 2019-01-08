@@ -42,6 +42,17 @@ public class DictionaryEntry {
                 put("LBNL UID", "LBNL_UID");
             }
         };
+    public static Map<String, String> reverseLabUIDMap = generateReverseLabUIDMap();
+
+    private static Map<String, String> generateReverseLabUIDMap() {
+        Map<String, String> reverseMap = new TreeMap<String, String>();
+
+        for(String key : labUIDMap.keySet()) {
+            reverseMap.put(labUIDMap.get(key), key);
+        }
+
+        return reverseMap;
+    }
 
     public String stubString() {
         switch(stub) {
@@ -133,11 +144,6 @@ public class DictionaryEntry {
 
     public Map<String, String> generateFieldMap() {
         Map<String, String> fieldMap = new TreeMap<String, String>();
-        Map<String, String> reverseUIDMap = new TreeMap<String, String>();
-
-        for(String key : labUIDMap.keySet()) {
-            reverseUIDMap.put(labUIDMap.get(key), key);
-        }
         
         // Add Lab UIDs
         for(String key : labUIDs.keySet()) {
@@ -159,7 +165,7 @@ public class DictionaryEntry {
                     }
                 }
             }
-            fieldMap.put(reverseUIDMap.get(key), uid);
+            fieldMap.put(reverseLabUIDMap.get(key), uid);
         }
 
         fieldMap.put("Common Name", name);
