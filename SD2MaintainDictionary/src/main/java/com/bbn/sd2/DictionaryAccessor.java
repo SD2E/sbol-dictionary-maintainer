@@ -110,10 +110,10 @@ public class DictionaryAccessor {
 
         // Build flow and trigger user authorization request.
         GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
-                HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, SCOPES)
-                .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
-                .setAccessType("offline")
-                .build();
+            HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, SCOPES)
+            .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
+            .setAccessType("offline")
+            .build();
         return new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("user");
     }
 
@@ -124,8 +124,8 @@ public class DictionaryAccessor {
             // Build a new authorized API client service.
             final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
             service = new Sheets.Builder(HTTP_TRANSPORT, JSON_FACTORY, getCredentials(HTTP_TRANSPORT))
-                    .setApplicationName(APPLICATION_NAME)
-                    .build();
+                .setApplicationName(APPLICATION_NAME)
+                .build();
 
             log.info("Successfully logged into Google Sheets");
         } catch(Exception e) {
@@ -180,25 +180,25 @@ public class DictionaryAccessor {
         GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
         HttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
         GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
-                HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, Arrays.asList(DriveScopes.DRIVE_FILE))
-                .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
-                .setAccessType("offline")
-                .build();
+            HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, Arrays.asList(DriveScopes.DRIVE_FILE))
+            .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
+            .setAccessType("offline")
+            .build();
         Credential credential = new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("owner");
         Drive drive = new Drive.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential)
-                .setApplicationName(APPLICATION_NAME)
-                .build();
-            try {
-                String backup_filename = drive.files().get(spreadsheetId).execute().getName();
-                backup_filename += "_backup_" + MaintainDictionary.xmlDateTimeStamp();
-                com.google.api.services.drive.model.File copiedFile = new com.google.api.services.drive.model.File();
-                copiedFile.setName(backup_filename);
-                copiedFile.setParents(Collections.singletonList(GDRIVE_BACKUP_FOLDER));
-                drive.files().copy(spreadsheetId, copiedFile).execute();
-                System.out.println("Successfully wrote back-up to " + backup_filename);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            .setApplicationName(APPLICATION_NAME)
+            .build();
+        try {
+            String backup_filename = drive.files().get(spreadsheetId).execute().getName();
+            backup_filename += "_backup_" + MaintainDictionary.xmlDateTimeStamp();
+            com.google.api.services.drive.model.File copiedFile = new com.google.api.services.drive.model.File();
+            copiedFile.setName(backup_filename);
+            copiedFile.setParents(Collections.singletonList(GDRIVE_BACKUP_FOLDER));
+            drive.files().copy(spreadsheetId, copiedFile).execute();
+            System.out.println("Successfully wrote back-up to " + backup_filename);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public static void exportCSV() throws IOException {
@@ -247,18 +247,18 @@ public class DictionaryAccessor {
     }
 
     //    // Reads one column
-//    public static List<String> snapshotColumn(char column_id) throws IOException, GeneralSecurityException {
-//      String column_range = "!" + column_id + (row_offset+1) + ":" + (char)(column_id+1);
-//      List<String> cell_vals = new ArrayList<>();
-//      Sheets.Spreadsheets.Values.Get request = service.spreadsheets().values().get(spreadsheetId, column_range);
-//      request.setMajorDimension("COLUMNS");
-//      ValueRange result = request.execute();
-//        List<Object> column = result.getValues().get(0);
-//        for (Object cell : column) {
-//          cell_vals.add(cell.toString());
-//        }
-//      return cell_vals;
-//    }
+    //    public static List<String> snapshotColumn(char column_id) throws IOException, GeneralSecurityException {
+    //      String column_range = "!" + column_id + (row_offset+1) + ":" + (char)(column_id+1);
+    //      List<String> cell_vals = new ArrayList<>();
+    //      Sheets.Spreadsheets.Values.Get request = service.spreadsheets().values().get(spreadsheetId, column_range);
+    //      request.setMajorDimension("COLUMNS");
+    //      ValueRange result = request.execute();
+    //        List<Object> column = result.getValues().get(0);
+    //        for (Object cell : column) {
+    //          cell_vals.add(cell.toString());
+    //        }
+    //      return cell_vals;
+    //    }
 
     /**
      * Checks if entries under the given header are unique across all sheets in the Dictionary
@@ -309,7 +309,7 @@ public class DictionaryAccessor {
                 entry_i.statusCode = StatusCode.DUPLICATE_VALUE;
             }
             headers.put(val_i, entry_i);
-         }
+        }
     }
 
     /**
@@ -338,7 +338,7 @@ public class DictionaryAccessor {
 
     public static void submitRequests(List<Request> requests) throws IOException {
         BatchUpdateSpreadsheetRequest update_sheet_request =
-                new BatchUpdateSpreadsheetRequest().setRequests(requests);
+            new BatchUpdateSpreadsheetRequest().setRequests(requests);
         service.spreadsheets().batchUpdate(spreadsheetId, update_sheet_request).execute();
     }
 
@@ -375,12 +375,12 @@ public class DictionaryAccessor {
         int lastRow = row + values.size() - 1;
 
         String writeRange = tab + "!" + col + row +
-                ":" + col + lastRow;
+            ":" + col + lastRow;
 
         response.setRange(writeRange);
         service.spreadsheets().values().update(spreadsheetId, writeRange, response)
-                                               .setValueInputOption("RAW")
-                                               .execute();
+            .setValueInputOption("RAW")
+            .execute();
     }
 
     public static String getCellData(String tab, String colName, int row) throws Exception {
@@ -393,17 +393,17 @@ public class DictionaryAccessor {
         List<List<Object>> values = response.getValues();
 
         if(values == null) {
-                return "";
+            return "";
         }
 
         if(values.size() == 0) {
-                return "";
+            return "";
         }
 
         List<Object> rowValues = values.get(0);
 
         if(rowValues.size() == 0) {
-                return "";
+            return "";
         }
 
         return (String)rowValues.get(0);
@@ -572,8 +572,10 @@ public class DictionaryAccessor {
             }
 
             // Copy the sheet from the source spreadsheet to the destination spreadsheet
-            SheetProperties sp = service.spreadsheets().sheets().copyTo(srcSpreadsheetId,
-                    srcProperties.getSheetId(), requestBody).execute();
+            SheetProperties sp =
+                service.spreadsheets().sheets().copyTo(srcSpreadsheetId,
+                                                       srcProperties.getSheetId(),
+                                                       requestBody).execute();
 
             // At this point the sheet as been copied, but the title is prepended with
             // "Copy of ".  It needs to be restored to the original title
@@ -606,7 +608,7 @@ public class DictionaryAccessor {
                                               SheetProperties sheetProperties,
                                               List<Request> updateRangeRequests) throws Exception {
         Set<String> columnsToProtect =
-                new TreeSet<String>(MaintainDictionary.getProtectedHeaders());
+            new TreeSet<String>(MaintainDictionary.getProtectedHeaders());
 
         String sheetTitle = sheetProperties.getTitle();
 
@@ -644,7 +646,7 @@ public class DictionaryAccessor {
             } else {
                 columnTitle = reverseLookup.get(startColumnIndex);
                 if(!columnsToProtect.contains(columnTitle) ||
-                        endRowIndex != null) {
+                   endRowIndex != null) {
                     unexpectedProtection = true;
                 }
             }
@@ -654,13 +656,13 @@ public class DictionaryAccessor {
                 if(endColumnIndex == null) {
                     if(startColumnIndex == null) {
                         log.warning("Deleting unexpected protection from on row " +
-                                (startRowIndex + 1) + " on sheet " + quotedSheetTitle);
+                                    (startRowIndex + 1) + " on sheet " + quotedSheetTitle);
                     } else {
                         char startColumn = (char) ('A' + startColumnIndex);
 
                         log.warning("Deleting unexpected protection from on row " +
-                                (startRowIndex + 1) + " starting from column " + startColumn +
-                                " on sheet " + quotedSheetTitle);
+                                    (startRowIndex + 1) + " starting from column " + startColumn +
+                                    " on sheet " + quotedSheetTitle);
                     }
                 } else if(endColumnIndex < 26) {
                     char startColumn = (char) ('A' + startColumnIndex);
@@ -676,7 +678,7 @@ public class DictionaryAccessor {
                         if(startRowIndex == null) {
                             if(startColumn == endColumn) {
                                 log.warning("Deleting unexpected protection on column " +
-                                        startColumn + " on sheet " + sheetTitle);
+                                            startColumn + " on sheet " + sheetTitle);
                             } else {
                                 log.warning("Deleting unexpected protection from column " +
                                             startColumn + " to column " + endColumn + " on sheet " +
@@ -689,9 +691,9 @@ public class DictionaryAccessor {
                         }
                     } else {
                         log.warning("Deleting unexpected protection from " +
-                                startColumn + (startRowIndex + 1) +
-                                " to " + endColumn + endRowIndex +
-                                " on sheet " + sheetTitle);
+                                    startColumn + (startRowIndex + 1) +
+                                    " to " + endColumn + endRowIndex +
+                                    " on sheet " + sheetTitle);
                     }
                 } else {
                     log.warning("Deleting unexpected protection on sheet " +
@@ -761,7 +763,7 @@ public class DictionaryAccessor {
             newRange.setEditors(editors);
 
             AddProtectedRangeRequest addProtectedRangeRequest =
-                    new AddProtectedRangeRequest();
+                new AddProtectedRangeRequest();
             addProtectedRangeRequest.setProtectedRange(newRange);
 
             Request request = new Request();
@@ -853,8 +855,8 @@ public class DictionaryAccessor {
                 List<CellData> values = rowData.getValues();
 
                 if(values == null) {
-                        formatList.add(null);
-                        continue;
+                    formatList.add(null);
+                    continue;
                 }
 
                 formatList.add(values.get(0).getUserEnteredFormat());
@@ -862,29 +864,6 @@ public class DictionaryAccessor {
         } while( false );
 
         return formatList;
-        /*
-        for(Sheet sheet: sheets) {
-            // Get the sheet properties
-            SheetProperties sheetProperties = sheet.getProperties();
-
-            // Make sure the title is in the list of sheets we process
-            String sheetTitle = sheetProperties.getTitle();
-            if(!tab.equals(sheetTitle)) {
-                continue;
-            }
-
-            List<GridData> glist = sheet.getData();
-            System.out.println("glist size is " + glist.size());
-            GridData rowData = glist.get(0);
-            System.out.println("Rowdata size is " + rowData.size());
-            List<RowData> rList = rowData.getRowData();
-            System.out.println("rlist size is " + rList.size());
-            List<CellData> cData = rList.get(5).getValues();
-            System.out.println("cData size is " + cData.size());
-
-            sheet.getData().get(0).getRowData().get(0).getValues().get(0).getUserEnteredFormat();
-        }
-        */
     }
 
     public static List<ProtectedRange> getProtectedRanges(String tab) throws IOException {
@@ -904,7 +883,7 @@ public class DictionaryAccessor {
         }
 
         return sheets.get(0).getProtectedRanges();
-     }
+    }
 
     public static Request setStatusColor(int row, char column, Integer sheetId, Color color) {
         Request req = new Request();
@@ -990,16 +969,16 @@ public class DictionaryAccessor {
     static final String getSpreadsheetId() {
         return spreadsheetId;
     }
-//    public static void main(String... args) throws IOException, GeneralSecurityException {
-//        List<DictionaryEntry> entries = snapshotCurrentDictionary();
-//        if (entries.isEmpty()) {
-//            System.out.println("No data found.");
-//        } else {
-//            System.out.println("Name, URI");
-//            for (DictionaryEntry e : entries) {
-//                System.out.printf("%s, %s\n", e.name, e.uri==null?"no URI":e.uri.toString());
-//            }
-//        }
-//    }
+    //    public static void main(String... args) throws IOException, GeneralSecurityException {
+    //        List<DictionaryEntry> entries = snapshotCurrentDictionary();
+    //        if (entries.isEmpty()) {
+    //            System.out.println("No data found.");
+    //        } else {
+    //            System.out.println("Name, URI");
+    //            for (DictionaryEntry e : entries) {
+    //                System.out.printf("%s, %s\n", e.name, e.uri==null?"no URI":e.uri.toString());
+    //            }
+    //        }
+    //    }
 
 }
