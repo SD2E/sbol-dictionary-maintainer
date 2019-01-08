@@ -7,6 +7,7 @@ import java.io.InputStream;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.io.IOUtils;
+import org.junit.AfterClass;
 import org.junit.Test;
 import org.mortbay.log.Log;
 
@@ -53,5 +54,11 @@ public class DictionaryTestShared {
     public void verifyDictionaryTestEnvironment() throws Exception {
         DictionaryTestShared.initializeTestEnvironment(MaintainDictionary.defaultSpreadsheet());
     }
+
+	@AfterClass
+	public static void tearDownAfterClass() throws Exception {
+		SynBioHubAccessor.logout();
+	}
+
 
 }
