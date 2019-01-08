@@ -27,6 +27,8 @@ import com.google.api.services.sheets.v4.model.AddProtectedRangeRequest;
 import com.google.api.services.sheets.v4.model.AddSheetRequest;
 import com.google.api.services.sheets.v4.model.AppendValuesResponse;
 import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
+import com.google.api.services.sheets.v4.model.CellFormat;
+import com.google.api.services.sheets.v4.model.Color;
 import com.google.api.services.sheets.v4.model.DeleteSheetRequest;
 import com.google.api.services.sheets.v4.model.Editors;
 import com.google.api.services.sheets.v4.model.GridRange;
@@ -70,61 +72,61 @@ public class TestMaintainDictionary {
     private static Logger log = Logger.getGlobal();
 
     public static Spreadsheet getSratchSheet() throws IOException {
-	    return sheetsService.spreadsheets().get(sheetId).execute();
+            return sheetsService.spreadsheets().get(sheetId).execute();
     }
 
-	@BeforeClass
-	public static void setUpBeforeClass() throws Exception {
-		// Create scratch spreadsheet
-		// Load credentials
-	    InputStream in = DictionaryAccessor.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
-	    GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
+        @BeforeClass
+        public static void setUpBeforeClass() throws Exception {
+                // Create scratch spreadsheet
+                // Load credentials
+            InputStream in = DictionaryAccessor.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
+            GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
 
-	    // Build flow and trigger user authorization request
-	    HttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
-	    GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
-	    			HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, SCOPES)
-	                .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
-	                .setAccessType("offline")
-	                .build();
-	    credential = new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("owner");
+            // Build flow and trigger user authorization request
+            HttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
+            GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
+                                HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, SCOPES)
+                        .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
+                        .setAccessType("offline")
+                        .build();
+            credential = new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("owner");
 
-	    sheetsService = new Sheets.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential).setApplicationName(APPLICATION_NAME).build();
-	    Sheets.Spreadsheets.Create create_sheet_request = sheetsService.spreadsheets().create(new Spreadsheet());
-	    Spreadsheet SCRATCH_SHEET = create_sheet_request.execute();
-	    sheetId = SCRATCH_SHEET.getSpreadsheetId();
-	    log.info("Created " + SCRATCH_SHEET.getSpreadsheetId());
+            sheetsService = new Sheets.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential).setApplicationName(APPLICATION_NAME).build();
+            Sheets.Spreadsheets.Create create_sheet_request = sheetsService.spreadsheets().create(new Spreadsheet());
+            Spreadsheet SCRATCH_SHEET = create_sheet_request.execute();
+            sheetId = SCRATCH_SHEET.getSpreadsheetId();
+            log.info("Created " + SCRATCH_SHEET.getSpreadsheetId());
 
-	    // Add tabs to test sheet
-	    List<Request> add_sheet_requests = new ArrayList<>();
-	    for (String tab : MaintainDictionary.tabs()) {
-		    Request request = new Request().setAddSheet(new AddSheetRequest().setProperties(new SheetProperties().setTitle(tab)));
-		    add_sheet_requests.add(request);
-	    }
-	    BatchUpdateSpreadsheetRequest update_sheet_request =
-	            new BatchUpdateSpreadsheetRequest().setRequests(add_sheet_requests);
-	    sheetsService.spreadsheets().batchUpdate(sheetId, update_sheet_request).execute();
+            // Add tabs to test sheet
+            List<Request> add_sheet_requests = new ArrayList<>();
+            for (String tab : MaintainDictionary.tabs()) {
+                    Request request = new Request().setAddSheet(new AddSheetRequest().setProperties(new SheetProperties().setTitle(tab)));
+                    add_sheet_requests.add(request);
+            }
+            BatchUpdateSpreadsheetRequest update_sheet_request =
+                    new BatchUpdateSpreadsheetRequest().setRequests(add_sheet_requests);
+            sheetsService.spreadsheets().batchUpdate(sheetId, update_sheet_request).execute();
 
-	    // Write headers to tabs
-		List<Object> headers = new ArrayList<Object>();
-		for (String header : MaintainDictionary.headers()) {
-			headers.add(header);
-		}
-		List<List<Object>> values = new ArrayList<List<Object>>();
-		values.add(headers);
-		for (String tab : MaintainDictionary.tabs()) {
-			String target_range = tab + "!A2";
-			ValueRange body = new ValueRange()
-			        .setValues(values);
-			AppendValuesResponse result =
-					sheetsService.spreadsheets().values().append(sheetId, target_range, body)
-			                .setValueInputOption("RAW")
-			                .execute();
-		}
+            // Write headers to tabs
+                List<Object> headers = new ArrayList<Object>();
+                for (String header : MaintainDictionary.headers()) {
+                        headers.add(header);
+                }
+                List<List<Object>> values = new ArrayList<List<Object>>();
+                values.add(headers);
+                for (String tab : MaintainDictionary.tabs()) {
+                        String target_range = tab + "!A2";
+                        ValueRange body = new ValueRange()
+                                .setValues(values);
+                        AppendValuesResponse result =
+                                        sheetsService.spreadsheets().values().append(sheetId, target_range, body)
+                                        .setValueInputOption("RAW")
+                                        .execute();
+                }
 
-	    DictionaryTestShared.initializeTestEnvironment(sheetId);
-//		DictionaryMaintainerApp.main(options);
-	}
+            DictionaryTestShared.initializeTestEnvironment(sheetId);
+//              DictionaryMaintainerApp.main(options);
+        }
 
     // Adds an extra protection range on one of the tabs
     private void addExtraProtection(String tab) throws Exception {
@@ -228,6 +230,30 @@ public class TestMaintainDictionary {
         log.info("Tab copy test succeeded");
     }
 
+    private int colorFloatToInt(Float f) {
+        if(f == null) {
+                return 0;
+        }
+
+        return (int)Math.round(f * 255.0);
+    }
+
+    public boolean compareColors(Color c1, Color c2) {
+        if(colorFloatToInt(c1.getRed()) != colorFloatToInt(c2.getRed())) {
+                return false;
+        }
+
+        if(colorFloatToInt(c1.getBlue()) != colorFloatToInt(c2.getBlue())) {
+                return false;
+        }
+
+        if(colorFloatToInt(c1.getGreen()) != colorFloatToInt(c2.getGreen())) {
+                return false;
+        }
+
+        return true;
+    }
+
     @Test
     public void testEntries() throws Exception {
         List<ValueRange> valueUpdates = new ArrayList<ValueRange>();
@@ -298,11 +324,41 @@ public class TestMaintainDictionary {
         // Update the value
         DictionaryAccessor.setCellData(updateTab, "Common Name", updateRow, updatedName);
 
+        // Delete a name
+        DictionaryAccessor.setCellData("Attribute", "Common Name", 3, "");
+
+        // Create an invalid type
+        DictionaryAccessor.setCellData("Genetic Construct", "Type", 3, "Bad Type");
+
         // Give Google a break
         Thread.sleep(20000);
 
         // Run the Dictionary
         DictionaryTestShared.initializeTestEnvironment(sheetId);
+
+        Color red = MaintainDictionary.redColor();
+        Color green = MaintainDictionary.greenColor();
+
+        // Retrieve formatting of the Status column in the Attribute tab
+        List<CellFormat> cellFormatList = DictionaryAccessor.getColumnFormatting("Attribute", "Status");
+        assert(cellFormatList.size() >= 4);
+
+        // The text in row 3 of the attribute tab should be red since the common name is empty
+        Color textColor = cellFormatList.get(2).getTextFormat().getForegroundColor();
+        assert(compareColors(textColor, red));
+
+        // The text in row 4 of the attribute tab should be green
+        textColor = cellFormatList.get(4).getTextFormat().getForegroundColor();
+        assert(compareColors(textColor, green));
+
+        // Retrieve formatting of the Status column in the Genetic Construct tab
+        cellFormatList = DictionaryAccessor.getColumnFormatting("Genetic Construct", "Status");
+        assert(cellFormatList.size() >= 3);
+
+        // The text in row 3 of the attribute tab should be red since the type
+        // value is an illegal value
+        textColor = cellFormatList.get(2).getTextFormat().getForegroundColor();
+        assert(compareColors(textColor, red));
 
         // Check the protections
         validateProtections();
@@ -345,27 +401,27 @@ public class TestMaintainDictionary {
 
     @AfterClass
     public static void tearDownAfterClass() throws Exception {
-		// Delete scratch sheet
-		if (System.getProperty("c") != null && System.getProperty("c").toLowerCase().equals("true")) {
-			log.info("Tearing down test Dictionary");
-		    InputStream in = DictionaryAccessor.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
-		    GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
-			HttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
-			GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
-	                HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, Arrays.asList(DriveScopes.DRIVE_FILE))
-	                .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
-	                .setAccessType("offline")
-	                .build();
-	        credential = new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("owner");
-			Drive service = new Drive.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential)
-	                .setApplicationName(APPLICATION_NAME)
-	                .build();
-				try {
-					service.files().delete(sheetId).execute();
-					log.info("Successfully deleted scratch sheet " + sheetId);
-				} catch (IOException e) {
-					log.info("An error tearing down scratch sheet occurred: " + e);
-				}
-		}
-	}
+        // Delete scratch sheet
+        if (System.getProperty("c") != null && System.getProperty("c").toLowerCase().equals("true")) {
+            log.info("Tearing down test Dictionary");
+            InputStream in = DictionaryAccessor.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
+            GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
+            HttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
+            GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
+                                                                                       HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, Arrays.asList(DriveScopes.DRIVE_FILE))
+                .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
+                .setAccessType("offline")
+                .build();
+            credential = new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("owner");
+            Drive service = new Drive.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential)
+                .setApplicationName(APPLICATION_NAME)
+                .build();
+            try {
+                service.files().delete(sheetId).execute();
+                log.info("Successfully deleted scratch sheet " + sheetId);
+            } catch (IOException e) {
+                log.info("An error tearing down scratch sheet occurred: " + e);
+            }
+        }
+    }
 }

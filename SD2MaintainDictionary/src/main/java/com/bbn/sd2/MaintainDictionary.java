@@ -564,13 +564,25 @@ public final class MaintainDictionary {
         return newColor;
     }
 
+    public static Color greenColor() {
+        return makeColor(0, 144, 81);
+    }
+
+    public static Color redColor() {
+        return makeColor(148, 17, 0);
+    }
+
+    public static Color grayColor() {
+        return makeColor(146, 146, 146);
+    }
+
     /**
      * Run one pass through the dictionary, updating all entries as needed
      */
     public static void maintain_dictionary() throws IOException, GeneralSecurityException, SBOLValidationException, SynBioHubException, SBOLConversionException {
-        Color green = makeColor(0, 144, 81);
-        Color red = makeColor(148, 17, 0);
-        Color gray = makeColor(146, 146, 146);
+        Color green = greenColor();
+        Color red = redColor();
+        Color gray = grayColor();
 
         UpdateReport report = new UpdateReport();
         try {

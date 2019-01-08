@@ -390,7 +390,23 @@ public class DictionaryAccessor {
 
         ValueRange response = service.spreadsheets().values().get(spreadsheetId, readRange).execute();
 
-        return (String)response.getValues().get(0).get(0);
+        List<List<Object>> values = response.getValues();
+
+        if(values == null) {
+                return "";
+        }
+
+        if(values.size() == 0) {
+                return "";
+        }
+
+        List<Object> rowValues = values.get(0);
+
+        if(rowValues.size() == 0) {
+                return "";
+        }
+
+        return (String)rowValues.get(0);
     }
 
     public static void setCellData(String tab, String colName, int row, String value) throws Exception {
@@ -791,7 +807,7 @@ public class DictionaryAccessor {
         char column = columnNameToIndex(tab, columnName);
         Sheets.Spreadsheets.Get get = service.spreadsheets().get(spreadsheetId);
         get.setFields("sheets.data.rowData.values.userEnteredFormat");
-        get.setRanges(new ArrayList<String>(Arrays.asList("Reagent!" + column + ":" + column)));
+        get.setRanges(new ArrayList<String>(Arrays.asList(tab + "!" + column + ":" + column)));
         Spreadsheet s = get.execute();
         List<Sheet> sheets = s.getSheets();
 
@@ -834,10 +850,17 @@ public class DictionaryAccessor {
             }
 
             for(RowData rowData : rowDataList) {
-                formatList.add(rowData.getValues().get(0).getUserEnteredFormat());
+                List<CellData> values = rowData.getValues();
+
+                if(values == null) {
+                        formatList.add(null);
+                        continue;
+                }
+
+                formatList.add(values.get(0).getUserEnteredFormat());
             }
         } while( false );
-        
+
         return formatList;
         /*
         for(Sheet sheet: sheets) {
