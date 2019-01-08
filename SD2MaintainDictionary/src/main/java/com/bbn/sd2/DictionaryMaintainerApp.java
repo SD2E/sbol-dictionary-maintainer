@@ -8,20 +8,22 @@ import java.text.NumberFormat;
 import java.util.logging.Logger;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.Set;
+import java.util.HashSet;
 
 import org.apache.commons.cli.*;
 import org.synbiohub.frontend.SynBioHubException;
 
 public class DictionaryMaintainerApp {
     public static final String VERSION = "1.2.0";
-    
+
     private static Logger log = Logger.getGlobal();
     private static int sleepMillis;
     private static boolean stopSignal = false;
     private static Semaphore heartbeatSem = new Semaphore(0);
     private static Semaphore backupSem = new Semaphore(0);
     private static boolean stopWorkerThreads = false;
-    
+
     public static void main(String... args) throws Exception {
         // Parse arguments and configure
         CommandLine cmd = parseArguments(args);
@@ -31,16 +33,37 @@ public class DictionaryMaintainerApp {
         SynBioHubAccessor.configure(cmd);
         stopWorkerThreads = false;
         kludge_heartbeat_reporter();
+        final boolean backupInMainLoop = true;
 
-        if(!cmd.hasOption("test_mode")) {
-            start_backup(1);
+        if(!backupInMainLoop) {
+            if(!cmd.hasOption("test_mode")) {
+                start_backup(1);
+            }
         }
+
+        // Number of milliseconds in one hour
+        long hourMillis = 3600000;
+
+        // Number of milliseconds in one day
+        long dayMillis = hourMillis * 24;
+
+        // Get time, in milliseconds since 1970 UTC
+        long now = System.currentTimeMillis();
+
+        // Calculate time of next midnight (UTC)
+        long nextMidnightUTC = now - (now % dayMillis) + dayMillis;
+
+        // Backup time in hours after midnight UTC.
+        long backTimeHoursAM_UTC = 8;
+
+        // This keeps track of the next time to run a backup
+        long nextBackupTime = nextMidnightUTC + (backTimeHoursAM_UTC * hourMillis);
 
         // Run as an eternal loop, reporting errors but not crashing out
         while(!stopSignal) {
             DictionaryAccessor.restart();
             SynBioHubAccessor.restart();
-            
+
             try {
                 if(!SynBioHubAccessor.collectionExists()) {
                     URI collectionID = SynBioHubAccessor.getCollectionID();
@@ -58,7 +81,7 @@ public class DictionaryMaintainerApp {
 
             while(!stopSignal) {
                 try {
-                	long start = System.currentTimeMillis();
+                    long start = System.currentTimeMillis();
                     MaintainDictionary.maintain_dictionary();
                     long end = System.currentTimeMillis();
                     NumberFormat formatter = new DecimalFormat("#0.00000");
@@ -67,14 +90,33 @@ public class DictionaryMaintainerApp {
                     log.severe("Exception while maintaining dictionary:");
                     e.printStackTrace();
                 }
-                if (cmd.hasOption("test_mode"))
-                	setStopSignal();
-                else {
-                	try {
-                		Thread.sleep(sleepMillis);
-                	} catch(InterruptedException e) {
-                		// ignore sleep interruptions
-                	}
+                if (cmd.hasOption("test_mode")) {
+                    setStopSignal();
+                } else {
+                    if(backupInMainLoop) {
+                        try {
+                            Thread.sleep(sleepMillis);
+
+                            if(System.currentTimeMillis() > nextBackupTime) {
+                                // Back up spreadsheet
+                                DictionaryAccessor.backup();
+
+                                while(System.currentTimeMillis() > nextBackupTime) {
+                                    nextBackupTime += dayMillis;
+                                }
+                            }
+
+                            copyTabsToStagingSpreadsheet();
+                        } catch(Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+
+                    try {
+                        Thread.sleep(sleepMillis);
+                    } catch(InterruptedException e) {
+                        // ignore sleep interruptions
+                    }
                 }
             }
         }
@@ -83,28 +125,30 @@ public class DictionaryMaintainerApp {
         backupSem.release(1);
         log.info("Dictionary Maintainer run complete, shutting down.");
     }
- 
+
     private static void start_backup(int days) {
-    	
-    	new Thread() { 
-    		public void run() {
+
+        new Thread() {
+            public void run() {
                 while(!stopWorkerThreads) {
-        			log.info("Executing Dictionary backup");
-					try {
-						DictionaryAccessor.backup();
-					} catch (IOException | GeneralSecurityException e) {
-						e.printStackTrace();
-					} 
-					try {
-						backupSem.tryAcquire(1, days*24*3600, TimeUnit.SECONDS);
-					}
-					catch(InterruptedException e) {}
-    			}
+                    log.info("Executing Dictionary backup");
+                    try {
+                        DictionaryAccessor.backup();
+                        copyTabsToStagingSpreadsheet();
+
+                    } catch (IOException | GeneralSecurityException e) {
+                        e.printStackTrace();
+                    }
+                    try {
+                        backupSem.tryAcquire(1, days*24*3600, TimeUnit.SECONDS);
+                    }
+                    catch(InterruptedException e) {}
+                }
                 log.info("Stopping Dictionary backups");
-    		}
-    	}.start();
-    }   
-  
+            }
+        }.start();
+    }
+
     private static void kludge_heartbeat_reporter() {
         new Thread() { public void run() {
             int count=0;
@@ -119,7 +163,7 @@ public class DictionaryMaintainerApp {
     }
 
     /**
-     * Prepare and 
+     * Prepare and
      * @param args Current command-line arguments, to be passed in
      */
     public static CommandLine parseArguments(String ...args) {
@@ -147,12 +191,27 @@ public class DictionaryMaintainerApp {
         }
         return cmd;
     }
-    
+
     public static void setStopSignal() {
-    	stopSignal = true;
+        stopSignal = true;
     }
-    
+
     public static void restart() {
-    	stopSignal = false;
+        stopSignal = false;
+    }
+
+    private static void copyTabsToStagingSpreadsheet() throws IOException {
+        String spreadsheetId = DictionaryAccessor.getSpreadsheetId();
+        String stagingSpreadsheetId = MaintainDictionary.stagingSpreadsheet();
+
+        // Copy Spreadsheet tabs to staging spreadsheet
+        Set<String> tabList = new HashSet<>(MaintainDictionary.tabs());
+
+        // This tab is treated differently and is not in the tab list
+        tabList.add("Mapping Failures");
+
+        DictionaryAccessor.copyTabsFromOtherSpreadSheet(spreadsheetId,
+                                                        stagingSpreadsheetId,
+                                                        tabList);
     }
 }

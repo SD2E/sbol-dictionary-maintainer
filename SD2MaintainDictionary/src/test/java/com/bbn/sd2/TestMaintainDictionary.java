@@ -23,11 +23,16 @@ import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.store.FileDataStoreFactory;
 import com.google.api.services.sheets.v4.Sheets;
 import com.google.api.services.sheets.v4.SheetsScopes;
+import com.google.api.services.sheets.v4.model.AddProtectedRangeRequest;
 import com.google.api.services.sheets.v4.model.AddSheetRequest;
 import com.google.api.services.sheets.v4.model.AppendValuesResponse;
 import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
 import com.google.api.services.sheets.v4.model.DeleteSheetRequest;
+import com.google.api.services.sheets.v4.model.Editors;
+import com.google.api.services.sheets.v4.model.GridRange;
+import com.google.api.services.sheets.v4.model.ProtectedRange;
 import com.google.api.services.sheets.v4.model.Request;
+import com.google.api.services.sheets.v4.model.Sheet;
 import com.google.api.services.sheets.v4.model.SheetProperties;
 import com.google.api.services.sheets.v4.model.Spreadsheet;
 import com.google.api.services.sheets.v4.model.SpreadsheetProperties;
@@ -41,9 +46,11 @@ import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
 
@@ -117,15 +124,117 @@ public class TestMaintainDictionary {
 
 	    DictionaryTestShared.initializeTestEnvironment(sheetId);
 //		DictionaryMaintainerApp.main(options);
-
 	}
 
-	@Test
+    // Adds an extra protection range on one of the tabs
+    private void addExtraProtection(String tab) throws Exception {
+        Sheet sheet = DictionaryAccessor.getSheetProperties(tab);
+
+        ProtectedRange newRange = new ProtectedRange();
+
+        GridRange gridRange = new GridRange();
+        gridRange.setStartColumnIndex(1);
+        gridRange.setEndColumnIndex(3);
+        gridRange.setStartRowIndex(1);
+        gridRange.setEndRowIndex(3);
+        gridRange.setSheetId(sheet.getProperties().getSheetId());
+        newRange.setRange(gridRange);
+
+        AddProtectedRangeRequest addProtectedRangeRequest =
+                new AddProtectedRangeRequest();
+        addProtectedRangeRequest.setProtectedRange(newRange);
+
+        Request request = new Request();
+        request.setAddProtectedRange(addProtectedRangeRequest);
+        List<Request> requests = new ArrayList<>();
+        requests.add(request);
+        BatchUpdateSpreadsheetRequest update_sheet_request =
+                new BatchUpdateSpreadsheetRequest().setRequests(requests);
+        sheetsService.spreadsheets().batchUpdate(sheetId, update_sheet_request).execute();
+    }
+
+    private void validateProtections() throws Exception {
+        log.info("Validating Protections...");
+
+        // This contains the names of the columns that should be protected
+        Set<String> protectedColumnHeaders = MaintainDictionary.getProtectedHeaders();
+
+        // This will contain the column indexes of the actual protected columns
+        Set<Integer> protectedColumns = new HashSet<>();
+
+        //  This will contain the columns indicies of the columns that should
+        // be protected
+        Set<Integer> expectedProtectedColumns = new HashSet<>();
+
+        // Check the protections
+        for (String tab : MaintainDictionary.tabs()) {
+            // Get the protected ranges of the tap
+            List<ProtectedRange> protectedRanges = DictionaryAccessor.getProtectedRanges(tab);
+
+            // This maps the column header name to its index
+            Hashtable<String, Integer> headerMap =
+                    DictionaryAccessor.getDictionaryHeaders(tab);
+
+            for(String key : headerMap.keySet()) {
+                if(protectedColumnHeaders.contains(key)) {
+                    expectedProtectedColumns.add(headerMap.get(key));
+                }
+            }
+
+            // Verify the correct number of columns are protected
+            assert(protectedRanges != null);
+            assert(protectedRanges.size() == expectedProtectedColumns.size());
+
+            for(ProtectedRange protectedRange : protectedRanges) {
+                GridRange range = protectedRange.getRange();
+
+                // Make sure protected range is a column
+                assert(range.getStartRowIndex() == null);
+                assert(range.getEndRowIndex() == null);
+                protectedColumns.add(range.getStartColumnIndex());
+            }
+
+            // Make sure the correct columns are protected
+            assert(protectedColumns.equals(expectedProtectedColumns));
+
+            protectedColumns.clear();
+            expectedProtectedColumns.clear();
+        }
+
+        log.info("Protections Validated.");
+    }
+
+    private void testCopyTab() throws Exception {
+        log.info("Testing tab copy...");
+
+        String tabToCopy = "Reagent";
+
+        // Get the tab properties to extract the sheet id
+        Sheet sheet = DictionaryAccessor.getSheetProperties(tabToCopy);
+        int originalSheetId = sheet.getProperties().getSheetId();
+
+        // Make a copy of the tab on the scratch sheet
+        Set<String> tabSet = new HashSet<>();
+        tabSet.add(tabToCopy);
+
+        DictionaryAccessor.copyTabsFromOtherSpreadSheet(sheetId, sheetId, tabSet);
+
+        sheet = DictionaryAccessor.getSheetProperties(tabToCopy);
+        int newSheetId = sheet.getProperties().getSheetId();
+
+        // If the tab copy worked, the sheet id should have changed
+        assert(originalSheetId != newSheetId);
+
+        log.info("Tab copy test succeeded");
+    }
+
+    @Test
     public void testEntries() throws Exception {
         List<ValueRange> valueUpdates = new ArrayList<ValueRange>();
 
         // Populate each tab with objects
         for (String tab : MaintainDictionary.tabs()) {
+
             // Form entries
             List<List<Object>> values = new ArrayList<List<Object>>();
 
@@ -161,8 +270,22 @@ public class TestMaintainDictionary {
         // Update the spreadsheet
         DictionaryAccessor.batchUpdateValues(valueUpdates);
 
+        // Give Google a break
+        Thread.sleep(20000);
+
+        testCopyTab();
+
+        // Give Google a break
+        Thread.sleep(20000);
+
         // Run the dictionary application
         DictionaryTestShared.initializeTestEnvironment(sheetId);
+
+        // Check the protections
+        validateProtections();
+
+        // Add an extra protection
+        addExtraProtection("Strain");
 
         // Change an object name
         Integer updateRow = 4;
@@ -175,8 +298,14 @@ public class TestMaintainDictionary {
         // Update the value
         DictionaryAccessor.setCellData(updateTab, "Common Name", updateRow, updatedName);
 
+        // Give Google a break
+        Thread.sleep(20000);
+
         // Run the Dictionary
         DictionaryTestShared.initializeTestEnvironment(sheetId);
+
+        // Check the protections
+        validateProtections();
 
         // Translate the URI
         URI local_uri = SynBioHubAccessor.translateURI(new URI(updateUri));
@@ -195,6 +324,9 @@ public class TestMaintainDictionary {
 
         DictionaryAccessor.deleteCellShiftUp("Reagent", deleteColumn, 5);
 
+        // Give Google a break
+        Thread.sleep(20000);
+
         // Run Dictionary update
         DictionaryTestShared.initializeTestEnvironment(sheetId);
 
@@ -211,8 +343,8 @@ public class TestMaintainDictionary {
         }
     }
 
-	@AfterClass
-	public static void tearDownAfterClass() throws Exception {
+    @AfterClass
+    public static void tearDownAfterClass() throws Exception {
 		// Delete scratch sheet
 		if (System.getProperty("c") != null && System.getProperty("c").toLowerCase().equals("true")) {
 			log.info("Tearing down test Dictionary");

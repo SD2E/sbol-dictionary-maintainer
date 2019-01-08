@@ -44,8 +44,10 @@ public final class MaintainDictionary {
     private static final QName CREATED = new QName("http://purl.org/dc/terms/","created","dcterms");
     private static final QName MODIFIED = new QName("http://purl.org/dc/terms/","modified","dcterms");
     
+    private static final String STAGING_DICTIONARY = "1xyFH-QqYzoswvI3pPJRlBqw9PQdlp91ds3mZoPc3wCU";
+
     /** The ID for the default Dictionary Spreadsheet, currently the "staging instance" */
-    private static final String SD2E_DICTIONARY = "1xyFH-QqYzoswvI3pPJRlBqw9PQdlp91ds3mZoPc3wCU";
+    private static final String SD2E_DICTIONARY = STAGING_DICTIONARY;
     
     /** Each spreadsheet tab is only allowed to contain objects of certain types, as determined by this mapping */
     private static Map<String, Set<String>> typeTabs = new HashMap<String,Set<String>>() {{
@@ -60,6 +62,15 @@ public final class MaintainDictionary {
     /** Expected headers */
     private static final Set<String> validHeaders = new HashSet<>(Arrays.asList("Common Name", "Type", "SynBioHub URI",
                 "Stub Object?", "Definition URI", "Status"));
+
+    private static final Set<String> protectedColumns = new HashSet<>(Arrays.asList("SynBioHub URI",
+                "Stub Object?", "Status"));
+
+    public static final List<String> editors = Arrays.asList("bartleyba@sbolstandard.org",
+                                                             "nicholasroehner@gmail.com",
+                                                             "jakebeal@gmail.com",
+                                                             "weston@netrias.com",
+                                                             "vaughn@tacc.utexas.edu");
 
     /** These columns, along with the lab UID columns, will be checked for deleted cells that
      *  cause other cells to shift up */
@@ -113,13 +124,17 @@ public final class MaintainDictionary {
     	return typeTabs.keySet().contains(tab);
     }
     
-    public static Set<String> headers() {
+    public static final Set<String> headers() {
         Set<String> allValidHeaders = new HashSet<String>();
 
         allValidHeaders.addAll(validHeaders);
         allValidHeaders.addAll(DictionaryEntry.labUIDMap.keySet());
 
         return allValidHeaders;
+    }
+
+    public static final Set<String> getProtectedHeaders() {
+        return protectedColumns;
     }
 
     public static Set<String> tabs() {
@@ -130,6 +145,10 @@ public final class MaintainDictionary {
     	return SD2E_DICTIONARY;
     }
     
+    public static String stagingSpreadsheet() {
+        return STAGING_DICTIONARY;
+    }
+
     public static Set<String> getAllowedTypesForTab(String tab) {
     	return typeTabs.get(tab);
     }
@@ -645,6 +664,14 @@ public final class MaintainDictionary {
             report.success(currentEntries.size()+" entries",true);
             report.success(mod_count+" modified",true);
             if(bad_count>0) report.failure(bad_count+" invalid",true);
+
+            // Delay to throttle Google requests
+            Thread.sleep(30000);
+
+            DictionaryAccessor.checkProtections();
+
+            // Delay to throttle Google requests
+            Thread.sleep(30000);
         } catch(Exception e) {
             e.printStackTrace();
             //report.failure("Dictionary update failed with exception of type "+e.getClass().getName(), true);
