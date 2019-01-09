@@ -75,58 +75,60 @@ public class TestMaintainDictionary {
             return sheetsService.spreadsheets().get(sheetId).execute();
     }
 
-        @BeforeClass
-        public static void setUpBeforeClass() throws Exception {
-                // Create scratch spreadsheet
-                // Load credentials
-            InputStream in = DictionaryAccessor.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
-            GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
+    @BeforeClass
+    public static void setUpBeforeClass() throws Exception {        	
+        // Create scratch spreadsheet
+        // Load credentials
+        InputStream in = DictionaryAccessor.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
+        GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
 
-            // Build flow and trigger user authorization request
-            HttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
-            GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
-                                HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, SCOPES)
-                        .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
-                        .setAccessType("offline")
-                        .build();
-            credential = new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("owner");
+        // Build flow and trigger user authorization request
+        HttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
+        GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
+                                                                                   HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, SCOPES)
+            .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
+            .setAccessType("offline")
+            .build();
+        credential = new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("owner");
 
-            sheetsService = new Sheets.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential).setApplicationName(APPLICATION_NAME).build();
-            Sheets.Spreadsheets.Create create_sheet_request = sheetsService.spreadsheets().create(new Spreadsheet());
-            Spreadsheet SCRATCH_SHEET = create_sheet_request.execute();
-            sheetId = SCRATCH_SHEET.getSpreadsheetId();
-            log.info("Created " + SCRATCH_SHEET.getSpreadsheetId());
+        sheetsService = new Sheets.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential).setApplicationName(APPLICATION_NAME).build();
+        Sheets.Spreadsheets.Create create_sheet_request = sheetsService.spreadsheets().create(new Spreadsheet());
+        Spreadsheet SCRATCH_SHEET = create_sheet_request.execute();
+        sheetId = SCRATCH_SHEET.getSpreadsheetId();
+        log.info("Created " + SCRATCH_SHEET.getSpreadsheetId());
 
-            // Add tabs to test sheet
-            List<Request> add_sheet_requests = new ArrayList<>();
-            for (String tab : MaintainDictionary.tabs()) {
-                    Request request = new Request().setAddSheet(new AddSheetRequest().setProperties(new SheetProperties().setTitle(tab)));
-                    add_sheet_requests.add(request);
-            }
-            BatchUpdateSpreadsheetRequest update_sheet_request =
-                    new BatchUpdateSpreadsheetRequest().setRequests(add_sheet_requests);
-            sheetsService.spreadsheets().batchUpdate(sheetId, update_sheet_request).execute();
-
-            // Write headers to tabs
-                List<Object> headers = new ArrayList<Object>();
-                for (String header : MaintainDictionary.headers()) {
-                        headers.add(header);
-                }
-                List<List<Object>> values = new ArrayList<List<Object>>();
-                values.add(headers);
-                for (String tab : MaintainDictionary.tabs()) {
-                        String target_range = tab + "!A2";
-                        ValueRange body = new ValueRange()
-                                .setValues(values);
-                        AppendValuesResponse result =
-                                        sheetsService.spreadsheets().values().append(sheetId, target_range, body)
-                                        .setValueInputOption("RAW")
-                                        .execute();
-                }
-
-            DictionaryTestShared.initializeTestEnvironment(sheetId);
-//              DictionaryMaintainerApp.main(options);
+        // Add tabs to test sheet
+        List<Request> add_sheet_requests = new ArrayList<>();
+        for (String tab : MaintainDictionary.tabs()) {
+            Request request = new Request().setAddSheet(new AddSheetRequest().setProperties(new SheetProperties().setTitle(tab)));
+            add_sheet_requests.add(request);
         }
+
+        // Send requests to Google
+        BatchUpdateSpreadsheetRequest update_sheet_request =
+            new BatchUpdateSpreadsheetRequest().setRequests(add_sheet_requests);
+        sheetsService.spreadsheets().batchUpdate(sheetId, update_sheet_request).execute();
+
+        // Write headers to tabs
+        List<Object> headers = new ArrayList<Object>();
+        for (String header : MaintainDictionary.headers()) {
+            headers.add(header);
+        }
+        List<List<Object>> values = new ArrayList<List<Object>>();
+        values.add(headers);
+        for (String tab : MaintainDictionary.tabs()) {
+            String target_range = tab + "!A2";
+            ValueRange body = new ValueRange()
+                .setValues(values);
+            AppendValuesResponse result =
+                sheetsService.spreadsheets().values().append(sheetId, target_range, body)
+                .setValueInputOption("RAW")
+                .execute();
+        }
+
+        DictionaryTestShared.initializeTestEnvironment(sheetId);
+        //              DictionaryMaintainerApp.main(options);
+    }
 
     // Adds an extra protection range on one of the tabs
     private void addExtraProtection(String tab) throws Exception {
@@ -292,7 +294,20 @@ public class TestMaintainDictionary {
                     .setValues(values).setRange(target_range);
             valueUpdates.add(body);
         }
+        
+        InputStream mappingFailureData =
+        		DictionaryAccessor.class.getResourceAsStream("/mapping_failures.csv");
 
+        DictionaryAccessor.importTabFromCSV("Mapping Failures", mappingFailureData);
+        MaintainDictionary.processMappingFailures();
+/*
+        DictionaryAccessor.sendEmail("dan.sumorok@raytheon.com", "dsumorokraytheon@gmail.com", "Hello from Gmail",
+        		"The quick brown fox jumps over the lazy dog!");
+        */
+        if(valueUpdates.size() > 0) {
+        	return;
+        }
+        
         // Update the spreadsheet
         DictionaryAccessor.batchUpdateValues(valueUpdates);
 

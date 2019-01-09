@@ -60,7 +60,9 @@ public final class MaintainDictionary {
         put("Strain", new HashSet<>(Arrays.asList("Strain")));
         put("Protein", new HashSet<>(Arrays.asList("Protein")));
         put("Collections", new HashSet<>(Arrays.asList("Challenge Problem")));
-    }};
+    }
+    static final long serialVersionUID = 0;
+    };
 
     /** Expected headers */
     private static final Set<String> validHeaders = new HashSet<>(Arrays.asList("Common Name", "Type", "SynBioHub URI",
@@ -87,7 +89,9 @@ public final class MaintainDictionary {
         put("DNA",ComponentDefinition.DNA);
         put("Protein",ComponentDefinition.PROTEIN);
         put("RNA",ComponentDefinition.RNA);
-    }};
+    }
+    static final long serialVersionUID = 0;
+    };
 
     /** Classes of object that are implemented as a ModuleDefinition */
     private static Map<String,URI> moduleTypes = new HashMap<String,URI>(){{
@@ -96,19 +100,25 @@ public final class MaintainDictionary {
         put("Stain",URI.create("http://purl.obolibrary.org/obo/NCIT_C841"));
         put("Buffer",URI.create("http://purl.obolibrary.org/obo/NCIT_C70815"));
         put("Solution",URI.create("http://purl.obolibrary.org/obo/NCIT_C70830"));
-    }};
+    }
+    static final long serialVersionUID = 0;
+    };
 
     /** Classes of object that are implemented as a Collection.
      *  Currently no subtypes of Collections other than Challenge Problem are
      *  specified, though that may change in the future */
     private static Map<String,URI> collectionTypes = new HashMap<String,URI>(){{
         put("Challenge Problem",URI.create(""));
-    }};
+    }
+    static final long serialVersionUID = 0;
+    };
 
     /** Classes of object that are not stored in SynBioHub, but are grounded in external definitions */
     private static Map<String,QName> externalTypes = new HashMap<String,QName>(){{
         put("Attribute",new QName("http://sd2e.org/types/#","attribute","sd2"));
-    }};
+    }
+    static final long serialVersionUID = 0;
+    };
 
     /**
      * @param tab String name of a spreadsheet tab
@@ -158,7 +168,7 @@ public final class MaintainDictionary {
 
 
     /** @return A string listing all valid types */
-    private static String allTypes() {
+    public static String allTypes() {
         Set<String> s = new HashSet<>(componentTypes.keySet());
         s.addAll(moduleTypes.keySet());
         s.addAll(externalTypes.keySet());
@@ -244,7 +254,7 @@ public final class MaintainDictionary {
      * @throws SBOLValidationException
      */
     private static void replaceOldAnnotations(TopLevel entity, QName key, String new_value) throws SBOLValidationException {
-        Set<String> new_values = new HashSet<String>() {{ add(new_value); }};
+        Set<String> new_values = new HashSet<String>() {{ add(new_value); } static final long serialVersionUID = 0;};
         replaceOldAnnotations(entity, key, new_values);
     }
 
@@ -574,6 +584,41 @@ public final class MaintainDictionary {
 
     public static Color grayColor() {
         return makeColor(146, 146, 146);
+    }
+
+    private static List<MappingFailureEntry> getMappingFailures() throws IOException {
+        List<MappingFailureEntry> entries = new ArrayList<>();
+
+        // First, read the data from the Mapping Failures tab
+        ValueRange tabData = DictionaryAccessor.getTabData("Mapping Failures");
+
+        List<List<Object>> values = tabData.getValues();
+        if(values == null) {
+            return entries;
+        }
+
+        List<Object> columnHeaders = values.get(1);
+
+        for(int i=2; i<values.size(); ++i) {
+            List<Object> rowData = values.get(i);
+
+            Map<String, String> rowEntries = new HashMap<>();
+
+            for(int j=0; j<rowData.size(); ++j) {
+                String columnHeader = (String)columnHeaders.get(j);
+                String cellValue = (String)rowData.get(j);
+
+                rowEntries.put(columnHeader, cellValue);
+            }
+
+            entries.add(new MappingFailureEntry(rowEntries));
+        }
+
+        return entries;
+    }
+
+    public static void processMappingFailures() throws IOException {
+        List<MappingFailureEntry> entries = getMappingFailures();
     }
 
     /**

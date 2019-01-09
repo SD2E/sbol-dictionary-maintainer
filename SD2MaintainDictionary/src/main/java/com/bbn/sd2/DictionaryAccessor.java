@@ -19,6 +19,7 @@ import com.google.api.services.drive.DriveScopes;
 import com.google.api.services.sheets.v4.Sheets;
 import com.google.api.services.sheets.v4.SheetsScopes;
 import com.google.api.services.sheets.v4.model.AddProtectedRangeRequest;
+import com.google.api.services.sheets.v4.model.AddSheetRequest;
 import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
 import com.google.api.services.sheets.v4.model.CopySheetToAnotherSpreadsheetRequest;
 import com.google.api.services.sheets.v4.model.DeleteProtectedRangeRequest;
@@ -36,7 +37,9 @@ import com.google.api.services.sheets.v4.model.Spreadsheet;
 import com.google.api.services.sheets.v4.model.TextFormat;
 import com.google.api.services.sheets.v4.model.UpdateProtectedRangeRequest;
 import com.google.api.services.sheets.v4.Sheets.Spreadsheets.Values;
+import com.google.api.services.sheets.v4.Sheets.Spreadsheets.Values.BatchUpdate;
 import com.google.api.services.sheets.v4.model.BatchUpdateValuesRequest;
+import com.google.api.services.sheets.v4.model.BatchUpdateValuesResponse;
 import com.google.api.services.sheets.v4.model.CellData;
 import com.google.api.services.sheets.v4.model.CellFormat;
 import com.google.api.services.sheets.v4.model.Color;
@@ -46,6 +49,8 @@ import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.GmailScopes;
 import com.google.api.services.gmail.model.Message;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -166,7 +171,6 @@ public class DictionaryAccessor {
      * @throws MessagingException
      */
     public static void sendEmail(String to,
-                                 String from,
                                  String subject,
                                  String bodyText)
             throws MessagingException, IOException {
@@ -175,7 +179,6 @@ public class DictionaryAccessor {
 
         MimeMessage email = new MimeMessage(session);
 
-        email.setFrom(new InternetAddress(from));
         email.addRecipient(javax.mail.Message.RecipientType.TO,
                 new InternetAddress(to));
         email.setSubject(subject);
@@ -416,11 +419,12 @@ public class DictionaryAccessor {
         return new ValueRange().setRange(writeRange).setValues(values);
     }
 
-    public static void batchUpdateValues(List<ValueRange> values) throws IOException {
+    public static BatchUpdateValuesResponse batchUpdateValues(List<ValueRange> values) throws IOException {
         BatchUpdateValuesRequest req = new BatchUpdateValuesRequest();
         req.setData(values);
         req.setValueInputOption("RAW");
-        sheetsService.spreadsheets().values().batchUpdate(spreadsheetId, req).execute();
+
+        return sheetsService.spreadsheets().values().batchUpdate(spreadsheetId, req).execute();
     }
 
     public static void submitRequests(List<Request> requests) throws IOException {
@@ -1051,6 +1055,53 @@ public class DictionaryAccessor {
                 e.printStackTrace();
             }
         }
+    }
+
+    static void importTabFromCSV(String tab, InputStream csvData) throws IOException {
+        List<Request> requests = new ArrayList<>();
+
+        // Add Mapping Failures Tab
+        SheetProperties sheetProperties = new SheetProperties();
+        sheetProperties.setTitle("Mapping Failures");
+
+        AddSheetRequest addSheetRequest = new AddSheetRequest().setProperties(sheetProperties);
+
+        Request request = new Request().setAddSheet(addSheetRequest);
+
+        requests.add(request);
+
+        // Send requests to Google
+        BatchUpdateSpreadsheetRequest update_sheet_request =
+            new BatchUpdateSpreadsheetRequest().setRequests(requests);
+
+        sheetsService.spreadsheets().batchUpdate(spreadsheetId, update_sheet_request).execute();
+
+        BufferedReader reader = new BufferedReader( new InputStreamReader(csvData) );
+
+        List<List<Object>> values = new ArrayList<>();
+
+        String csvLine = reader.readLine();
+        while(csvLine != null) {
+                String[] rowStringValues = csvLine.split(",");
+
+                List<Object> rowValues = new ArrayList<>(Arrays.asList(rowStringValues));
+                values.add(rowValues);
+
+                csvLine = reader.readLine();
+        }
+
+        ValueRange sheetData = new ValueRange()
+                .setValues(values).setRange(sheetProperties.getTitle());
+
+        List<ValueRange> valueRangeUpdates = new ArrayList<>();
+
+        valueRangeUpdates.add(sheetData);
+
+        batchUpdateValues(valueRangeUpdates);
+    }
+
+    static ValueRange getTabData(String tab) throws IOException {
+        return sheetsService.spreadsheets().values().get(spreadsheetId, tab).execute();
     }
 
     static final String getSpreadsheetId() {
