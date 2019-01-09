@@ -12,7 +12,9 @@ import java.util.TreeMap;
 import java.util.logging.Logger;
 
 import org.sbolstandard.core2.SBOLDocument;
-import org.synbiohub.frontend.SynBioHubException;
+
+import com.google.api.services.sheets.v4.model.Color;
+import com.google.api.services.sheets.v4.model.Request;
 
 public class DictionaryEntry {
     private static Logger log = Logger.getGlobal();
@@ -69,14 +71,13 @@ public class DictionaryEntry {
     }
 
     public DictionaryEntry(DictionaryEntry src) {
-        log = src.log;
         row_index = src.row_index;
         statusCode = src.statusCode;
         statusLog = src.statusLog;
         name = src.name;
         type = src.type;
         uri = src.uri;
-        labUIDs = new HashMap();
+        labUIDs = new HashMap<>();
         for(String key : src.labUIDs.keySet()) {
             labUIDs.put(key, src.labUIDs.get(key));
         }
@@ -94,7 +95,7 @@ public class DictionaryEntry {
     }
 
     public DictionaryEntry(String tab, Hashtable<String, Integer> header_map, int row_number, List<Object> row) throws IOException, GeneralSecurityException {
-    	this.tab = tab;
+        this.tab = tab;
         row_index = row_number;
 
         if (fullbox(row, header_map.get("Common Name")))
@@ -144,7 +145,7 @@ public class DictionaryEntry {
 
     public Map<String, String> generateFieldMap() {
         Map<String, String> fieldMap = new TreeMap<String, String>();
-        
+
         // Add Lab UIDs
         for(String key : labUIDs.keySet()) {
             String uid = labUIDs.get(key);
@@ -176,6 +177,15 @@ public class DictionaryEntry {
         }
 
         return fieldMap;
+    }
+
+    public Request setColor(String columnName, Color color) throws Exception {
+        char col = (char) ('A' + header_map.get(columnName));
+
+        Integer sheetId =
+            DictionaryAccessor.getCachedSheetProperties(tab).getProperties().getSheetId();
+
+        return DictionaryAccessor.setStatusColor(this.row_index - 1, col, sheetId, color);
     }
 
 //    public boolean validType() {
