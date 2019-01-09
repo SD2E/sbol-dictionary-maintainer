@@ -340,7 +340,7 @@ public class TestMaintainDictionary {
         Color green = MaintainDictionary.greenColor();
 
         // Retrieve formatting of the Status column in the Attribute tab
-        List<CellFormat> cellFormatList = DictionaryAccessor.getColumnFormatting("Attribute", "Status");
+        List<CellFormat> cellFormatList = DictionaryAccessor.getColumnFormatting("Genetic Construct", "Status");
         assert(cellFormatList.size() >= 4);
 
         // The text in row 3 of the attribute tab should be red since the common name is empty
@@ -348,11 +348,11 @@ public class TestMaintainDictionary {
         assert(compareColors(textColor, red));
 
         // The text in row 4 of the attribute tab should be green
-        textColor = cellFormatList.get(4).getTextFormat().getForegroundColor();
+        textColor = cellFormatList.get(3).getTextFormat().getForegroundColor();
         assert(compareColors(textColor, green));
 
         // Retrieve formatting of the Status column in the Genetic Construct tab
-        cellFormatList = DictionaryAccessor.getColumnFormatting("Genetic Construct", "Status");
+        cellFormatList = DictionaryAccessor.getColumnFormatting("Attribute", "Status");
         assert(cellFormatList.size() >= 3);
 
         // The text in row 3 of the attribute tab should be red since the type
