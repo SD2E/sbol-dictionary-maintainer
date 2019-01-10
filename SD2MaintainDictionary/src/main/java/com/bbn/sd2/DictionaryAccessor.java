@@ -409,7 +409,7 @@ public class DictionaryAccessor {
      * @return The ValueRange json object to send to the Spreadsheets server
      * @throws IOException
      */
-    private static ValueRange writeLocationText(String writeRange, String value) throws IOException {
+    public static ValueRange writeLocationText(String writeRange, String value) throws IOException {
         List<Object> row = new ArrayList<>();
         row.add(value);
 

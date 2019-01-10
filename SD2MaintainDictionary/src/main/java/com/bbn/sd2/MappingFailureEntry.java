@@ -1,31 +1,85 @@
 package com.bbn.sd2;
 
 import java.io.IOException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Map;
 
 public class MappingFailureEntry {
-    public String experiment;
-    public String lab;
-    public String item;
-    public String status;
+    private String experiment;
+    private String lab;
+    private String item;
+    private String status;
+    private Date lastNotificationTime;
+    private SimpleDateFormat dateFormatter;
+    private int row;
+    private final String statusDatePrefix = "Notification sent at ";
+    private boolean notified;
+    private boolean valid;
+    private final String experimentColumnTag = "Experiment/Run";
+    private final String labColumnTag = "Lab";
+    private final String itemColumnTag = "Item Name";
+    private final String statusColumnTag = "Status";
 
-    MappingFailureEntry(Map<String, String> rowEntries) throws IOException {
-        experiment = rowEntries.get("Experiment");
+    MappingFailureEntry(Map<String, String> rowEntries, int row) throws IOException {
+        this.status = "";
+        this.valid = true;
+        this.lastNotificationTime = null;
+        this.dateFormatter = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss z");
+        this.row = row + 1; // Index from 1 instead of 0
+        this.notified = false;
+
+        experiment = rowEntries.get(experimentColumnTag);
         if(experiment == null) {
             experiment = "";
         }
 
-        lab = rowEntries.get("Lab");
+        lab = rowEntries.get(labColumnTag);
         if(lab == null) {
             lab = "";
         }
 
-        item = rowEntries.get("Item");
+        item = rowEntries.get(itemColumnTag);
         if(item == null) {
             item = "";
         }
 
-        status = "";
+        if(experiment.length() == 0) {
+            status = "Missing " + experimentColumnTag + " value";
+            valid = false;
+            return;
+        }
+
+        if(item.length() == 0) {
+            status = "Missing " + itemColumnTag + " value";
+            valid = false;
+            return;
+        }
+
+        if(lab.length() == 0) {
+            status = "Missing " + labColumnTag + " value";
+            valid = false;
+            return;
+        }
+
+        String statusString = rowEntries.get(statusColumnTag);
+        if(statusString == null) {
+            statusString = "";
+        }
+
+        // Parse status field
+        String[] statusFields = statusString.split(",");
+        for(String statusField : statusFields) {
+            if(statusField.startsWith(statusDatePrefix)) {
+                String dateString = statusField.substring(statusDatePrefix.length());
+                try {
+                    lastNotificationTime = dateFormatter.parse(dateString);
+                } catch(ParseException e) {
+                    throw new IOException("Failed to parse status date");
+                }
+            }
+        }
     }
 
     public String getExperiement() {
@@ -41,6 +95,42 @@ public class MappingFailureEntry {
     }
 
     public String getStatus() {
-        return status;
+        if(!valid) {
+            return status;
+        }
+
+        String newStatusString = "";
+
+        if(lastNotificationTime != null) {
+            newStatusString = statusDatePrefix;
+            newStatusString += dateFormatter.format(lastNotificationTime);
+        }
+
+        return newStatusString;
+    }
+
+    public int getRow() {
+        return row;
+    }
+
+    public boolean getNotified() {
+        return notified;
+    }
+
+    public void setLastNotificationTime(Date lastEmailDate) {
+        this.lastNotificationTime = lastEmailDate;
+        this.notified = true;
+    }
+
+    public long secondsSinceLastNotification(Date date) {
+        if(lastNotificationTime == null) {
+            return date.getTime() / 1000L;
+        }
+
+        return (date.getTime() - lastNotificationTime.getTime()) / 1000L;
+    }
+
+    public boolean getValid() {
+        return valid;
     }
 }

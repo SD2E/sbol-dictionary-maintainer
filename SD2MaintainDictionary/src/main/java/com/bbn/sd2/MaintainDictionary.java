@@ -7,6 +7,9 @@ import java.security.GeneralSecurityException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -14,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
@@ -54,22 +58,22 @@ public final class MaintainDictionary {
 
     /** Each spreadsheet tab is only allowed to contain objects of certain types, as determined by this mapping */
     private static Map<String, Set<String>> typeTabs = new HashMap<String,Set<String>>() {{
-        put("Attribute", new HashSet<>(Arrays.asList("Attribute")));
-        put("Reagent", new HashSet<>(Arrays.asList("Bead", "CHEBI", "DNA", "Protein", "RNA", "Media", "Stain", "Buffer", "Solution")));
-        put("Genetic Construct", new HashSet<>(Arrays.asList("DNA", "RNA")));
-        put("Strain", new HashSet<>(Arrays.asList("Strain")));
-        put("Protein", new HashSet<>(Arrays.asList("Protein")));
-        put("Collections", new HashSet<>(Arrays.asList("Challenge Problem")));
-    }
-    static final long serialVersionUID = 0;
-    };
+            put("Attribute", new HashSet<>(Arrays.asList("Attribute")));
+            put("Reagent", new HashSet<>(Arrays.asList("Bead", "CHEBI", "DNA", "Protein", "RNA", "Media", "Stain", "Buffer", "Solution")));
+            put("Genetic Construct", new HashSet<>(Arrays.asList("DNA", "RNA")));
+            put("Strain", new HashSet<>(Arrays.asList("Strain")));
+            put("Protein", new HashSet<>(Arrays.asList("Protein")));
+            put("Collections", new HashSet<>(Arrays.asList("Challenge Problem")));
+        }
+            static final long serialVersionUID = 0;
+        };
 
     /** Expected headers */
     private static final Set<String> validHeaders = new HashSet<>(Arrays.asList("Common Name", "Type", "SynBioHub URI",
-                "Stub Object?", "Definition URI", "Status"));
+                                                                                "Stub Object?", "Definition URI", "Status"));
 
     private static final Set<String> protectedColumns = new HashSet<>(Arrays.asList("SynBioHub URI",
-                "Stub Object?", "Status"));
+                                                                                    "Stub Object?", "Status"));
 
     public static final List<String> editors = Arrays.asList("bartleyba@sbolstandard.org",
                                                              "nicholasroehner@gmail.com",
@@ -80,45 +84,50 @@ public final class MaintainDictionary {
     /** These columns, along with the lab UID columns, will be checked for deleted cells that
      *  cause other cells to shift up */
     private static final Set<String> shiftCheckColumns = new HashSet<>(Arrays.asList("Common Name",
-                "Definition URI"));
+                                                                                     "Definition URI"));
 
     /** Classes of object that are implemented as a ComponentDefinition */
     private static Map<String,URI> componentTypes = new HashMap<String,URI>() {{
-        put("Bead",URI.create("http://purl.obolibrary.org/obo/NCIT_C70671"));
-        put("CHEBI",URI.create("http://identifiers.org/chebi/CHEBI:24431"));
-        put("DNA",ComponentDefinition.DNA);
-        put("Protein",ComponentDefinition.PROTEIN);
-        put("RNA",ComponentDefinition.RNA);
-    }
-    static final long serialVersionUID = 0;
-    };
+            put("Bead",URI.create("http://purl.obolibrary.org/obo/NCIT_C70671"));
+            put("CHEBI",URI.create("http://identifiers.org/chebi/CHEBI:24431"));
+            put("DNA",ComponentDefinition.DNA);
+            put("Protein",ComponentDefinition.PROTEIN);
+            put("RNA",ComponentDefinition.RNA);
+        }
+            static final long serialVersionUID = 0;
+        };
 
     /** Classes of object that are implemented as a ModuleDefinition */
     private static Map<String,URI> moduleTypes = new HashMap<String,URI>(){{
-        put("Strain",URI.create("http://purl.obolibrary.org/obo/NCIT_C14419"));
-        put("Media",URI.create("http://purl.obolibrary.org/obo/NCIT_C85504"));
-        put("Stain",URI.create("http://purl.obolibrary.org/obo/NCIT_C841"));
-        put("Buffer",URI.create("http://purl.obolibrary.org/obo/NCIT_C70815"));
-        put("Solution",URI.create("http://purl.obolibrary.org/obo/NCIT_C70830"));
-    }
-    static final long serialVersionUID = 0;
-    };
+            put("Strain",URI.create("http://purl.obolibrary.org/obo/NCIT_C14419"));
+            put("Media",URI.create("http://purl.obolibrary.org/obo/NCIT_C85504"));
+            put("Stain",URI.create("http://purl.obolibrary.org/obo/NCIT_C841"));
+            put("Buffer",URI.create("http://purl.obolibrary.org/obo/NCIT_C70815"));
+            put("Solution",URI.create("http://purl.obolibrary.org/obo/NCIT_C70830"));
+        }
+            static final long serialVersionUID = 0;
+        };
 
     /** Classes of object that are implemented as a Collection.
      *  Currently no subtypes of Collections other than Challenge Problem are
      *  specified, though that may change in the future */
     private static Map<String,URI> collectionTypes = new HashMap<String,URI>(){{
-        put("Challenge Problem",URI.create(""));
-    }
-    static final long serialVersionUID = 0;
-    };
+            put("Challenge Problem",URI.create(""));
+        }
+            static final long serialVersionUID = 0;
+        };
 
     /** Classes of object that are not stored in SynBioHub, but are grounded in external definitions */
     private static Map<String,QName> externalTypes = new HashMap<String,QName>(){{
-        put("Attribute",new QName("http://sd2e.org/types/#","attribute","sd2"));
-    }
-    static final long serialVersionUID = 0;
-    };
+            put("Attribute",new QName("http://sd2e.org/types/#","attribute","sd2"));
+        }
+            static final long serialVersionUID = 0;
+        };
+
+    /** The amount of time, in seconds, before notification email messages
+     * for the mapping failures tab
+     */
+    private static final long minumumMappingFailureNotificationTime = 86400;
 
     /**
      * @param tab String name of a spreadsheet tab
@@ -426,7 +435,7 @@ public final class MaintainDictionary {
                     originalEntry.attributeDefinition = null;
                 } else {
                     originalEntry.attributeDefinition =
-                            derivations.iterator().next();
+                        derivations.iterator().next();
                 }
             }
 
@@ -493,7 +502,7 @@ public final class MaintainDictionary {
 
             if(e.uri == null) {
                 log.severe("Row " + e.row_index + " in tab \"" + e.tab
-                                   + " is missing a uri ");
+                           + " is missing a uri ");
                 continue;
             }
 
@@ -551,7 +560,7 @@ public final class MaintainDictionary {
                     count = upShiftCounts.get(key);
                     if(count == maxShifts) {
                         String errMsg = "Found potential shift in column \"" +
-                                    key + "\" of tab \"" + tab + "\"";
+                            key + "\" of tab \"" + tab + "\"";
                         log.severe(errMsg);
                         throw new Exception(errMsg);
                     }
@@ -599,6 +608,17 @@ public final class MaintainDictionary {
 
         List<Object> columnHeaders = values.get(1);
 
+        // Make sure there is a "Status" Column
+        Set<String> columnHeaderSet = new TreeSet<>();
+        for(Object columnHeader : columnHeaders) {
+            columnHeaderSet.add((String)columnHeader);
+        }
+
+        if(!columnHeaderSet.contains("Status")) {
+            throw new IOException("Mapping Failures tab does not contain a Status column");
+        }
+
+        // Create data structures from the spreadsheet data
         for(int i=2; i<values.size(); ++i) {
             List<Object> rowData = values.get(i);
 
@@ -611,14 +631,181 @@ public final class MaintainDictionary {
                 rowEntries.put(columnHeader, cellValue);
             }
 
-            entries.add(new MappingFailureEntry(rowEntries));
+            entries.add(new MappingFailureEntry(rowEntries, i));
         }
 
         return entries;
     }
 
-    public static void processMappingFailures() throws IOException {
+    private static String generateNotificationReport(Map<String, List<MappingFailureEntry>> itemToExperiments) {
+        // Sort item list
+        Set<String> keySet = itemToExperiments.keySet();
+        String[] keyArray = keySet.toArray(new String[0]);
+        Arrays.sort(keyArray);
+
+        String lab = itemToExperiments.get(keyArray[0]).get(0).getLab();
+
+        Date notificationDate = new Date();
+
+        // Build content of notification email
+        String notificationReport = "Mapping Failures for " + lab + ":\n";
+
+        for(String item : keyArray) {
+            List<MappingFailureEntry> itemEntries = itemToExperiments.get(item);
+
+            // Sort entries by experiment name
+            class CompareExperiments implements Comparator<MappingFailureEntry> {
+                @Override
+                public int compare(MappingFailureEntry entry1, MappingFailureEntry entry2) {
+                    return entry1.getExperiement().compareTo(entry2.getExperiement());
+                }
+            }
+
+            Collections.sort(itemEntries, new CompareExperiments());
+
+            notificationReport += "\n\t" + item + ":\n";
+            for(MappingFailureEntry entry : itemEntries) {
+                entry.setLastNotificationTime(notificationDate);
+                notificationReport += "\t\t" + entry.getExperiement() + " - row " +
+                    entry.getRow() + "\n";
+            }
+        }
+
+        return notificationReport;
+    }
+
+    private static void updateMappingFailuresTab(List<MappingFailureEntry> entries,
+                                                 char statusColumn) throws IOException {
+        List<ValueRange> updates = new ArrayList<>();
+
+        // Update the Status column in the Mapping Failures tab
+        for(MappingFailureEntry entry : entries) {
+            if(!entry.getNotified() && entry.getValid()) {
+                continue;
+            }
+
+            String location = "Mapping Failures!" + statusColumn + entry.getRow();
+            String status = entry.getStatus();
+            ValueRange valueRange = DictionaryAccessor.writeLocationText(location, status);
+            updates.add(valueRange);
+        }
+
+        if(!updates.isEmpty()) {
+            DictionaryAccessor.batchUpdateValues(updates);
+        }
+    }
+
+    // Find the spreadsheet column of the Status column in the mapping
+    // failures tab
+    private static char getMappingFailuresStatusColumn() throws IOException {
+        ValueRange columnHeaders = DictionaryAccessor.getTabData("Mapping Failures!2:2");
+        List<List<Object>> values = columnHeaders.getValues();
+
+        if(values == null) {
+            throw new IOException("Did not find headers in Mapping Failures tab");
+        }
+
+        char columnName = 'A';
+
+        for(Object stringObject : values.get(0)) {
+            if(stringObject == null) {
+                continue;
+            }
+
+            String headerName = (String)stringObject;
+            if(headerName.equals("Status")) {
+                return columnName;
+            }
+
+            columnName = (char)(columnName + 1);
+        }
+
+        throw new IOException("Did not find Status column in Mapping Failures tab");
+    }
+
+    private static String findMappingFailuresForLab(List<MappingFailureEntry> entries) throws IOException {
+        if(entries.isEmpty()) {
+            return null;
+        }
+
+        Map<String, List<MappingFailureEntry>> itemToExperiments =
+            new TreeMap<String, List<MappingFailureEntry>>();
+
+        Date now = new Date();
+        long timeSinceLastNotification = now.getTime() / 1000L;
+
+        // Associate experiments with items
+        for(MappingFailureEntry entry : entries) {
+            if(!entry.getValid()) {
+                continue;
+            }
+
+            String item = entry.getItem();
+
+            List<MappingFailureEntry> experimentList = itemToExperiments.get(item);
+            if(experimentList == null) {
+                experimentList = new ArrayList<>();
+                itemToExperiments.put(item, experimentList);
+            }
+
+            experimentList.add(entry);
+
+            // Keep track of the most recent time a notification email
+            // message was sent
+            long timeSinceNotification = entry.secondsSinceLastNotification(now);
+            if(timeSinceNotification < timeSinceLastNotification) {
+                timeSinceLastNotification = timeSinceNotification;
+            }
+        }
+
+        if(timeSinceLastNotification < minumumMappingFailureNotificationTime) {
+            return null;
+        }
+
+        if(itemToExperiments.isEmpty()) {
+            return null;
+        }
+
+       return generateNotificationReport(itemToExperiments);
+    }
+
+    public static Map<String, String> generateMappingFailureEmails() throws IOException {
+        Map<String, String> notifications = new TreeMap<>();
         List<MappingFailureEntry> entries = getMappingFailures();
+
+        // Sort entries by labs
+        Map<String, List<MappingFailureEntry>> labEntries = new TreeMap<>();
+
+        for(MappingFailureEntry entry : entries) {
+            String lab = entry.getLab();
+
+            List<MappingFailureEntry> labEntryList = labEntries.get(lab);
+            if(labEntryList == null) {
+                labEntryList = new ArrayList<>();
+                labEntries.put(lab, labEntryList);
+            }
+
+            labEntryList.add(entry);
+        }
+
+        for(String lab : labEntries.keySet()) {
+            String emailContent = findMappingFailuresForLab(labEntries.get(lab));
+            if(emailContent != null) {
+                notifications.put(lab, emailContent);
+            }
+        }
+
+        char statusColumn = getMappingFailuresStatusColumn();
+
+        updateMappingFailuresTab(entries, statusColumn);
+
+        return notifications;
+    }
+
+    public static void processMappingFailures() throws IOException {
+        Map<String, String> notifications = generateMappingFailureEmails();
+
+        System.out.println("Number of notification email messages: " + notifications.size());
     }
 
     /**
