@@ -3,12 +3,16 @@ package com.bbn.sd2;
 import java.io.IOException;
 import java.net.URI;
 import java.security.GeneralSecurityException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.logging.Logger;
 
 import org.sbolstandard.core2.SBOLDocument;
@@ -25,7 +29,7 @@ public class DictionaryEntry {
     public String name = null;
     public String type = null;
     public URI uri = null;
-    public Map<String,String> labUIDs = new HashMap<>();
+    public Map<String,Set<String>> labUIDs = new HashMap<>();
     public enum StubStatus { YES, NO, UNDEFINED };
     public StubStatus stub = StubStatus.UNDEFINED;
     public boolean attribute = false;
@@ -77,10 +81,23 @@ public class DictionaryEntry {
         name = src.name;
         type = src.type;
         uri = src.uri;
+
         labUIDs = new HashMap<>();
         for(String key : src.labUIDs.keySet()) {
-            labUIDs.put(key, src.labUIDs.get(key));
+            Set<String> uidSet = null;
+            Set<String> srcSet = src.labUIDs.get(key);
+
+            if(srcSet != null) {
+                uidSet = new TreeSet<>();
+
+                for(String labUID : srcSet) {
+                    uidSet.add(labUID);
+                }
+            }
+
+            labUIDs.put(key, uidSet);
         }
+
         stub = src.stub;
         attribute = src.attribute;
         attributeDefinition = src.attributeDefinition;
@@ -125,10 +142,14 @@ public class DictionaryEntry {
                 continue;
             }
 
-            if(fullbox(row, column))
-                labUIDs.put(uidTag, row.get(header_map.get(uidLabel)).toString());
-             else
+            if(fullbox(row, column)) {
+                String cellValue = (String)row.get(header_map.get(uidLabel));
+                Set<String> uidSet = new TreeSet<>();
+                uidSet.addAll(Arrays.asList(cellValue.split("\\s*,\\s*")));
+                labUIDs.put(uidTag, uidSet);
+            } else {
                 labUIDs.put(uidTag, null);
+            }
         }
 
         if (header_map.get("Stub Object?") != null && fullbox(row, header_map.get("Stub Object?"))) {
@@ -148,26 +169,33 @@ public class DictionaryEntry {
 
         // Add Lab UIDs
         for(String key : labUIDs.keySet()) {
-            String uid = labUIDs.get(key);
-            if(uid == null) {
-                uid = "";
+            String uidsString = null;
+
+            Set<String> uidSet = labUIDs.get(key);
+
+            List<String> uidList = new ArrayList<>();
+            if(uidSet != null) {
+                uidList.addAll(uidSet);
+            }
+
+            if(uidList.isEmpty()) {
+                uidsString = "";
             } else {
                 // The uid string is a comma-separated list.
                 // Sort the list so the string can be compared later
-
-                String[] uidArray = uid.split("\\s*,\\s*");
-                Arrays.sort(uidArray);
-                uid = null;
-                for(String uidElement : uidArray) {
-                    if(uid == null) {
-                        uid = uidElement;
+                Collections.sort(uidList);
+                for(String uidElement : uidList) {
+                    if(uidsString == null) {
+                        uidsString = uidElement;
                     } else {
-                        uid = uid + ", " + uidElement;
+                        uidsString = uidsString + ", " + uidElement;
                     }
                 }
             }
-            fieldMap.put(reverseLabUIDMap.get(key), uid);
+
+            fieldMap.put(reverseLabUIDMap.get(key), uidsString);
         }
+
 
         fieldMap.put("Common Name", name);
         fieldMap.put("Stub Object?", stubString());

@@ -1,6 +1,5 @@
 package com.bbn.sd2;
 
-
 import com.bbn.sd2.DictionaryEntry.StubStatus;
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
@@ -359,7 +358,7 @@ public class DictionaryAccessor {
      */
     public static void validateUniquenessOfEntries(String header_name, List<DictionaryEntry> entries) throws IOException, GeneralSecurityException {
         final Map<String, String> uidMap = DictionaryEntry.labUIDMap;
-        Map<String, DictionaryEntry> headers = new TreeMap<String, DictionaryEntry>();
+        Map<String, DictionaryEntry> nameToEntry = new TreeMap<String, DictionaryEntry>();
         boolean commonName = false;
         String uidTag = null;
 
@@ -374,31 +373,38 @@ public class DictionaryAccessor {
 
         for(int e_i = 0; e_i < entries.size(); ++e_i) {
             DictionaryEntry entry_i = entries.get(e_i);
-            String val_i = null;
+            List<String> vals = new ArrayList<>();
+
+            if(entry_i.statusCode != StatusCode.VALID) {
+                continue;
+            }
+
             if(commonName) {
-                val_i = entry_i.name;
+                vals.add(entry_i.name);
             } else {
-                val_i = entry_i.labUIDs.get(uidTag);
+                Set<String> nameSet = entry_i.labUIDs.get(uidTag);
+
+                if(nameSet != null) {
+                    vals.addAll(nameSet);
+                }
             }
 
-            if(val_i == null) {
-                continue;
-            }
+            for(String val_i : vals) {
+                val_i = val_i.trim();
+                if(val_i.isEmpty()) {
+                    continue;
+                }
 
-            val_i = val_i.trim();
-            if(val_i.isEmpty()) {
-                continue;
+                DictionaryEntry entry_j = nameToEntry.get(val_i);
+                if(entry_j != null) {
+                    entry_i.statusLog =
+                        "Duplicate entry. Found " + val_i + " in row " + entry_j.row_index +
+                        " of " + entry_j.tab + " and row " + entry_i.row_index + " of " +
+                        entry_i.tab;
+                    entry_i.statusCode = StatusCode.DUPLICATE_VALUE;
+                }
+                nameToEntry.put(val_i, entry_i);
             }
-
-            DictionaryEntry entry_j = headers.get(val_i);
-            if(entry_j != null) {
-                entry_i.statusLog =
-                    "Duplicate entry. Found " + val_i + " in row " + entry_j.row_index +
-                    " of " + entry_j.tab + " and row " + entry_i.row_index + " of " +
-                    entry_i.tab;
-                entry_i.statusCode = StatusCode.DUPLICATE_VALUE;
-            }
-            headers.put(val_i, entry_i);
         }
     }
 
@@ -412,6 +418,25 @@ public class DictionaryAccessor {
     public static ValueRange writeLocationText(String writeRange, String value) throws IOException {
         List<Object> row = new ArrayList<>();
         row.add(value);
+
+        List<List<Object>> values = new ArrayList<>();
+        values.add(row);
+
+        return new ValueRange().setRange(writeRange).setValues(values);
+    }
+
+    /**
+     * Write text to a row of cells
+     * @param writeRange location of the row
+     * @param values to be written
+     * @return The ValueRange json object to send to the Spreadsheets server
+     * @throws IOException
+     */
+    public static ValueRange writeRowText(String writeRange, List<String> rowValues) throws IOException {
+        List<Object> row = new ArrayList<>();
+        for(String value: rowValues) {
+            row.add(value);
+        }
 
         List<List<Object>> values = new ArrayList<>();
         values.add(row);
@@ -1058,24 +1083,6 @@ public class DictionaryAccessor {
     }
 
     static void importTabFromCSV(String tab, InputStream csvData) throws IOException {
-        List<Request> requests = new ArrayList<>();
-
-        // Add Mapping Failures Tab
-        SheetProperties sheetProperties = new SheetProperties();
-        sheetProperties.setTitle("Mapping Failures");
-
-        AddSheetRequest addSheetRequest = new AddSheetRequest().setProperties(sheetProperties);
-
-        Request request = new Request().setAddSheet(addSheetRequest);
-
-        requests.add(request);
-
-        // Send requests to Google
-        BatchUpdateSpreadsheetRequest update_sheet_request =
-            new BatchUpdateSpreadsheetRequest().setRequests(requests);
-
-        sheetsService.spreadsheets().batchUpdate(spreadsheetId, update_sheet_request).execute();
-
         BufferedReader reader = new BufferedReader( new InputStreamReader(csvData) );
 
         List<List<Object>> values = new ArrayList<>();
@@ -1091,7 +1098,7 @@ public class DictionaryAccessor {
         }
 
         ValueRange sheetData = new ValueRange()
-                .setValues(values).setRange(sheetProperties.getTitle());
+                .setValues(values).setRange(tab);
 
         List<ValueRange> valueRangeUpdates = new ArrayList<>();
 

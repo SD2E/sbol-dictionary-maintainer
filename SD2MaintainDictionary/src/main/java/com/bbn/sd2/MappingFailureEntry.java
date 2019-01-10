@@ -11,6 +11,7 @@ public class MappingFailureEntry {
     private String lab;
     private String item;
     private String status;
+    private String itemId;
     private Date lastNotificationTime;
     private SimpleDateFormat dateFormatter;
     private int row;
@@ -20,6 +21,7 @@ public class MappingFailureEntry {
     private final String experimentColumnTag = "Experiment/Run";
     private final String labColumnTag = "Lab";
     private final String itemColumnTag = "Item Name";
+    private final String itemIdColumnTag = "Item ID";
     private final String statusColumnTag = "Status";
 
     MappingFailureEntry(Map<String, String> rowEntries, int row) throws IOException {
@@ -45,6 +47,11 @@ public class MappingFailureEntry {
             item = "";
         }
 
+        itemId = rowEntries.get(itemIdColumnTag);
+        if(itemId == null) {
+            itemId = "";
+        }
+
         if(experiment.length() == 0) {
             status = "Missing " + experimentColumnTag + " value";
             valid = false;
@@ -59,6 +66,12 @@ public class MappingFailureEntry {
 
         if(lab.length() == 0) {
             status = "Missing " + labColumnTag + " value";
+            valid = false;
+            return;
+        }
+
+        if(itemId.length() == 0) {
+            status = "Missing " + itemIdColumnTag + " value";
             valid = false;
             return;
         }
@@ -92,6 +105,10 @@ public class MappingFailureEntry {
 
     public String getItem() {
         return item;
+    }
+
+    public String getItemId() {
+        return itemId;
     }
 
     public String getStatus() {

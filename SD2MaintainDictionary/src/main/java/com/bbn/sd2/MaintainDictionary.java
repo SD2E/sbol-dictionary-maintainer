@@ -1,6 +1,5 @@
 package com.bbn.sd2;
 
-
 import java.io.IOException;
 import java.net.URI;
 import java.security.GeneralSecurityException;
@@ -387,44 +386,38 @@ public final class MaintainDictionary {
 
         // if the entry has lab entries, check if they match and (re)annotate if different
         for(String labKey : e.labUIDs.keySet()) {
-            QName labQKey = new QName("http://sd2e.org#",labKey,"sd2");
-            String labEntry = e.labUIDs.get(labKey);
+            // Extra lab ids from entry (spreadsheet)
             Set<String> labIds = new HashSet<String>();
-            if(labEntry != null)
-                labIds.addAll(Arrays.asList(labEntry.split("\\s*,\\s*")));  // Separate by comma and whitespace
-            Set<String> currentIds = new HashSet<String>();
+
+            Set<String> labEntries = e.labUIDs.get(labKey);
+            if(labEntries != null) {
+                labIds.addAll(labEntries);
+            }
+
+            // Extract lab ids from SynBioHub
+            Set<String> synBioHubIds = new HashSet<String>();
+
+            QName labQKey = new QName("http://sd2e.org#",labKey,"sd2");
             List<Annotation> annotations = entity.getAnnotations();
             for (Annotation ann : annotations) {
                 if(ann.getQName().equals(labQKey)) {
-                    currentIds.add(ann.getStringValue());
+                    synBioHubIds.add(ann.getStringValue());
                 }
             }
 
-            if(!labIds.equals(currentIds)) {
+            // Compare lab ids
+            if(!labIds.equals(synBioHubIds)) {
                 if(originalEntry != null) {
-                    // Extract lab IDs from document
-                    String originalLabIDs = null;
-                    for(String labId : currentIds) {
-                        if(originalLabIDs == null) {
-                            originalLabIDs = labId;
-                        } else {
-                            originalLabIDs = originalLabIDs + "," + labId;
-                        }
-                    }
-
-                    if(originalLabIDs == null) {
-                        originalEntry.labUIDs.remove(labKey);
-                    } else {
-                        originalEntry.labUIDs.put(labKey, originalLabIDs);
-                    }
+                    // Update originalEntry with values from SynBioHub
+                    originalEntry.labUIDs.put(labKey, synBioHubIds);
                 }
 
-                replaceOldAnnotations(entity,labQKey,labIds);
+                replaceOldAnnotations(entity, labQKey, labIds);
                 e.changed = true;
                 if(labIds.size() > 0)
-                    report.success(labKey+" for "+e.name+" is "+String.join(", ", labIds),true);
+                    report.success(labKey+" for " + e.name + " is "+String.join(", ", labIds),true);
                 else
-                    report.success("Deleted lab UID", true);
+                    report.success("Deleted " + labKey + " for " + e.name, true);
             }
         }
 
@@ -769,9 +762,8 @@ public final class MaintainDictionary {
        return generateNotificationReport(itemToExperiments);
     }
 
-    public static Map<String, String> generateMappingFailureEmails() throws IOException {
+    public static Map<String, String> generateMappingFailureEmails(List<MappingFailureEntry> entries) throws IOException {
         Map<String, String> notifications = new TreeMap<>();
-        List<MappingFailureEntry> entries = getMappingFailures();
 
         // Sort entries by labs
         Map<String, List<MappingFailureEntry>> labEntries = new TreeMap<>();
@@ -803,7 +795,9 @@ public final class MaintainDictionary {
     }
 
     public static void processMappingFailures() throws IOException {
-        Map<String, String> notifications = generateMappingFailureEmails();
+        List<MappingFailureEntry> entries = getMappingFailures();
+
+        Map<String, String> notifications = generateMappingFailureEmails(entries);
 
         System.out.println("Number of notification email messages: " + notifications.size());
     }
@@ -950,6 +944,7 @@ public final class MaintainDictionary {
             // Delay to throttle Google requests
             Thread.sleep(30000);
 
+            processMappingFailures();
             DictionaryAccessor.checkProtections();
 
             // Delay to throttle Google requests

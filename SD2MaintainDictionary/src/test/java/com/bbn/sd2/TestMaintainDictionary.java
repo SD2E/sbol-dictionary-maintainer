@@ -27,6 +27,7 @@ import com.google.api.services.sheets.v4.model.AddProtectedRangeRequest;
 import com.google.api.services.sheets.v4.model.AddSheetRequest;
 import com.google.api.services.sheets.v4.model.AppendValuesResponse;
 import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
+import com.google.api.services.sheets.v4.model.BatchUpdateValuesRequest;
 import com.google.api.services.sheets.v4.model.CellFormat;
 import com.google.api.services.sheets.v4.model.Color;
 import com.google.api.services.sheets.v4.model.DeleteSheetRequest;
@@ -76,7 +77,7 @@ public class TestMaintainDictionary {
     }
 
     @BeforeClass
-    public static void setUpBeforeClass() throws Exception {        	
+    public static void setUpBeforeClass() throws Exception {
         // Create scratch spreadsheet
         // Load credentials
         InputStream in = DictionaryAccessor.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
@@ -104,27 +105,49 @@ public class TestMaintainDictionary {
             add_sheet_requests.add(request);
         }
 
+        // Mapping Failures tab
+        {
+            String tab = "Mapping Failures";
+            Request request = new Request().setAddSheet(new AddSheetRequest().setProperties(new SheetProperties().setTitle(tab)));
+            add_sheet_requests.add(request);
+        }
+
         // Send requests to Google
         BatchUpdateSpreadsheetRequest update_sheet_request =
             new BatchUpdateSpreadsheetRequest().setRequests(add_sheet_requests);
         sheetsService.spreadsheets().batchUpdate(sheetId, update_sheet_request).execute();
 
         // Write headers to tabs
-        List<Object> headers = new ArrayList<Object>();
+        List<ValueRange> vrList = new ArrayList<>();
+
+        // Create headers list
+        List<String> headers = new ArrayList<>();
         for (String header : MaintainDictionary.headers()) {
             headers.add(header);
         }
-        List<List<Object>> values = new ArrayList<List<Object>>();
-        values.add(headers);
+
+        // Create requests to add headers to each tab
         for (String tab : MaintainDictionary.tabs()) {
-            String target_range = tab + "!A2";
-            ValueRange body = new ValueRange()
-                .setValues(values);
-            AppendValuesResponse result =
-                sheetsService.spreadsheets().values().append(sheetId, target_range, body)
-                .setValueInputOption("RAW")
-                .execute();
+            String target_range = tab + "!2:2";
+            vrList.add( DictionaryAccessor.writeRowText(target_range, headers) );
         }
+
+        // Write mappig failures tab headers
+        List<String> headerValues = new ArrayList<>();
+        headerValues.add("Experiment/Run");
+        headerValues.add("Lab");
+        headerValues.add("Item Name");
+        headerValues.add("Item ID");
+        headerValues.add("Status");
+        ValueRange vr = DictionaryAccessor.writeRowText("Mapping Failures!2:2",
+                                                        headerValues);
+        vrList.add(vr);
+
+        BatchUpdateValuesRequest req = new BatchUpdateValuesRequest();
+        req.setData(vrList);
+        req.setValueInputOption("RAW");
+
+        sheetsService.spreadsheets().values().batchUpdate(sheetId, req).execute();
 
         DictionaryTestShared.initializeTestEnvironment(sheetId);
         //              DictionaryMaintainerApp.main(options);
@@ -258,9 +281,20 @@ public class TestMaintainDictionary {
 
     @Test
     public void testEntries() throws Exception {
-        List<ValueRange> valueUpdates = new ArrayList<ValueRange>();
+        // Add Mapping Failures tab
+        InputStream mappingFailureData =
+                        DictionaryAccessor.class.getResourceAsStream("/mapping_failures.csv");
+
+        DictionaryAccessor.importTabFromCSV("Mapping Failures", mappingFailureData);
+
+        // Extract some lab ids
+        ValueRange mappingFailureIds = DictionaryAccessor.getTabData("Mapping Failures!D3:D22");
+        List<List<Object>> mappingFailureIdValues = mappingFailureIds.getValues();
+        assert(mappingFailureIdValues != null);
 
         // Populate each tab with objects
+        List<ValueRange> valueUpdates = new ArrayList<ValueRange>();
+
         for (String tab : MaintainDictionary.tabs()) {
 
             // Form entries
@@ -269,19 +303,22 @@ public class TestMaintainDictionary {
             Hashtable<String, Integer> header_map = DictionaryAccessor.getDictionaryHeaders(tab);
 
             // Populate a dummy object for each allowed type
+            int itemIdIndex = 0;
             for (String type : MaintainDictionary.getAllowedTypesForTab(tab)) {
                 String[] row_entries = new String[header_map.keySet().size()];
                 for (String header : header_map.keySet()) {
                     String entry = null;
-                    if (header.equals("Type"))
+                    if (header.equals("Type")) {
                         entry = type;
-                    else if (header.equals("Common Name"))
+                    } else if (header.equals("Common Name")) {
                         entry = UUID.randomUUID().toString().substring(0,6);
-                    else if (header.equals("LBNL UID") && tab.equals("Reagent"))
+                    } else if (header.equals("BioFAB UID") && tab.equals("Reagent")) {
                         entry = UUID.randomUUID().toString().substring(0,6) +
-                            ", " + UUID.randomUUID().toString().substring(0,6);
-                    else
+                            ", " + (String)mappingFailureIdValues.get(itemIdIndex).get(0);
+                        ++itemIdIndex;
+                    } else {
                         entry = "";  // Fill empty cells, null value won't work
+                    }
                     row_entries[header_map.get(header)] = entry;
                 }
                 List<Object> row = new ArrayList<Object>(Arrays.asList(row_entries));
@@ -294,20 +331,12 @@ public class TestMaintainDictionary {
                     .setValues(values).setRange(target_range);
             valueUpdates.add(body);
         }
-        
-        InputStream mappingFailureData =
-        		DictionaryAccessor.class.getResourceAsStream("/mapping_failures.csv");
 
-        DictionaryAccessor.importTabFromCSV("Mapping Failures", mappingFailureData);
-        MaintainDictionary.processMappingFailures();
-/*
+        /*
         DictionaryAccessor.sendEmail("dan.sumorok@raytheon.com", "dsumorokraytheon@gmail.com", "Hello from Gmail",
         		"The quick brown fox jumps over the lazy dog!");
         */
-        if(valueUpdates.size() > 0) {
-        	return;
-        }
-        
+
         // Update the spreadsheet
         DictionaryAccessor.batchUpdateValues(valueUpdates);
 
@@ -391,7 +420,7 @@ public class TestMaintainDictionary {
         }
 
         // Delete a cell
-        String deleteColumn = "LBNL UID";
+        String deleteColumn = "BioFAB UID";
 
         DictionaryAccessor.deleteCellShiftUp("Reagent", deleteColumn, 5);
 
