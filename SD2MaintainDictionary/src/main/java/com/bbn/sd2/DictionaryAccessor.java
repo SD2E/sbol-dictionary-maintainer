@@ -18,10 +18,11 @@ import com.google.api.services.drive.DriveScopes;
 import com.google.api.services.sheets.v4.Sheets;
 import com.google.api.services.sheets.v4.SheetsScopes;
 import com.google.api.services.sheets.v4.model.AddProtectedRangeRequest;
-import com.google.api.services.sheets.v4.model.AddSheetRequest;
 import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
+import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetResponse;
 import com.google.api.services.sheets.v4.model.CopySheetToAnotherSpreadsheetRequest;
 import com.google.api.services.sheets.v4.model.DeleteProtectedRangeRequest;
+import com.google.api.services.sheets.v4.model.DeleteRangeRequest;
 import com.google.api.services.sheets.v4.model.DeleteSheetRequest;
 import com.google.api.services.sheets.v4.model.Editors;
 import com.google.api.services.sheets.v4.model.GridData;
@@ -36,7 +37,6 @@ import com.google.api.services.sheets.v4.model.Spreadsheet;
 import com.google.api.services.sheets.v4.model.TextFormat;
 import com.google.api.services.sheets.v4.model.UpdateProtectedRangeRequest;
 import com.google.api.services.sheets.v4.Sheets.Spreadsheets.Values;
-import com.google.api.services.sheets.v4.Sheets.Spreadsheets.Values.BatchUpdate;
 import com.google.api.services.sheets.v4.model.BatchUpdateValuesRequest;
 import com.google.api.services.sheets.v4.model.BatchUpdateValuesResponse;
 import com.google.api.services.sheets.v4.model.CellData;
@@ -48,7 +48,6 @@ import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.GmailScopes;
 import com.google.api.services.gmail.model.Message;
 
-import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -452,6 +451,12 @@ public class DictionaryAccessor {
         return sheetsService.spreadsheets().values().batchUpdate(spreadsheetId, req).execute();
     }
 
+    public static BatchUpdateSpreadsheetResponse batchUpdateRequests(List<Request> requestList) throws IOException {
+        BatchUpdateSpreadsheetRequest breq = new BatchUpdateSpreadsheetRequest();
+        breq.setRequests(requestList);
+        return sheetsService.spreadsheets().batchUpdate(spreadsheetId, breq).execute();
+    }
+
     public static void submitRequests(List<Request> requests) throws IOException {
         BatchUpdateSpreadsheetRequest update_sheet_request =
             new BatchUpdateSpreadsheetRequest().setRequests(requests);
@@ -635,6 +640,26 @@ public class DictionaryAccessor {
         }
 
         batchUpdateValues(updates);
+    }
+
+    public static Request deleteRowRequest(String tab, int row) throws IOException {
+        DeleteRangeRequest deleteRange = new DeleteRangeRequest();
+
+        Sheet sheet = getCachedSheetProperties(tab);
+
+        GridRange range = new GridRange();
+
+        range.setStartRowIndex(row);
+        range.setEndRowIndex(row + 1);
+        range.setSheetId(sheet.getProperties().getSheetId());
+
+        deleteRange.setRange(range);
+        deleteRange.setShiftDimension("ROWS");
+
+        Request req = new Request();
+        req.setDeleteRange(deleteRange);
+
+        return req;
     }
 
     public static void copyTabsFromOtherSpreadSheet(String srcSpreadsheetId, String dstSpreadsheetId,
@@ -888,7 +913,7 @@ public class DictionaryAccessor {
         }
     }
 
-    public static void cacheSheetProperties() throws Exception {
+    public static void cacheSheetProperties() throws IOException {
         // Lookup the sheet properties and protected ranges on the source spreadsheet
         Sheets.Spreadsheets.Get get = sheetsService.spreadsheets().get(spreadsheetId);
         get.setFields("sheets.properties");
@@ -911,13 +936,13 @@ public class DictionaryAccessor {
         }
     }
 
-    public static Sheet getSheetProperties(String tab) throws Exception {
+    public static Sheet getSheetProperties(String tab) throws IOException {
         cacheSheetProperties();
 
         return cachedSheetProperties.get(tab);
     }
 
-    public static Sheet getCachedSheetProperties(String tab) throws Exception {
+    public static Sheet getCachedSheetProperties(String tab) {
         return cachedSheetProperties.get(tab);
     }
 

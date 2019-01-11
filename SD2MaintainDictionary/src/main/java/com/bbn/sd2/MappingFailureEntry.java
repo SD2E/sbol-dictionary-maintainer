@@ -95,7 +95,7 @@ public class MappingFailureEntry {
         }
     }
 
-    public String getExperiement() {
+    public String getExperiment() {
         return experiment;
     }
 
@@ -128,6 +128,10 @@ public class MappingFailureEntry {
 
     public int getRow() {
         return row;
+    }
+
+    public void decrementRow(int delta) {
+        row -= delta;
     }
 
     public boolean getNotified() {

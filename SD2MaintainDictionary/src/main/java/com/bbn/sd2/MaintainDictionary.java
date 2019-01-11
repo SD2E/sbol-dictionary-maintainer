@@ -6,7 +6,6 @@ import java.security.GeneralSecurityException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Calendar;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
@@ -18,7 +17,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.logging.Logger;
-import java.util.regex.Pattern;
 
 import javax.xml.namespace.QName;
 
@@ -34,8 +32,6 @@ import org.sbolstandard.core2.TopLevel;
 import org.synbiohub.frontend.SynBioHubException;
 
 import com.bbn.sd2.DictionaryEntry.StubStatus;
-import com.google.api.services.sheets.v4.Sheets;
-import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
 import com.google.api.services.sheets.v4.model.Color;
 import com.google.api.services.sheets.v4.model.Request;
 import com.google.api.services.sheets.v4.model.ValueRange;
@@ -89,9 +85,9 @@ public final class MaintainDictionary {
     private static Map<String,URI> componentTypes = new HashMap<String,URI>() {{
             put("Bead",URI.create("http://purl.obolibrary.org/obo/NCIT_C70671"));
             put("CHEBI",URI.create("http://identifiers.org/chebi/CHEBI:24431"));
-            put("DNA",ComponentDefinition.DNA);
+            put("DNA",ComponentDefinition.DNA_REGION);
             put("Protein",ComponentDefinition.PROTEIN);
-            put("RNA",ComponentDefinition.RNA);
+            put("RNA",ComponentDefinition.RNA_REGION);
         }
             static final long serialVersionUID = 0;
         };
@@ -494,8 +490,8 @@ public final class MaintainDictionary {
             }
 
             if(e.uri == null) {
-                log.severe("Row " + e.row_index + " in tab \"" + e.tab
-                           + " is missing a uri ");
+                log.severe("Row " + e.row_index + " of tab \"" + e.tab
+                           + "\" is missing a uri ");
                 continue;
             }
 
@@ -650,7 +646,7 @@ public final class MaintainDictionary {
             class CompareExperiments implements Comparator<MappingFailureEntry> {
                 @Override
                 public int compare(MappingFailureEntry entry1, MappingFailureEntry entry2) {
-                    return entry1.getExperiement().compareTo(entry2.getExperiement());
+                    return entry1.getExperiment().compareTo(entry2.getExperiment());
                 }
             }
 
@@ -659,7 +655,7 @@ public final class MaintainDictionary {
             notificationReport += "\n\t" + item + ":\n";
             for(MappingFailureEntry entry : itemEntries) {
                 entry.setLastNotificationTime(notificationDate);
-                notificationReport += "\t\t" + entry.getExperiement() + " - row " +
+                notificationReport += "\t\t" + entry.getExperiment() + " - row " +
                     entry.getRow() + "\n";
             }
         }
@@ -762,8 +758,8 @@ public final class MaintainDictionary {
        return generateNotificationReport(itemToExperiments);
     }
 
-    public static Map<String, String> generateMappingFailureEmails(List<MappingFailureEntry> entries) throws IOException {
-        Map<String, String> notifications = new TreeMap<>();
+    private static Map<String, List<MappingFailureEntry>> generateMappingFailureLabEntries(List<MappingFailureEntry> entries)
+        throws IOException  {
 
         // Sort entries by labs
         Map<String, List<MappingFailureEntry>> labEntries = new TreeMap<>();
@@ -780,6 +776,127 @@ public final class MaintainDictionary {
             labEntryList.add(entry);
         }
 
+        return labEntries;
+    }
+
+    public static String resolveMappingFailuresForLab(List<MappingFailureEntry> labMappingFailures,
+                                                      List<MappingFailureEntry> allMappingFailures,
+                                                      List<DictionaryEntry> dictionaryEntries)
+        throws IOException {
+        // This is the first row in the mapping failures sheet,
+        // indexed starting at 1
+        final int firstDataRow = 3;
+
+        String notification = null;
+
+        if(labMappingFailures.isEmpty()) {
+            return null;
+        }
+
+        // Extract lab name
+        String lab = labMappingFailures.get(0).getLab();
+
+        // Construct a Set of all Lab ids from this lab;
+        Set<String> labIds = new TreeSet<>();
+        Map<String, DictionaryEntry> idToEntry = new TreeMap<>();
+
+        for(DictionaryEntry entry : dictionaryEntries) {
+            Set<String> itemIds = entry.itemIdsForLabUID(lab);
+            if(itemIds == null) {
+                continue;
+            }
+
+            for(String itemId : itemIds) {
+                idToEntry.put(itemId, entry);
+            }
+
+            labIds.addAll( itemIds );
+        }
+
+        // Construct a set of the row from the Mapping Failures tab
+        // to be deleted.  Also keep track of the first row to be
+        // deleted
+        Set<Integer> rowsToDelete = new TreeSet<>();
+        int firstRowToDelete = allMappingFailures.size() + firstDataRow - 1;
+
+        for(int i=0; i<labMappingFailures.size(); ++i) {
+            MappingFailureEntry mEntry = labMappingFailures.get(i);
+
+            if(!mEntry.getValid()) {
+                continue;
+            }
+
+            String itemId = mEntry.getItemId();
+            if(mEntry.getRow() < firstRowToDelete) {
+                firstRowToDelete = mEntry.getRow();
+            }
+
+            DictionaryEntry dEntry = idToEntry.get( itemId );
+            if(dEntry == null) {
+                continue;
+            }
+
+            rowsToDelete.add(mEntry.getRow());
+        }
+
+        if(rowsToDelete.size() == 0) {
+            return null;
+        }
+
+        if(rowsToDelete.size() == 1) {
+            notification = "The following mapping failure was resolved:\n\n";
+        } else {
+            notification = "The following mapping failures were resolved:\n\n";
+        }
+
+        // Remove rows in rowsToDelete set
+        List<Request> deleteRequests = new ArrayList<>();
+
+        int decrementDelta = 0;
+        for(int i=(firstRowToDelete-firstDataRow); i<allMappingFailures.size(); ++i) {
+            MappingFailureEntry mEntry = allMappingFailures.get(i);
+            mEntry.decrementRow(decrementDelta);
+
+            int deleteIndex = i + firstDataRow + decrementDelta;
+            if(!rowsToDelete.contains(deleteIndex)) {
+                continue;
+            }
+
+            // Generate request to delete the row from the spreadsheet
+            // Note that Google API indexes rows starting at zero, so
+            // one is subtracted from the row index
+            Request req = DictionaryAccessor.deleteRowRequest("Mapping Failures",
+                                                              mEntry.getRow() - 1);
+            deleteRequests.add( req );
+
+            notification += mEntry.getExperiment() + "," +
+                mEntry.getLab() + "," +
+                mEntry.getItem() + "," +
+                mEntry.getItemId() + "\n";
+
+            // Remove mapping failure entry
+            allMappingFailures.remove( i-- );
+            ++decrementDelta;
+        }
+
+        DictionaryAccessor.batchUpdateRequests(deleteRequests);
+
+        return notification;
+    }
+
+    /*
+     * Generates notification emails for entries in the mapping
+     * failures tab.
+     *
+     * Returns a map that maps lab names to the contents of a
+     * notification email for that lab.
+     */
+    public static Map<String, String> generateMappingFailureEmails(List<MappingFailureEntry> entries) throws IOException {
+        Map<String, String> notifications = new TreeMap<>();
+
+        Map<String, List<MappingFailureEntry>> labEntries =
+            generateMappingFailureLabEntries(entries);
+
         for(String lab : labEntries.keySet()) {
             String emailContent = findMappingFailuresForLab(labEntries.get(lab));
             if(emailContent != null) {
@@ -794,12 +911,43 @@ public final class MaintainDictionary {
         return notifications;
     }
 
-    public static void processMappingFailures() throws IOException {
+    /*
+     * Generates notification emails for resolution of entries in the
+     * mapping failures tab.
+     *
+     * Returns a map that maps lab names to the contents of a
+     * notification email for that lab.
+     */
+    public static Map<String, String> generateMappingFailureResolutionEmails(List<MappingFailureEntry> mappingFailures,
+                                                                             List<DictionaryEntry> dictionaryEntries)
+        throws IOException {
+
+        Map<String, String> notifications = new TreeMap<>();
+
+        Map<String, List<MappingFailureEntry>> labEntries =
+            generateMappingFailureLabEntries(mappingFailures);
+
+        for(String lab : labEntries.keySet()) {
+            String emailContent = resolveMappingFailuresForLab(labEntries.get(lab),
+                                                               mappingFailures,
+                                                               dictionaryEntries);
+            if(emailContent != null) {
+                notifications.put(lab, emailContent);
+            }
+        }
+
+        return notifications;
+    }
+
+    /**
+     * Process mapping failures tab
+     */
+    public static void processMappingFailures(List<DictionaryEntry> dictionaryEntries) throws IOException {
         List<MappingFailureEntry> entries = getMappingFailures();
 
-        Map<String, String> notifications = generateMappingFailureEmails(entries);
+        Map<String, String> notifications = generateMappingFailureResolutionEmails(entries, dictionaryEntries);
 
-        System.out.println("Number of notification email messages: " + notifications.size());
+        notifications = generateMappingFailureEmails(entries);
     }
 
     /**
@@ -936,6 +1084,9 @@ public final class MaintainDictionary {
                 DictionaryAccessor.submitRequests(statusFormattingUpdates);
             }
 
+            // Process Mapping Failures Tab in the spreadsheet
+            processMappingFailures(currentEntries);
+
             log.info("Completed certification of dictionary");
             report.success(currentEntries.size()+" entries",true);
             report.success(mod_count+" modified",true);
@@ -944,7 +1095,6 @@ public final class MaintainDictionary {
             // Delay to throttle Google requests
             Thread.sleep(30000);
 
-            processMappingFailures();
             DictionaryAccessor.checkProtections();
 
             // Delay to throttle Google requests

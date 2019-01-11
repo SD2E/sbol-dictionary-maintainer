@@ -207,6 +207,23 @@ public class DictionaryEntry {
         return fieldMap;
     }
 
+    public Set<String> itemIdsForLabUID(String labUID) {
+        Set<String> itemIds = new TreeSet<>();
+
+        String key = labUID + " UID";
+        String uidKey = labUIDMap.get(key);
+
+        if(uidKey != null) {
+            Set<String> _itemIds = labUIDs.get(uidKey);
+
+            if(_itemIds != null) {
+                itemIds.addAll( _itemIds );
+            }
+        }
+
+        return itemIds;
+    }
+
     public Request setColor(String columnName, Color color) throws Exception {
         char col = (char) ('A' + header_map.get(columnName));
 

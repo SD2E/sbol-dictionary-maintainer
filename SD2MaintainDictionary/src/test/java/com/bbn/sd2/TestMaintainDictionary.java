@@ -288,7 +288,7 @@ public class TestMaintainDictionary {
         DictionaryAccessor.importTabFromCSV("Mapping Failures", mappingFailureData);
 
         // Extract some lab ids
-        ValueRange mappingFailureIds = DictionaryAccessor.getTabData("Mapping Failures!D3:D22");
+        ValueRange mappingFailureIds = DictionaryAccessor.getTabData("Mapping Failures!D10:D40");
         List<List<Object>> mappingFailureIdValues = mappingFailureIds.getValues();
         assert(mappingFailureIdValues != null);
 
@@ -315,7 +315,7 @@ public class TestMaintainDictionary {
                     } else if (header.equals("BioFAB UID") && tab.equals("Reagent")) {
                         entry = UUID.randomUUID().toString().substring(0,6) +
                             ", " + (String)mappingFailureIdValues.get(itemIdIndex).get(0);
-                        ++itemIdIndex;
+                        itemIdIndex += 2;
                     } else {
                         entry = "";  // Fill empty cells, null value won't work
                     }
