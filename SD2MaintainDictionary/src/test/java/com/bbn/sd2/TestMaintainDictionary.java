@@ -1,8 +1,5 @@
 package com.bbn.sd2;
 
-import static org.junit.Assert.*;
-
-import org.apache.commons.cli.CommandLine;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -14,10 +11,8 @@ import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInsta
 import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
-import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.http.HttpTransport;
-import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.store.FileDataStoreFactory;
@@ -25,35 +20,29 @@ import com.google.api.services.sheets.v4.Sheets;
 import com.google.api.services.sheets.v4.SheetsScopes;
 import com.google.api.services.sheets.v4.model.AddProtectedRangeRequest;
 import com.google.api.services.sheets.v4.model.AddSheetRequest;
-import com.google.api.services.sheets.v4.model.AppendValuesResponse;
 import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
 import com.google.api.services.sheets.v4.model.BatchUpdateValuesRequest;
 import com.google.api.services.sheets.v4.model.CellFormat;
 import com.google.api.services.sheets.v4.model.Color;
-import com.google.api.services.sheets.v4.model.DeleteSheetRequest;
-import com.google.api.services.sheets.v4.model.Editors;
 import com.google.api.services.sheets.v4.model.GridRange;
 import com.google.api.services.sheets.v4.model.ProtectedRange;
 import com.google.api.services.sheets.v4.model.Request;
 import com.google.api.services.sheets.v4.model.Sheet;
 import com.google.api.services.sheets.v4.model.SheetProperties;
 import com.google.api.services.sheets.v4.model.Spreadsheet;
-import com.google.api.services.sheets.v4.model.SpreadsheetProperties;
 import com.google.api.services.sheets.v4.model.ValueRange;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
-import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
-import java.util.Properties;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.logging.Logger;
 
@@ -283,13 +272,20 @@ public class TestMaintainDictionary {
     public void testEntries() throws Exception {
         // Add Mapping Failures tab
         InputStream mappingFailureData =
-                        DictionaryAccessor.class.getResourceAsStream("/mapping_failures.csv");
+            DictionaryAccessor.class.getResourceAsStream("/mapping_failures.csv");
 
         DictionaryAccessor.importTabFromCSV("Mapping Failures", mappingFailureData);
 
         // Extract some lab ids
-        ValueRange mappingFailureIds = DictionaryAccessor.getTabData("Mapping Failures!D10:D40");
+        ValueRange mappingFailureIds = DictionaryAccessor.getTabData("Mapping Failures!D:D");
         List<List<Object>> mappingFailureIdValues = mappingFailureIds.getValues();
+
+        // This set will contain the UIDs that are "resolved" from the
+        // Mapping Failures tab, that is, there are the UIDs thare are
+        // added to the UID column of one of the tabs.  They should be
+        // subsequently removed from the Mapping Failures tab
+        Set<String> resolvedUIDs = new TreeSet<>();
+
         assert(mappingFailureIdValues != null);
 
         // Populate each tab with objects
@@ -303,7 +299,7 @@ public class TestMaintainDictionary {
             Hashtable<String, Integer> header_map = DictionaryAccessor.getDictionaryHeaders(tab);
 
             // Populate a dummy object for each allowed type
-            int itemIdIndex = 0;
+            int itemIdIndex = 10;
             for (String type : MaintainDictionary.getAllowedTypesForTab(tab)) {
                 String[] row_entries = new String[header_map.keySet().size()];
                 for (String header : header_map.keySet()) {
@@ -313,9 +309,14 @@ public class TestMaintainDictionary {
                     } else if (header.equals("Common Name")) {
                         entry = UUID.randomUUID().toString().substring(0,6);
                     } else if (header.equals("BioFAB UID") && tab.equals("Reagent")) {
-                        entry = UUID.randomUUID().toString().substring(0,6) +
-                            ", " + (String)mappingFailureIdValues.get(itemIdIndex).get(0);
-                        itemIdIndex += 2;
+                        entry = UUID.randomUUID().toString().substring(0,6);
+                        String resolvedUID = (String)mappingFailureIdValues.get(itemIdIndex).get(0);
+                        if(!resolvedUIDs.contains(resolvedUID)) {
+                            entry += ", " + resolvedUID;
+                            resolvedUIDs.add(resolvedUID);
+
+                            itemIdIndex += 2;
+                        }
                     } else {
                         entry = "";  // Fill empty cells, null value won't work
                     }
@@ -328,13 +329,13 @@ public class TestMaintainDictionary {
             // Write entries to spreadsheet range
             String target_range = tab + "!A3";
             ValueRange body = new ValueRange()
-                    .setValues(values).setRange(target_range);
+                .setValues(values).setRange(target_range);
             valueUpdates.add(body);
         }
 
         /*
-        DictionaryAccessor.sendEmail("dan.sumorok@raytheon.com", "dsumorokraytheon@gmail.com", "Hello from Gmail",
-        		"The quick brown fox jumps over the lazy dog!");
+          DictionaryAccessor.sendEmail("dan.sumorok@raytheon.com", "dsumorokraytheon@gmail.com", "Hello from Gmail",
+          "The quick brown fox jumps over the lazy dog!");
         */
 
         // Update the spreadsheet
@@ -350,6 +351,19 @@ public class TestMaintainDictionary {
 
         // Run the dictionary application
         DictionaryTestShared.initializeTestEnvironment(sheetId);
+
+        // Check mapping failures
+        ValueRange mappingFailureData1 = DictionaryAccessor.getTabData("Mapping Failures!D:E");
+        mappingFailureIdValues = mappingFailureData1.getValues();
+        assert(mappingFailureIdValues.size() == 174);
+        for(int i=2; i<mappingFailureIdValues.size(); ++i) {
+            List<Object> rowData = mappingFailureIdValues.get(i);
+            String labId = (String)rowData.get(0);
+            String status = (String)rowData.get(1);
+
+            assert(!resolvedUIDs.contains(labId));
+            assert(status.startsWith("Notification sent at "));
+        }
 
         // Check the protections
         validateProtections();
@@ -379,6 +393,19 @@ public class TestMaintainDictionary {
 
         // Run the Dictionary
         DictionaryTestShared.initializeTestEnvironment(sheetId);
+
+        // Check mapping failures.  Make sure status column did not change
+        ValueRange mappingFailureData2 = DictionaryAccessor.getTabData("Mapping Failures!E:E");
+        List<List<Object>> mappingFailureIdValues2 = mappingFailureData2.getValues();
+        assert(mappingFailureIdValues.size() == 174);
+        for(int i=2; i<mappingFailureIdValues.size(); ++i) {
+            List<Object> rowData1 = mappingFailureIdValues.get(i);
+            List<Object> rowData2 = mappingFailureIdValues2.get(i);
+            String status1 = (String)rowData1.get(1);
+            String status2 = (String)rowData2.get(0);
+
+            assert(status1.equals(status2));
+        }
 
         Color red = MaintainDictionary.redColor();
         Color green = MaintainDictionary.greenColor();
@@ -435,7 +462,7 @@ public class TestMaintainDictionary {
 
         // Look for column shift error message in sheet status
         String errMsg = "Found potential shift in column \"" +
-                        deleteColumn + "\" of tab \"Reagent\"";
+            deleteColumn + "\" of tab \"Reagent\"";
 
         if(status.indexOf(errMsg) == -1) {
             System.err.println("Cell Delete Test Failed");

@@ -280,164 +280,169 @@ public final class MaintainDictionary {
      * @return true if anything has been changed
      * @throws Exception
      */
-    private static DictionaryEntry update_entry(DictionaryEntry e, List<ValueRange> valueUpdates) throws SBOLConversionException, IOException, SBOLValidationException, SynBioHubException {
+    private static DictionaryEntry update_entry(DictionaryEntry e, List<ValueRange> valueUpdates) throws SBOLConversionException, IOException, SBOLValidationException {
         assert(e.statusCode == StatusCode.VALID);
 
         UpdateReport report = new UpdateReport();
         // This is never called unless the entry is known valid
         URI local_uri = null;
         DictionaryEntry originalEntry = null;
+        String synBioHubAction = null;
 
-        // If the URI is null and the name is not, attempt to resolve:
-        if(e.uri==null && e.name!=null) {
-            try {
+        try {
+            // If the URI is null and the name is not, attempt to resolve:
+            if(e.uri==null && e.name!=null) {
+                synBioHubAction = "resolve URI to name in SynBioHub";
                 e.uri = SynBioHubAccessor.nameToURI(e.name);
                 if(e.uri!=null) {
                     // This is an update to the spreadsheet, but not to symBioHub,
                     // so "changed" is not updated
                     valueUpdates.add(DictionaryAccessor.writeEntryURI(e, e.uri));
                 }
-            } catch (SynBioHubException exception) {
-                e.statusCode = StatusCode.SBH_CONNECTION_FAILED; // Don't try to make anything if we couldn't check if it exists
-                exception.printStackTrace();
-                log.warning("SynBioHub connection failed in trying to resolve URI to name");
-                return originalEntry;
             }
-        }
 
-        // if the entry has no URI, create per type
-        if(e.uri==null) {
-            e.document = createStubOfType(e.name, e.type);
-            if(e.document==null) {
-                report.failure("Could not make object "+e.name, true);
-                valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
-                return originalEntry;
-            }
-            // pull out the first (and only) element to get the URI
-            local_uri = e.document.getTopLevels().iterator().next().getIdentity();
-            e.uri = SynBioHubAccessor.translateLocalURI(local_uri);
-            report.success("Created stub in SynBioHub",true);
-            valueUpdates.add(DictionaryAccessor.writeEntryURI(e, e.uri));
-            e.changed = true;
-        } else { // otherwise get a copy from SynBioHub
-            local_uri = SynBioHubAccessor.translateURI(e.uri);
-            try {
+            // if the entry has no URI, create per type
+            if(e.uri==null) {
+                synBioHubAction = "create document for " + e.name + " in SynBioHub";
+                e.document = createStubOfType(e.name, e.type);
+                if(e.document==null) {
+                    report.failure("Could not make object "+e.name, true);
+                    valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
+                    e.statusCode = StatusCode.SBH_CONNECTION_FAILED;
+                    return originalEntry;
+                }
+                // pull out the first (and only) element to get the URI
+                local_uri = e.document.getTopLevels().iterator().next().getIdentity();
+                synBioHubAction = "translate local URI";
+                e.uri = SynBioHubAccessor.translateLocalURI(local_uri);
+                report.success("Created stub in SynBioHub",true);
+                valueUpdates.add(DictionaryAccessor.writeEntryURI(e, e.uri));
+                e.changed = true;
+            } else { // otherwise get a copy from SynBioHub
+                synBioHubAction = "translate local URI";
+                local_uri = SynBioHubAccessor.translateURI(e.uri);
+                synBioHubAction = "retrieve linked object from SynBioHub";
                 e.document = SynBioHubAccessor.retrieve(e.uri, false);
                 originalEntry = new DictionaryEntry(e);
-            } catch(SynBioHubException sbhe) {
-                report.failure("Could not retrieve linked object from SynBioHub", true);
-                log.severe(sbhe.getMessage());
+            }
+
+            // Check if object belongs to the target Collection
+            if(e.uri.equals(local_uri)) { // this condition occurs when the entry does not belong to the target collection, probably a more explicit and better way to check for it
+                report.failure("Object does not belong to Dictionary collection " + SynBioHubAccessor.getCollectionID());
                 valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
+                e.statusCode = StatusCode.SBH_CONNECTION_FAILED;
                 return originalEntry;
             }
-        }
 
-        // Check if object belongs to the target Collection
-        if(e.uri.equals(local_uri)) { // this condition occurs when the entry does not belong to the target collection, probably a more explicit and better way to check for it
-            report.failure("Object does not belong to Dictionary collection " + SynBioHubAccessor.getCollectionID());
-            valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
-            return originalEntry;
-        }
-
-        // Make sure we've got the entity to update in our hands:
-        TopLevel entity = e.document.getTopLevel(local_uri);
-        if(entity==null) {
-            report.failure("Could not find or make object", true);
-            valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
-            return originalEntry;
-        }
-
-        // Check if typing is valid
-        if(!validateEntityType(entity,e.type)) {
-            report.failure("Type does not match '"+e.type+"'", true);
-        }
-
-        // Note that the "stub" field is defined by the SynBioHub document.
-        // The spreadsheet is updated to be consistent with the SynBioHub
-        // document, but "changed" flag is not updated since the SynBioHub
-        // document is not updated.
-        if(e.attribute) {
-            if(e.stub != StubStatus.UNDEFINED) {
-                e.stub = StubStatus.UNDEFINED;
-                valueUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
-            }
-        } else {
-            boolean entity_is_stub = (entity.getAnnotation(STUB_ANNOTATION) != null);
-            if((entity_is_stub && e.stub!=StubStatus.YES) || (!entity_is_stub && e.stub!=StubStatus.NO)) {
-                e.stub = entity_is_stub ? StubStatus.YES : StubStatus.NO;
-                valueUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
-                report.note(entity_is_stub?"Stub object":"Linked with non-stub object", true);
-            }
-        }
-
-        // update entity name if needed
-        if(e.name!=null && !e.name.equals(entity.getName())) {
-            if(originalEntry != null) {
-                originalEntry.name = entity.getName();
-            }
-            entity.setName(e.name);
-            e.changed = true;
-            report.success("Name changed to '"+e.name+"'",true);
-        }
-
-        // if the entry has lab entries, check if they match and (re)annotate if different
-        for(String labKey : e.labUIDs.keySet()) {
-            // Extra lab ids from entry (spreadsheet)
-            Set<String> labIds = new HashSet<String>();
-
-            Set<String> labEntries = e.labUIDs.get(labKey);
-            if(labEntries != null) {
-                labIds.addAll(labEntries);
+            // Make sure we've got the entity to update in our hands:
+            TopLevel entity = e.document.getTopLevel(local_uri);
+            if(entity==null) {
+                report.failure("Could not find or make object", true);
+                valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
+                e.statusCode = StatusCode.SBH_CONNECTION_FAILED;
+                return originalEntry;
             }
 
-            // Extract lab ids from SynBioHub
-            Set<String> synBioHubIds = new HashSet<String>();
+            // Check if typing is valid
+            if(!validateEntityType(entity,e.type)) {
+                report.failure("Type does not match '"+e.type+"'", true);
+                valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
+                e.statusCode = StatusCode.INVALID_TYPE;
+                return originalEntry;
+            }
 
-            QName labQKey = new QName("http://sd2e.org#",labKey,"sd2");
-            List<Annotation> annotations = entity.getAnnotations();
-            for (Annotation ann : annotations) {
-                if(ann.getQName().equals(labQKey)) {
-                    synBioHubIds.add(ann.getStringValue());
+            // Note that the "stub" field is defined by the SynBioHub document.
+            // The spreadsheet is updated to be consistent with the SynBioHub
+            // document, but "changed" flag is not updated since the SynBioHub
+            // document is not updated.
+            if(e.attribute) {
+                if(e.stub != StubStatus.UNDEFINED) {
+                    e.stub = StubStatus.UNDEFINED;
+                    valueUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
+                }
+            } else {
+                boolean entity_is_stub = (entity.getAnnotation(STUB_ANNOTATION) != null);
+                if((entity_is_stub && e.stub!=StubStatus.YES) || (!entity_is_stub && e.stub!=StubStatus.NO)) {
+                    e.stub = entity_is_stub ? StubStatus.YES : StubStatus.NO;
+                    valueUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
+                    report.note(entity_is_stub?"Stub object":"Linked with non-stub object", true);
                 }
             }
 
-            // Compare lab ids
-            if(!labIds.equals(synBioHubIds)) {
+            // update entity name if needed
+            if(e.name!=null && !e.name.equals(entity.getName())) {
                 if(originalEntry != null) {
-                    // Update originalEntry with values from SynBioHub
-                    originalEntry.labUIDs.put(labKey, synBioHubIds);
+                    originalEntry.name = entity.getName();
+                }
+                entity.setName(e.name);
+                e.changed = true;
+                report.success("Name changed to '"+e.name+"'",true);
+            }
+
+            // if the entry has lab entries, check if they match and (re)annotate if different
+            for(String labKey : e.labUIDs.keySet()) {
+                // Extra lab ids from entry (spreadsheet)
+                Set<String> labIds = new HashSet<String>();
+
+                Set<String> labEntries = e.labUIDs.get(labKey);
+                if(labEntries != null) {
+                    labIds.addAll(labEntries);
                 }
 
-                replaceOldAnnotations(entity, labQKey, labIds);
-                e.changed = true;
-                if(labIds.size() > 0)
-                    report.success(labKey+" for " + e.name + " is "+String.join(", ", labIds),true);
-                else
-                    report.success("Deleted " + labKey + " for " + e.name, true);
-            }
-        }
+                // Extract lab ids from SynBioHub
+                Set<String> synBioHubIds = new HashSet<String>();
 
-        if(e.attribute && e.attributeDefinition!=null) {
-            Set<URI> derivations = entity.getWasDerivedFroms();
-            if(originalEntry != null) {
-                if(derivations.size() == 0) {
-                    originalEntry.attributeDefinition = null;
-                } else {
-                    originalEntry.attributeDefinition =
-                        derivations.iterator().next();
+                QName labQKey = new QName("http://sd2e.org#",labKey,"sd2");
+                List<Annotation> annotations = entity.getAnnotations();
+                for (Annotation ann : annotations) {
+                    if(ann.getQName().equals(labQKey)) {
+                        synBioHubIds.add(ann.getStringValue());
+                    }
+                }
+
+                // Compare lab ids
+                if(!labIds.equals(synBioHubIds)) {
+                    if(originalEntry != null) {
+                        // Update originalEntry with values from SynBioHub
+                        originalEntry.labUIDs.put(labKey, synBioHubIds);
+                    }
+
+                    replaceOldAnnotations(entity, labQKey, labIds);
+                    e.changed = true;
+                    if(labIds.size() > 0)
+                        report.success(labKey+" for " + e.name + " is "+String.join(", ", labIds),true);
+                    else
+                        report.success("Deleted " + labKey + " for " + e.name, true);
                 }
             }
 
-            if(derivations.size()==0 || !e.attributeDefinition.equals(derivations.iterator().next())) {
-                derivations.clear(); derivations.add(e.attributeDefinition);
-                entity.setWasDerivedFroms(derivations);
-                e.changed = true;
-                report.success("Definition for "+e.name+" is '"+e.attributeDefinition+"'",true);
-            }
-        }
+            if(e.attribute && e.attributeDefinition!=null) {
+                Set<URI> derivations = entity.getWasDerivedFroms();
+                if(originalEntry != null) {
+                    if(derivations.size() == 0) {
+                        originalEntry.attributeDefinition = null;
+                    } else {
+                        originalEntry.attributeDefinition =
+                            derivations.iterator().next();
+                    }
+                }
 
-        // Update the spreadsheet with the entry notes
-        valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
+                if(derivations.size()==0 || !e.attributeDefinition.equals(derivations.iterator().next())) {
+                    derivations.clear(); derivations.add(e.attributeDefinition);
+                    entity.setWasDerivedFroms(derivations);
+                    e.changed = true;
+                    report.success("Definition for "+e.name+" is '"+e.attributeDefinition+"'",true);
+                }
+            }
+
+            // Update the spreadsheet with the entry notes
+            valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
+        } catch (SynBioHubException exception) {
+            log.severe(exception.getMessage());
+            report.failure("Could not " + synBioHubAction, true);
+            valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
+            e.statusCode = StatusCode.SBH_CONNECTION_FAILED;
+        }
 
         return originalEntry;
     }
@@ -779,7 +784,7 @@ public final class MaintainDictionary {
         return labEntries;
     }
 
-    public static String resolveMappingFailuresForLab(List<MappingFailureEntry> labMappingFailures,
+    private static String resolveMappingFailuresForLab(List<MappingFailureEntry> labMappingFailures,
                                                       List<MappingFailureEntry> allMappingFailures,
                                                       List<DictionaryEntry> dictionaryEntries)
         throws IOException {
@@ -891,7 +896,7 @@ public final class MaintainDictionary {
      * Returns a map that maps lab names to the contents of a
      * notification email for that lab.
      */
-    public static Map<String, String> generateMappingFailureEmails(List<MappingFailureEntry> entries) throws IOException {
+    private static Map<String, String> generateMappingFailureEmails(List<MappingFailureEntry> entries) throws IOException {
         Map<String, String> notifications = new TreeMap<>();
 
         Map<String, List<MappingFailureEntry>> labEntries =
@@ -918,7 +923,7 @@ public final class MaintainDictionary {
      * Returns a map that maps lab names to the contents of a
      * notification email for that lab.
      */
-    public static Map<String, String> generateMappingFailureResolutionEmails(List<MappingFailureEntry> mappingFailures,
+    private static Map<String, String> generateMappingFailureResolutionEmails(List<MappingFailureEntry> mappingFailures,
                                                                              List<DictionaryEntry> dictionaryEntries)
         throws IOException {
 
@@ -942,7 +947,7 @@ public final class MaintainDictionary {
     /**
      * Process mapping failures tab
      */
-    public static void processMappingFailures(List<DictionaryEntry> dictionaryEntries) throws IOException {
+    private static void processMappingFailures(List<DictionaryEntry> dictionaryEntries) throws IOException {
         List<MappingFailureEntry> entries = getMappingFailures();
 
         Map<String, String> notifications = generateMappingFailureResolutionEmails(entries, dictionaryEntries);
@@ -1032,6 +1037,7 @@ public final class MaintainDictionary {
                         statusColor = red;
                         break;
                     case SBH_CONNECTION_FAILED:
+                        log.warning("Failed to connect to SynBioHub");
                         statusColor = gray;
                         break;
                     case GOOGLE_SHEETS_CONNECTION_FAILED:
