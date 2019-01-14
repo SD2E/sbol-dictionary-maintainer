@@ -37,6 +37,8 @@ public class DictionaryEntry {
     public Hashtable<String, Integer> header_map;
     public boolean changed = false;
     public SBOLDocument document = null;
+    public Color statusColor;
+    public UpdateReport report = new UpdateReport();
     public static Map<String, String> labUIDMap =
         new TreeMap<String, String>() {
             private static final long serialVersionUID = 1L;

@@ -34,9 +34,10 @@ public class DictionaryMaintainerApp {
         stopWorkerThreads = false;
         kludge_heartbeat_reporter();
         final boolean backupInMainLoop = true;
+        boolean test_mode = cmd.hasOption("test_mode");
 
         if(!backupInMainLoop) {
-            if(!cmd.hasOption("test_mode")) {
+            if(!test_mode) {
                 start_backup(1);
             }
         }
@@ -82,7 +83,7 @@ public class DictionaryMaintainerApp {
             while(!stopSignal) {
                 try {
                     long start = System.currentTimeMillis();
-                    MaintainDictionary.maintain_dictionary();
+                    MaintainDictionary.maintain_dictionary(test_mode);
                     long end = System.currentTimeMillis();
                     NumberFormat formatter = new DecimalFormat("#0.00000");
                     log.info("Dictionary update executed in " + formatter.format((end - start) / 1000d) + " seconds");
@@ -90,7 +91,7 @@ public class DictionaryMaintainerApp {
                     log.severe("Exception while maintaining dictionary:");
                     e.printStackTrace();
                 }
-                if (cmd.hasOption("test_mode")) {
+                if (test_mode) {
                     setStopSignal();
                 } else {
                     if(backupInMainLoop) {

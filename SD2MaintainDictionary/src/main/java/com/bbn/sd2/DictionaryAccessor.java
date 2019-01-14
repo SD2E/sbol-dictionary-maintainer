@@ -169,6 +169,7 @@ public class DictionaryAccessor {
      * @throws MessagingException
      */
     public static void sendEmail(String to,
+                                 String cc,
                                  String subject,
                                  String bodyText)
             throws MessagingException, IOException {
@@ -177,8 +178,17 @@ public class DictionaryAccessor {
 
         MimeMessage email = new MimeMessage(session);
 
-        email.addRecipient(javax.mail.Message.RecipientType.TO,
-                new InternetAddress(to));
+        for(String recipient : to.split(";")) {
+            recipient = recipient.trim();
+            email.addRecipient(javax.mail.Message.RecipientType.TO,
+                               new InternetAddress(recipient));
+        }
+
+        for(String recipient : cc.split(";")) {
+            recipient = recipient.trim();
+            email.addRecipient(javax.mail.Message.RecipientType.CC,
+                               new InternetAddress(recipient));
+        }
         email.setSubject(subject);
         email.setText(bodyText);
 
