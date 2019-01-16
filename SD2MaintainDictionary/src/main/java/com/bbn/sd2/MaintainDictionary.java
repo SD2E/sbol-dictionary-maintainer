@@ -1043,139 +1043,153 @@ public final class MaintainDictionary {
 
         UpdateReport report = new UpdateReport();
         try {
+            log.info("Beginning dictionary update");
             DictionaryAccessor.cacheSheetProperties();
 
-            List<DictionaryEntry> currentEntries = DictionaryAccessor.snapshotCurrentDictionary();
-            DictionaryAccessor.validateUniquenessOfEntries("Common Name", currentEntries);
-            for(String uidTag : DictionaryEntry.labUIDMap.keySet()) {
-                DictionaryAccessor.validateUniquenessOfEntries(uidTag, currentEntries);
-            }
-
-            log.info("Beginning dictionary update");
+            List<DictionaryEntry> allTabEntries = new ArrayList<>();
+            Map<String, List<DictionaryEntry>> tabEntries = new TreeMap<>();
             int mod_count = 0, bad_count = 0;
 
-            // This will contain updates to be made to the spreadsheet
-            List<ValueRange> spreadsheetUpdates = new ArrayList<ValueRange>();
+            for(String tab : MaintainDictionary.tabs()) {
+                List<DictionaryEntry> entries =
+                    DictionaryAccessor.snapshotCurrentDictionary(tab);
 
-            // This will contain the status column formatting updates
-            List<Request> statusFormattingUpdates = new ArrayList<>();
-
-            // This will contain the spreadsheet information according to what is
-            // currently in SynBioHub
-            List<DictionaryEntry> originalEntries = new ArrayList<DictionaryEntry>();
-
-            // Loop through the spreadsheet rows
-            for(DictionaryEntry e : currentEntries) {
-                DictionaryEntry originalEntry = null;
-
-                if (e.statusCode == StatusCode.VALID) {
-                    // At this point the spreadsheet row has passed some rudimentary
-                    // sanity checks.  The following method fetches or creates the
-                    // corresponding SBOL Document and updates the document according
-                    // to the spreadsheet row.  The method returns the "original"
-                    // spreadsheet row, based on data in SynBioHub
-                    originalEntry = update_entry(e, spreadsheetUpdates);
-                }
-
-                Color statusColor;
-                if(e.statusCode == StatusCode.VALID) {
-                    // This row looks good
-                    if(originalEntry != null) {
-                        // Save original (SynBioHub) entry
-                        originalEntries.add(originalEntry);
-                    }
-
-                    if(e.changed) {
-                        ++mod_count;
-                    }
-                    statusColor = green;
-                } else {
-                    // There is a problem with this row
-                    switch (e.statusCode) {
-                    case MISSING_NAME:
-                        log.info("Invalid entry, missing name, skipping");
-                        e.report.failure("Common name is missing");
-                        statusColor = red;
-                        break;
-                    case MISSING_TYPE:
-                        log.info("Invalid entry for name "+e.name+", skipping");
-                        e.report.failure("Type is missing");
-                        statusColor = red;
-                        break;
-                    case INVALID_TYPE:
-                        log.info("Invalid entry for name "+e.name+", skipping");
-                        e.report.failure("Type must be one of "+ typeTabs.get(e.tab).toString());
-                        statusColor = red;
-                        break;
-                    case DUPLICATE_VALUE:
-                        log.info("Invalid entry for name "+e.name+", skipping");
-                        e.report.failure(e.statusLog);
-                        statusColor = red;
-                        break;
-                    case SBH_CONNECTION_FAILED:
-                        log.warning("Failed to connect to SynBioHub");
-                        statusColor = gray;
-                        break;
-                    case GOOGLE_SHEETS_CONNECTION_FAILED:
-                        statusColor = gray;
-                        break;
-                    default:
-                        statusColor = red;
-                        break;
-                    }
-
-                    bad_count++;
-                }
-
-                e.statusColor = statusColor;
+                tabEntries.put(tab, entries);
+                allTabEntries.addAll(entries);
             }
 
-            // Check for deleted cells that caused column values to shift up
-            // If a deleted cell if found, an exception will be thrown
-            checkShifts(currentEntries, originalEntries);
+            DictionaryAccessor.validateUniquenessOfEntries("Common Name", allTabEntries);
+            for(String uidTag : DictionaryEntry.labUIDMap.keySet()) {
+                DictionaryAccessor.validateUniquenessOfEntries(uidTag, allTabEntries);
+            }
 
-            // Commit changes to SynBioHub
-            for(DictionaryEntry e : currentEntries) {
-                if(e.changed) {
-                    try {
-                        URI local_uri = e.document.getTopLevels().iterator().next().getIdentity();
-                        TopLevel entity = e.document.getTopLevel(local_uri);
-                        replaceOldAnnotations(entity, MODIFIED,xmlDateTimeStamp());
-                        //e.document.write(System.out);
-                        SynBioHubAccessor.update(e.document);
-                        e.report.success("Synchronized with SynBioHub");
-                    } catch(Exception exception) {
-                        e.report.failure("Failed to synchronize with SynBioBub");
-                        e.statusColor = red;
+            for(String tab : MaintainDictionary.tabs()) {
+                List<DictionaryEntry> currentEntries = tabEntries.get(tab);
+
+                // This will contain updates to be made to the spreadsheet
+                List<ValueRange> spreadsheetUpdates = new ArrayList<ValueRange>();
+
+                // This will contain the status column formatting updates
+                List<Request> statusFormattingUpdates = new ArrayList<>();
+
+                // This will contain the spreadsheet information according to what is
+                // currently in SynBioHub
+                List<DictionaryEntry> originalEntries = new ArrayList<DictionaryEntry>();
+
+                // Loop through the spreadsheet rows
+                for(DictionaryEntry e : currentEntries) {
+                    DictionaryEntry originalEntry = null;
+
+                    if (e.statusCode == StatusCode.VALID) {
+                        // At this point the spreadsheet row has passed some rudimentary
+                        // sanity checks.  The following method fetches or creates the
+                        // corresponding SBOL Document and updates the document according
+                        // to the spreadsheet row.  The method returns the "original"
+                        // spreadsheet row, based on data in SynBioHub
+                        originalEntry = update_entry(e, spreadsheetUpdates);
                     }
-                    if(!e.attribute) {
-                        spreadsheetUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
+
+                    Color statusColor;
+                    if(e.statusCode == StatusCode.VALID) {
+                        // This row looks good
+                        if(originalEntry != null) {
+                            // Save original (SynBioHub) entry
+                            originalEntries.add(originalEntry);
+                        }
+
+                        if(e.changed) {
+                            ++mod_count;
+                        }
+                        statusColor = green;
                     } else {
-                        if(e.attributeDefinition!=null) {
-                            spreadsheetUpdates.add(DictionaryAccessor.writeEntryDefinition(e, e.attributeDefinition));
+                        // There is a problem with this row
+                        switch (e.statusCode) {
+                        case MISSING_NAME:
+                            log.info("Invalid entry, missing name, skipping");
+                            e.report.failure("Common name is missing");
+                            statusColor = red;
+                            break;
+                        case MISSING_TYPE:
+                            log.info("Invalid entry for name "+e.name+", skipping");
+                            e.report.failure("Type is missing");
+                            statusColor = red;
+                            break;
+                        case INVALID_TYPE:
+                            log.info("Invalid entry for name "+e.name+", skipping");
+                            e.report.failure("Type must be one of "+ typeTabs.get(e.tab).toString());
+                            statusColor = red;
+                            break;
+                        case DUPLICATE_VALUE:
+                            log.info("Invalid entry for name "+e.name+", skipping");
+                            e.report.failure(e.statusLog);
+                            statusColor = red;
+                            break;
+                        case SBH_CONNECTION_FAILED:
+                            log.warning("Failed to connect to SynBioHub");
+                            statusColor = gray;
+                            break;
+                        case GOOGLE_SHEETS_CONNECTION_FAILED:
+                            statusColor = gray;
+                            break;
+                        default:
+                            statusColor = red;
+                            break;
+                        }
+
+                        bad_count++;
+                    }
+
+                    e.statusColor = statusColor;
+                }
+
+                // Check for deleted cells that caused column values to shift up
+                // If a deleted cell if found, an exception will be thrown
+                checkShifts(currentEntries, originalEntries);
+
+                // Commit changes to SynBioHub
+                for(DictionaryEntry e : currentEntries) {
+                    if(e.changed) {
+                        try {
+                            URI local_uri = e.document.getTopLevels().iterator().next().getIdentity();
+                            TopLevel entity = e.document.getTopLevel(local_uri);
+                            replaceOldAnnotations(entity, MODIFIED,xmlDateTimeStamp());
+                            //e.document.write(System.out);
+                            SynBioHubAccessor.update(e.document);
+                            e.report.success("Synchronized with SynBioHub");
+                        } catch(Exception exception) {
+                            e.report.failure("Failed to synchronize with SynBioBub");
+                            e.statusColor = red;
+                        }
+                        if(!e.attribute) {
+                            spreadsheetUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
+                        } else {
+                            if(e.attributeDefinition!=null) {
+                                spreadsheetUpdates.add(DictionaryAccessor.writeEntryDefinition(e, e.attributeDefinition));
+                            }
                         }
                     }
+
+                    spreadsheetUpdates.add(DictionaryAccessor.writeEntryNotes(e, e.report.toString()));
+                    statusFormattingUpdates.add( e.setColor("Status", e.statusColor) );
                 }
 
-                spreadsheetUpdates.add(DictionaryAccessor.writeEntryNotes(e, e.report.toString()));
-                statusFormattingUpdates.add( e.setColor("Status", e.statusColor) );
-            }
+                // Commit updates to spreadsheet
+                if(!spreadsheetUpdates.isEmpty()) {
+                    log.info("Updating " + tab + " tab in spreadsheet");
+                    DictionaryAccessor.batchUpdateValues(spreadsheetUpdates);
+                }
 
-            // Commit updates to spreadsheet
-            if(!spreadsheetUpdates.isEmpty()) {
-                log.info("Updating spreadsheet");
-                DictionaryAccessor.batchUpdateValues(spreadsheetUpdates);
-            }
-
-            if(!statusFormattingUpdates.isEmpty()) {
-                DictionaryAccessor.submitRequests(statusFormattingUpdates);
+                if(!statusFormattingUpdates.isEmpty()) {
+                    DictionaryAccessor.submitRequests(statusFormattingUpdates);
+                }
             }
 
             // Process Mapping Failures Tab in the spreadsheet
-            processMappingFailures(currentEntries);
+            log.info("Processing Mapping Failures");
+            processMappingFailures(allTabEntries);
 
             log.info("Completed certification of dictionary");
-            report.success(currentEntries.size()+" entries",true);
+            report.success(allTabEntries.size()+" entries",true);
             report.success(mod_count+" modified",true);
             if(bad_count>0) report.failure(bad_count+" invalid",true);
 

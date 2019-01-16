@@ -236,38 +236,37 @@ public class DictionaryAccessor {
 
     // TODO: generalize the readRange
     private final static int row_offset = 2; // number of header rows
-    public static List<DictionaryEntry> snapshotCurrentDictionary() throws Exception {
+    public static List<DictionaryEntry> snapshotCurrentDictionary(String tab) throws Exception {
         log.info("Taking snapshot");
         ensureSheetsService();
         // Go to each tab in turn, collecting entries
         List<DictionaryEntry> entries = new ArrayList<>();
-        for(String tab : MaintainDictionary.tabs()) {
-            log.info("Scanning tab " + tab);
-            Hashtable<String, Integer> header_map = getDictionaryHeaders(tab);
+        log.info("Scanning tab " + tab);
+        Hashtable<String, Integer> header_map = getDictionaryHeaders(tab);
 
-            Collection<Integer> columns = header_map.values();
+        Collection<Integer> columns = header_map.values();
 
-            char last_column = 'A';
-            for(Integer column : columns) {
-                char columnChar = (char)('A' + column);
-                if(columnChar > last_column) {
-                    last_column = columnChar;
-                }
-            }
-
-            // Pull the current range
-            String readRange = tab + "!A" + (row_offset+1) + ":" + last_column;
-            ValueRange response = sheetsService.spreadsheets().values().get(spreadsheetId, readRange).execute();
-            if(response.getValues()==null) {
-                log.info("No entries found on this tab");
-                continue; // skip empty sheets
-            }
-            int row_index = row_offset;
-
-            for(List<Object> value : response.getValues()) {
-                entries.add(new DictionaryEntry(tab, header_map, ++row_index, value));
+        char last_column = 'A';
+        for(Integer column : columns) {
+            char columnChar = (char)('A' + column);
+            if(columnChar > last_column) {
+                last_column = columnChar;
             }
         }
+
+        // Pull the current range
+        String readRange = tab + "!A" + (row_offset+1) + ":" + last_column;
+        ValueRange response = sheetsService.spreadsheets().values().get(spreadsheetId, readRange).execute();
+        if(response.getValues()==null) {
+            log.info("No entries found on this tab");
+            return entries;
+        }
+        int row_index = row_offset;
+
+        for(List<Object> value : response.getValues()) {
+            entries.add(new DictionaryEntry(tab, header_map, ++row_index, value));
+        }
+
         log.info("Read " + entries.size());
 
         return entries;
