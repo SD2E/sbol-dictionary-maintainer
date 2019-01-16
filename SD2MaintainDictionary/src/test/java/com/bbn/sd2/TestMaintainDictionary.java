@@ -333,11 +333,6 @@ public class TestMaintainDictionary {
             valueUpdates.add(body);
         }
 
-        /*
-          DictionaryAccessor.sendEmail("dan.sumorok@raytheon.com", "dsumorokraytheon@gmail.com", "Hello from Gmail",
-          "The quick brown fox jumps over the lazy dog!");
-        */
-
         // Update the spreadsheet
         DictionaryAccessor.batchUpdateValues(valueUpdates);
 
