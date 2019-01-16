@@ -121,21 +121,8 @@ public final class MaintainDictionary {
         };
 
     /** Email addresses mapping failures are sent to */
-    private static Map<String,String> mappingFailureToList = new HashMap<String,String>(){{
-            put("BioFAB", "bjkeller@uw.edu");
-            put("Transcriptic", "peter@transcriptic.com");
-            put("Ginkgo", "narendra@ginkgobioworks.com");
-        }
-            static final long serialVersionUID = 0;
-        };
-
-    private static Map<String,String> mappingFailureCCList = new HashMap<String,String>(){{
-            put("BioFAB", "jakebeal@gmail.com;weston@netrias.com");
-            put("Transcriptic", "jakebeal@gmail.com;weston@netrias.com");
-            put("Ginkgo", "jakebeal@gmail.com;weston@netrias.com");
-        }
-            static final long serialVersionUID = 0;
-        };
+    private static Map<String,String> mappingFailureToList = null;
+    private static Map<String,String> mappingFailureCCList = null;
 
     /** The amount of time, in seconds, before notification email messages
      * for the mapping failures tab
@@ -958,26 +945,42 @@ public final class MaintainDictionary {
     /**
      * Process mapping failures tab
      */
-    private static void processMappingFailures(List<DictionaryEntry> dictionaryEntries,
-                                               boolean test_mode) throws IOException {
+    private static void processMappingFailures(List<DictionaryEntry> dictionaryEntries) throws IOException {
         List<MappingFailureEntry> entries = getMappingFailures();
 
         Map<String, String> notifications = generateMappingFailureResolutionEmails(entries, dictionaryEntries);
-        if(!test_mode && (notifications != null)) {
+        if(notifications != null) {
             for(String lab : notifications.keySet()) {
-                if(mappingFailureToList.containsKey(lab)) {
-                    String toList = mappingFailureToList.get(lab);
-                    String ccList = mappingFailureCCList.get(lab);
+                String toList = null;
+                if(mappingFailureToList != null) {
+                    toList = mappingFailureToList.get(lab);
+                }
 
+                String ccList = null;
+                if(mappingFailureCCList != null) {
+                    ccList = mappingFailureCCList.get(lab);
+                }
+
+                if(toList != null) {
                     try {
                         DictionaryAccessor.sendEmail(toList, ccList,
                                                      "Mapping Failure Resolutions",
                                                      notifications.get(lab));
-                        log.info("Sent mapping failure resolution email notification for "
-                                 + lab + " to " + toList + " with cc " + ccList);
+                        if(ccList != null) {
+                            log.info("Sent mapping failure resolution email notification for "
+                                     + lab + " to " + toList + " with cc " + ccList);
+                        } else {
+                            log.info("Sent mapping failure resolution email notification for "
+                                     + lab + " to " + toList);
+                        }
                     } catch(MessagingException e) {
-                        log.info("Failed to send mapping failure resolution email notification for "
-                                 + lab + " to " + toList + " with cc " + ccList);
+                        if(ccList != null ) {
+                            log.warning("Failed to send mapping failure resolution email notification for "
+                                        + lab + " to " + toList + " with cc " + ccList);
+                        } else {
+                            log.warning("Failed to send mapping failure resolution email notification for "
+                                        + lab + " to " + toList);
+                        }
 
                         e.printStackTrace();
                     }
@@ -986,21 +989,38 @@ public final class MaintainDictionary {
         }
 
         notifications = generateMappingFailureEmails(entries);
-        if(!test_mode && (notifications != null)) {
+        if(notifications != null) {
             for(String lab : notifications.keySet()) {
-                if(mappingFailureToList.containsKey(lab)) {
-                    String toList = mappingFailureToList.get(lab);
-                    String ccList = mappingFailureCCList.get(lab);
+                String toList = null;
+                if(mappingFailureToList != null) {
+                    toList = mappingFailureToList.get(lab);
+                }
 
+                String ccList = null;
+                if(mappingFailureCCList != null) {
+                    ccList = mappingFailureCCList.get(lab);
+                }
+
+                if(toList != null) {
                     try {
                         DictionaryAccessor.sendEmail(toList, ccList,
                                                      "Mapping Failures Report",
                                                      notifications.get(lab));
-                        log.info("Sent mapping failure report email notification for "
-                                 + lab + " to " + toList + " with cc " + ccList);
+                        if(ccList != null) {
+                            log.info("Sent mapping failure report email notification for "
+                                     + lab + " to " + toList + " with cc " + ccList);
+                        } else {
+                            log.info("Sent mapping failure report email notification for "
+                                     + lab + " to " + toList);
+                        }
                     } catch(MessagingException e) {
-                        log.info("Failed to send mapping failure report email notification for "
-                                 + lab + " to " + toList + " with cc " + ccList);
+                        if(ccList != null) {
+                            log.warning("Failed to send mapping failure report email notification for "
+                                        + lab + " to " + toList + " with cc " + ccList);
+                        } else {
+                            log.warning("Failed to send mapping failure report email notification for "
+                                        + lab + " to " + toList);
+                        }
 
                         e.printStackTrace();
                     }
@@ -1012,10 +1032,14 @@ public final class MaintainDictionary {
     /**
      * Run one pass through the dictionary, updating all entries as needed
      */
-    public static void maintain_dictionary(boolean test_mode) throws IOException, GeneralSecurityException, SBOLValidationException, SynBioHubException, SBOLConversionException {
+    public static void maintain_dictionary(Map<String, Map<String, String>> emailLists) throws IOException, GeneralSecurityException, SBOLValidationException, SynBioHubException, SBOLConversionException {
         Color green = greenColor();
         Color red = redColor();
         Color gray = grayColor();
+
+        // Extract email address lists for mapping failure tab notifications
+        mappingFailureToList = emailLists.get("To");
+        mappingFailureCCList = emailLists.get("CC");
 
         UpdateReport report = new UpdateReport();
         try {
@@ -1148,7 +1172,7 @@ public final class MaintainDictionary {
             }
 
             // Process Mapping Failures Tab in the spreadsheet
-            processMappingFailures(currentEntries, test_mode);
+            processMappingFailures(currentEntries);
 
             log.info("Completed certification of dictionary");
             report.success(currentEntries.size()+" entries",true);

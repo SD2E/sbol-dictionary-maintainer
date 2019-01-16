@@ -184,10 +184,12 @@ public class DictionaryAccessor {
                                new InternetAddress(recipient));
         }
 
-        for(String recipient : cc.split(";")) {
-            recipient = recipient.trim();
-            email.addRecipient(javax.mail.Message.RecipientType.CC,
-                               new InternetAddress(recipient));
+        if(cc != null) {
+            for(String recipient : cc.split(";")) {
+                recipient = recipient.trim();
+                email.addRecipient(javax.mail.Message.RecipientType.CC,
+                                   new InternetAddress(recipient));
+            }
         }
         email.setSubject(subject);
         email.setText(bodyText);
