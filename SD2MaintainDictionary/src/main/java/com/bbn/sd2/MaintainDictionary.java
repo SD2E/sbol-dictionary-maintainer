@@ -1188,18 +1188,19 @@ public final class MaintainDictionary {
             log.info("Processing Mapping Failures");
             processMappingFailures(allTabEntries);
 
-            log.info("Completed certification of dictionary");
-            report.success(allTabEntries.size()+" entries",true);
-            report.success(mod_count+" modified",true);
-            if(bad_count>0) report.failure(bad_count+" invalid",true);
-
             // Delay to throttle Google requests
             Thread.sleep(30000);
 
+            log.info("Checking protections...");
             DictionaryAccessor.checkProtections();
 
             // Delay to throttle Google requests
             Thread.sleep(30000);
+
+            log.info("Completed certification of dictionary");
+            report.success(allTabEntries.size()+" entries",true);
+            report.success(mod_count+" modified",true);
+            if(bad_count>0) report.failure(bad_count+" invalid",true);
         } catch(Exception e) {
             e.printStackTrace();
             //report.failure("Dictionary update failed with exception of type "+e.getClass().getName(), true);
