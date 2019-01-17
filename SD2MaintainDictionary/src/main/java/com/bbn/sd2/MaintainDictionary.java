@@ -1042,6 +1042,7 @@ public final class MaintainDictionary {
         mappingFailureCCList = emailLists.get("CC");
 
         UpdateReport report = new UpdateReport();
+        int rangeId = -1;
         try {
             log.info("Beginning dictionary update");
             DictionaryAccessor.cacheSheetProperties();
@@ -1051,6 +1052,8 @@ public final class MaintainDictionary {
             int mod_count = 0, bad_count = 0;
 
             for(String tab : MaintainDictionary.tabs()) {
+                DictionaryAccessor.cacheTabHeaders(tab);
+
                 List<DictionaryEntry> entries =
                     DictionaryAccessor.snapshotCurrentDictionary(tab);
 
@@ -1076,11 +1079,18 @@ public final class MaintainDictionary {
                 // currently in SynBioHub
                 List<DictionaryEntry> originalEntries = new ArrayList<DictionaryEntry>();
 
+                // This contains the entries as they were before being
+                // updated by the dictionary application
+                Map<Integer, DictionaryEntry> initialEntryMap = new TreeMap<>();
+
                 // Loop through the spreadsheet rows
                 for(DictionaryEntry e : currentEntries) {
                     DictionaryEntry originalEntry = null;
 
                     if (e.statusCode == StatusCode.VALID) {
+                        // Save a copy of the entry before it is updated
+                        initialEntryMap.put(e.row_index, new DictionaryEntry(e));
+
                         // At this point the spreadsheet row has passed some rudimentary
                         // sanity checks.  The following method fetches or creates the
                         // corresponding SBOL Document and updates the document according
@@ -1146,9 +1156,17 @@ public final class MaintainDictionary {
                 // If a deleted cell if found, an exception will be thrown
                 checkShifts(currentEntries, originalEntries);
 
+                // List of requests to re-read spreadsheet rows
+                List<String> rowRanges = new ArrayList<>();
+
                 // Commit changes to SynBioHub
                 for(DictionaryEntry e : currentEntries) {
                     if(e.changed) {
+                        // Create a request to re-read the spreadsheet
+                        // row that was modified
+                        String rowRange = tab + "!" + e.row_index + ":" + e.row_index;
+                        rowRanges.add(rowRange);
+
                         try {
                             URI local_uri = e.document.getTopLevels().iterator().next().getIdentity();
                             TopLevel entity = e.document.getTopLevel(local_uri);
@@ -1173,8 +1191,67 @@ public final class MaintainDictionary {
                     statusFormattingUpdates.add( e.setColor("Status", e.statusColor) );
                 }
 
+                // Lock spread sheet to prevent race coditions before updating
+                rangeId = DictionaryAccessor.protectTab(tab);
+
                 // Commit updates to spreadsheet
                 if(!spreadsheetUpdates.isEmpty()) {
+                    // Make sure columns have not moved
+                    Map<String, Integer> oldHeaderMap =
+                        DictionaryAccessor.getDictionaryHeaders(tab);
+
+                    DictionaryAccessor.cacheTabHeaders(tab);
+
+                    Map<String, Integer> newHeaderMap =
+                        DictionaryAccessor.getDictionaryHeaders(tab);
+
+                    for(String header : oldHeaderMap.keySet()) {
+                        int oldIndex = oldHeaderMap.get(header);
+                        int newIndex = newHeaderMap.get(header);
+
+                        if(oldIndex != newIndex) {
+                            throw new Exception("Column " + header + " on tab \"" +
+                                                tab + "\" moved during processing");
+                        }
+                    }
+                }
+
+                if(!rowRanges.isEmpty()) {
+                    Map<String, Integer> newHeaderMap =
+                        DictionaryAccessor.getDictionaryHeaders(tab);
+
+                    // Re-read spreadsheet rows that are about to be
+                    // updated
+                    List<ValueRange> valueRanges = DictionaryAccessor.batchGet(rowRanges);
+
+                    // Create dictionary entries from the rows
+                    for(ValueRange valueRange : valueRanges) {
+                        String rowStr = valueRange.getRange();
+                        rowStr = rowStr.split("!")[1];
+                        rowStr = rowStr.split(":")[0];
+                        rowStr = rowStr.substring(1);
+
+                        // Create a dictionary entry what is currently
+                        // in the spreadsheet
+                        int row = (int)Integer.parseInt(rowStr);
+                        DictionaryEntry e =
+                            new DictionaryEntry(tab, newHeaderMap, row,
+                                                valueRange.getValues().get(0));
+
+                        DictionaryEntry initialEntry = initialEntryMap.get(e.row_index);
+                        if(initialEntry == null) {
+                            throw new Exception("Internal Error - no initial entry for row "
+                                                + e.row_index + " on tab \"" + tab + "\"");
+                        }
+
+                        // Make sure row has not changed during processing
+                        if(!initialEntry.equals(e)) {
+                            throw new Exception("Aborting update - Row " + e.row_index
+                                                + " on tab \"" + tab +
+                                                "\" changed during processing");
+                        }
+                    }
+
                     log.info("Updating " + tab + " tab in spreadsheet");
                     DictionaryAccessor.batchUpdateValues(spreadsheetUpdates);
                 }
@@ -1182,6 +1259,9 @@ public final class MaintainDictionary {
                 if(!statusFormattingUpdates.isEmpty()) {
                     DictionaryAccessor.submitRequests(statusFormattingUpdates);
                 }
+
+                DictionaryAccessor.unprotectRange(rangeId);
+                rangeId = -1;
             }
 
             // Process Mapping Failures Tab in the spreadsheet
@@ -1206,6 +1286,15 @@ public final class MaintainDictionary {
             //report.failure("Dictionary update failed with exception of type "+e.getClass().getName(), true);
             report.failure("Dictionary update failed: " + e.getMessage());
         }
+
+        if(rangeId >= 0) {
+            try {
+                DictionaryAccessor.unprotectRange(rangeId);
+            } catch(Exception e) {
+                log.warning("Failed to unprotect sheet");
+            }
+        }
+
         DictionaryAccessor.writeStatusUpdate("SD2 Dictionary ("+DictionaryMaintainerApp.VERSION+") "+report.toString());
         //DictionaryAccessor.exportCSV();
     }

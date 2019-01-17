@@ -39,8 +39,8 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.Hashtable;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -188,7 +188,7 @@ public class TestMaintainDictionary {
             List<ProtectedRange> protectedRanges = DictionaryAccessor.getProtectedRanges(tab);
 
             // This maps the column header name to its index
-            Hashtable<String, Integer> headerMap =
+            Map<String, Integer> headerMap =
                     DictionaryAccessor.getDictionaryHeaders(tab);
 
             for(String key : headerMap.keySet()) {
@@ -296,7 +296,7 @@ public class TestMaintainDictionary {
             // Form entries
             List<List<Object>> values = new ArrayList<List<Object>>();
 
-            Hashtable<String, Integer> header_map = DictionaryAccessor.getDictionaryHeaders(tab);
+            Map<String, Integer> header_map = DictionaryAccessor.getDictionaryHeaders(tab);
 
             // Populate a dummy object for each allowed type
             int itemIdIndex = 10;

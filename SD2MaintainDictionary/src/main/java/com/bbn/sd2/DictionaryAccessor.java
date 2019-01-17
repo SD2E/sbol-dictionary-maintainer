@@ -18,6 +18,8 @@ import com.google.api.services.drive.DriveScopes;
 import com.google.api.services.sheets.v4.Sheets;
 import com.google.api.services.sheets.v4.SheetsScopes;
 import com.google.api.services.sheets.v4.model.AddProtectedRangeRequest;
+import com.google.api.services.sheets.v4.model.AddProtectedRangeResponse;
+import com.google.api.services.sheets.v4.model.BatchGetValuesResponse;
 import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
 import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetResponse;
 import com.google.api.services.sheets.v4.model.CopySheetToAnotherSpreadsheetRequest;
@@ -30,6 +32,7 @@ import com.google.api.services.sheets.v4.model.GridRange;
 import com.google.api.services.sheets.v4.model.ProtectedRange;
 import com.google.api.services.sheets.v4.model.RepeatCellRequest;
 import com.google.api.services.sheets.v4.model.Request;
+import com.google.api.services.sheets.v4.model.Response;
 import com.google.api.services.sheets.v4.model.RowData;
 import com.google.api.services.sheets.v4.model.Sheet;
 import com.google.api.services.sheets.v4.model.SheetProperties;
@@ -62,7 +65,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -90,6 +92,8 @@ public class DictionaryAccessor {
     private DictionaryAccessor() {} // static-only class
 
     private static Map<String, Sheet> cachedSheetProperties = null;
+
+    private static Map< String, Map<String, Integer> > tab_headers = new TreeMap<>();
 
     /** Configure from command-line arguments */
     public static void configure(CommandLine cmd) {
@@ -242,7 +246,7 @@ public class DictionaryAccessor {
         // Go to each tab in turn, collecting entries
         List<DictionaryEntry> entries = new ArrayList<>();
         log.info("Scanning tab " + tab);
-        Hashtable<String, Integer> header_map = getDictionaryHeaders(tab);
+        Map<String, Integer> header_map = getDictionaryHeaders(tab);
 
         Collection<Integer> columns = header_map.values();
 
@@ -328,11 +332,15 @@ public class DictionaryAccessor {
     }
 
 
-    public static Hashtable<String, Integer> getDictionaryHeaders(String tab) throws IOException {
-        Hashtable<String, Integer> header_map = new Hashtable<>();
+    public static void cacheTabHeaders(String tab) throws IOException {
+        Map<String, Integer> header_map = new TreeMap<>();
         String headerRange = tab + "!" + row_offset + ":" + row_offset;
         ValueRange response = sheetsService.spreadsheets().values().get(spreadsheetId, headerRange).execute();
-        if(response.getValues()==null) return header_map; // skip empty sheets
+
+        if(response.getValues()==null) {
+            return; // skip empty sheets
+        }
+
         List<Object> headers = response.getValues().get(0);
         // TODO: validate required headers Type, Common Name, etc.
         // TODO: if header cells aren't locked, might need to check for duplicate header entries
@@ -342,7 +350,12 @@ public class DictionaryAccessor {
                 header_map.put(header, i_h);
             }
         }
-        return header_map;
+
+        tab_headers.put(tab, header_map);
+    }
+
+    public static Map<String, Integer> getDictionaryHeaders(String tab) throws IOException {
+        return tab_headers.get(tab);
     }
 
     //    // Reads one column
@@ -468,14 +481,25 @@ public class DictionaryAccessor {
         return sheetsService.spreadsheets().batchUpdate(spreadsheetId, breq).execute();
     }
 
-    public static void submitRequests(List<Request> requests) throws IOException {
-        BatchUpdateSpreadsheetRequest update_sheet_request =
+    public static List<ValueRange> batchGet(List<String> ranges) throws IOException {
+        Values.BatchGet request = sheetsService.spreadsheets().values().batchGet(spreadsheetId);
+        request.setSpreadsheetId(spreadsheetId);
+        request.setRanges(ranges);
+
+        BatchGetValuesResponse response = request.execute();
+
+        return response.getValueRanges();
+    }
+
+    public static BatchUpdateSpreadsheetResponse submitRequests(List<Request> requests) throws IOException {
+        BatchUpdateSpreadsheetRequest request =
             new BatchUpdateSpreadsheetRequest().setRequests(requests);
-        sheetsService.spreadsheets().batchUpdate(spreadsheetId, update_sheet_request).execute();
+
+        return sheetsService.spreadsheets().batchUpdate(spreadsheetId, request).execute();
     }
 
     private static char columnNameToIndex(String tab, String colName) throws IOException {
-        Hashtable<String, Integer> header_map = getDictionaryHeaders(tab);
+        Map<String, Integer> header_map = getDictionaryHeaders(tab);
 
         Integer colVal = header_map.get(colName);
         if(colVal == null) {
@@ -635,7 +659,7 @@ public class DictionaryAccessor {
         List<ValueRange> updates = new ArrayList<ValueRange>();
 
         for(String tab : MaintainDictionary.tabs()) {
-            Hashtable<String, Integer> header_map;
+            Map<String, Integer> header_map;
             try {
                 header_map = getDictionaryHeaders(tab);
             } catch (Exception e) {
@@ -766,10 +790,10 @@ public class DictionaryAccessor {
 
         // This returns a returns a map that maps a column header to a
         // column index
-        Hashtable<String, Integer> headers = getDictionaryHeaders(sheetTitle);
+        Map<String, Integer> headers = getDictionaryHeaders(sheetTitle);
 
         // Create a map the maps a sheet index to
-        Hashtable<Integer, String> reverseLookup = new Hashtable<Integer, String>();
+        Map<Integer, String> reverseLookup = new TreeMap<Integer, String>();
         for(String header : headers.keySet()) {
             reverseLookup.put(headers.get(header), header);
         }
@@ -922,6 +946,52 @@ public class DictionaryAccessor {
             request.setAddProtectedRange(addProtectedRangeRequest);
             updateRangeRequests.add(request);
         }
+    }
+
+    public static int protectTab(String tab) throws IOException {
+        Sheet sheet = getCachedSheetProperties(tab);
+        SheetProperties sheetProperties = sheet.getProperties();
+        ProtectedRange newRange = new ProtectedRange();
+
+        GridRange gridRange = new GridRange();
+
+        gridRange.setSheetId(sheetProperties.getSheetId());
+        newRange.setRange(gridRange);
+
+        AddProtectedRangeRequest addProtectedRangeRequest =
+            new AddProtectedRangeRequest();
+        addProtectedRangeRequest.setProtectedRange(newRange);
+
+        Request request = new Request();
+        request.setAddProtectedRange(addProtectedRangeRequest);
+
+        List<Request> requestList = new ArrayList<>();
+        requestList.add( request );
+
+        BatchUpdateSpreadsheetResponse batchResponse =
+            submitRequests(requestList);
+
+        Response response = batchResponse.getReplies().get(0);
+
+        AddProtectedRangeResponse pResponse =
+            response.getAddProtectedRange();
+
+        ProtectedRange range = pResponse.getProtectedRange();
+
+        return range.getProtectedRangeId();
+    }
+
+    public static void unprotectRange(int rangeId) throws IOException {
+        DeleteProtectedRangeRequest deleteRequest = new DeleteProtectedRangeRequest();
+        deleteRequest.setProtectedRangeId(rangeId);
+
+        Request request = new Request();
+        request.setDeleteProtectedRange(deleteRequest);
+
+        List<Request> requestList = new ArrayList<>();
+        requestList.add( request );
+
+        submitRequests(requestList);
     }
 
     public static void cacheSheetProperties() throws IOException {
@@ -1145,6 +1215,10 @@ public class DictionaryAccessor {
 
     static ValueRange getTabData(String tab) throws IOException {
         return sheetsService.spreadsheets().values().get(spreadsheetId, tab).execute();
+    }
+
+    static Values.Get getTabDataRequest(String tab) throws IOException {
+        return sheetsService.spreadsheets().values().get(spreadsheetId, tab);
     }
 
     static final String getSpreadsheetId() {

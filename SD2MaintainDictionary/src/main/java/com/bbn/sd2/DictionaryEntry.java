@@ -7,7 +7,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -34,7 +33,7 @@ public class DictionaryEntry {
     public StubStatus stub = StubStatus.UNDEFINED;
     public boolean attribute = false;
     public URI attributeDefinition = null;
-    public Hashtable<String, Integer> header_map;
+    public Map<String, Integer> header_map;
     public boolean changed = false;
     public SBOLDocument document = null;
     public Color statusColor;
@@ -51,6 +50,67 @@ public class DictionaryEntry {
             }
         };
     public static Map<String, String> reverseLabUIDMap = generateReverseLabUIDMap();
+
+    private boolean compareNull(Object o1, Object o2) {
+        if(o1 == null) {
+            if(o2 != null) {
+                return false;
+            }
+        } else if(o2 == null) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public boolean equals(DictionaryEntry e) {
+        if(!compareNull(e.name, name)) {
+            return false;
+        }
+
+        if((name != null) && !e.name.equals(name)) {
+            return false;
+        }
+
+        if(!compareNull(e.type, type)) {
+            return false;
+        }
+
+        if((type != null) && !e.type.equals(type)) {
+            return false;
+        }
+
+        if(!compareNull(e.uri, uri)) {
+            return false;
+        }
+
+        if((uri != null) && !e.uri.equals(uri)) {
+            return false;
+        }
+
+        for(String lab : e.labUIDs.keySet()) {
+            Set<String> map1 = labUIDs.get(lab);
+            Set<String> map2 = e.labUIDs.get(lab);
+
+            if(!compareNull(map1, map2)) {
+                return false;
+            }
+
+            if((map1 != null) && !map1.equals(map2)) {
+                return false;
+            }
+        }
+
+        if(e.labUIDs.size() != labUIDs.size()) {
+            return false;
+        }
+
+        if(e.attribute != attribute) {
+            return false;
+        }
+
+        return true;
+    }
 
     private static Map<String, String> generateReverseLabUIDMap() {
         Map<String, String> reverseMap = new TreeMap<String, String>();
@@ -113,7 +173,7 @@ public class DictionaryEntry {
         return row.size()>i && row.get(i).toString().length()>0;
     }
 
-    public DictionaryEntry(String tab, Hashtable<String, Integer> header_map, int row_number, List<Object> row) throws IOException, GeneralSecurityException {
+    public DictionaryEntry(String tab, Map<String, Integer> header_map, int row_number, List<Object> row) throws IOException, GeneralSecurityException {
         this.tab = tab;
         row_index = row_number;
 
