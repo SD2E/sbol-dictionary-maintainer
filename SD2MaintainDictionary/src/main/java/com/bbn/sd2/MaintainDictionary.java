@@ -1246,12 +1246,25 @@ public final class MaintainDictionary {
 
                         // Make sure row has not changed during processing
                         if(!initialEntry.equals(e)) {
-                            throw new Exception("Aborting update - Row " + e.row_index
-                                                + " on tab \"" + tab +
-                                                "\" changed during processing");
+                            log.warning("Aborting update - Row " + e.row_index
+                                        + " on tab \"" + tab +
+                                        "\" changed during processing");
+
+                            // Delay to throttle Google requests
+                            Thread.sleep(2000);
+
+                            DictionaryAccessor.unprotectRange(rangeId);
+                            rangeId = -1;
+                            break;
                         }
                     }
 
+                    if(rangeId < 0) {
+                        continue;
+                    }
+                }
+
+                if(!spreadsheetUpdates.isEmpty()) {
                     log.info("Updating " + tab + " tab in spreadsheet");
                     DictionaryAccessor.batchUpdateValues(spreadsheetUpdates);
                 }
@@ -1260,6 +1273,8 @@ public final class MaintainDictionary {
                     DictionaryAccessor.submitRequests(statusFormattingUpdates);
                 }
 
+                // Delay to throttle Google requests
+                Thread.sleep(2000);
                 DictionaryAccessor.unprotectRange(rangeId);
                 rangeId = -1;
             }
@@ -1289,6 +1304,8 @@ public final class MaintainDictionary {
 
         if(rangeId >= 0) {
             try {
+                // Delay to throttle Google requests
+                Thread.sleep(2000);
                 DictionaryAccessor.unprotectRange(rangeId);
             } catch(Exception e) {
                 log.warning("Failed to unprotect sheet");
