@@ -285,7 +285,7 @@ public final class MaintainDictionary {
      * @return true if anything has been changed
      * @throws Exception
      */
-    private static DictionaryEntry update_entry(DictionaryEntry e, List<ValueRange> valueUpdates) throws SBOLConversionException, IOException, SBOLValidationException {
+    private static DictionaryEntry update_entry(DictionaryEntry e) throws SBOLConversionException, IOException, SBOLValidationException {
         assert(e.statusCode == StatusCode.VALID);
 
         // This is never called unless the entry is known valid
@@ -301,7 +301,7 @@ public final class MaintainDictionary {
                 if(e.uri!=null) {
                     // This is an update to the spreadsheet, but not to symBioHub,
                     // so "changed" is not updated
-                    valueUpdates.add(DictionaryAccessor.writeEntryURI(e, e.uri));
+                    e.spreadsheetUpdates.add(DictionaryAccessor.writeEntryURI(e, e.uri));
                 }
             }
 
@@ -319,7 +319,7 @@ public final class MaintainDictionary {
                 synBioHubAction = "translate local URI";
                 e.uri = SynBioHubAccessor.translateLocalURI(local_uri);
                 e.report.success("Created stub in SynBioHub",true);
-                valueUpdates.add(DictionaryAccessor.writeEntryURI(e, e.uri));
+                e.spreadsheetUpdates.add(DictionaryAccessor.writeEntryURI(e, e.uri));
                 e.changed = true;
             } else { // otherwise get a copy from SynBioHub
                 synBioHubAction = "translate local URI";
@@ -358,13 +358,13 @@ public final class MaintainDictionary {
             if(e.attribute) {
                 if(e.stub != StubStatus.UNDEFINED) {
                     e.stub = StubStatus.UNDEFINED;
-                    valueUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
+                    e.spreadsheetUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
                 }
             } else {
                 boolean entity_is_stub = (entity.getAnnotation(STUB_ANNOTATION) != null);
                 if((entity_is_stub && e.stub!=StubStatus.YES) || (!entity_is_stub && e.stub!=StubStatus.NO)) {
                     e.stub = entity_is_stub ? StubStatus.YES : StubStatus.NO;
-                    valueUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
+                    e.spreadsheetUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
                     e.report.note(entity_is_stub?"Stub object":"Linked with non-stub object", true);
                 }
             }
@@ -438,8 +438,8 @@ public final class MaintainDictionary {
             // Update the spreadsheet with the entry notes
         } catch (SynBioHubException exception) {
             log.severe(exception.getMessage());
-            e.report.failure("Could not " + synBioHubAction, true);
-            e.statusCode = StatusCode.SBH_CONNECTION_FAILED;
+            throw new IOException("SynBioHub transaction failed when trying to "
+                                  + synBioHubAction);
         }
 
         return originalEntry;
@@ -1032,7 +1032,7 @@ public final class MaintainDictionary {
     /**
      * Run one pass through the dictionary, updating all entries as needed
      */
-    public static void maintain_dictionary(Map<String, Map<String, String>> emailLists) throws IOException, GeneralSecurityException, SBOLValidationException, SynBioHubException, SBOLConversionException {
+    public static void maintain_dictionary(Map<String, Map<String, String>> emailLists) {
         Color green = greenColor();
         Color red = redColor();
         Color gray = grayColor();
@@ -1041,17 +1041,28 @@ public final class MaintainDictionary {
         mappingFailureToList = emailLists.get("To");
         mappingFailureCCList = emailLists.get("CC");
 
+        // A list of all the dictionary entries in all the tabs
         List<DictionaryEntry> allTabEntries = new ArrayList<>();
+
+        // Maps the tab name to the dictionary entries in that tab
         Map<String, List<DictionaryEntry>> tabEntries = new TreeMap<>();
 
-        // Read the Google Spreadsheet
+        // Read the Google spreadsheet tabs
         try {
             log.info("Beginning dictionary update");
+
+            // Certain properties, such as "sheet id" numbers for the
+            // tabs do change during the processing and are used in
+            // several places.  This caches the values to limit the
+            // number of requests to Google
             DictionaryAccessor.cacheSheetProperties();
 
             for(String tab : MaintainDictionary.tabs()) {
+                // This caches the location of the the colums in the
+                // tab
                 DictionaryAccessor.cacheTabHeaders(tab);
 
+                // Read the dictionary entries from the tab
                 List<DictionaryEntry> entries =
                     DictionaryAccessor.snapshotCurrentDictionary(tab);
 
@@ -1096,28 +1107,33 @@ public final class MaintainDictionary {
                 // This will contain the status column formatting updates
                 List<Request> statusFormattingUpdates = new ArrayList<>();
 
-                // This will contain the spreadsheet information according to what is
-                // currently in SynBioHub
+                // This will contain the SynBioHub view of the
+                // dictionary entries
                 List<DictionaryEntry> originalEntries = new ArrayList<DictionaryEntry>();
 
                 // This contains the entries as they were before being
-                // updated by the dictionary application
+                // updated by the dictionary application.  The map is
+                // indexed by the entry row
                 Map<Integer, DictionaryEntry> initialEntryMap = new TreeMap<>();
+
+                // This contains the updated entries.  It is indexed
+                // by the entry row.
+                Map<Integer, DictionaryEntry> updatedEntryMap = new TreeMap<>();
 
                 // Loop through the spreadsheet rows
                 for(DictionaryEntry e : currentEntries) {
                     DictionaryEntry originalEntry = null;
 
-                    if (e.statusCode == StatusCode.VALID) {
-                        // Save a copy of the entry before it is updated
-                        initialEntryMap.put(e.row_index, new DictionaryEntry(e));
+                    // Save a copy of the entry before it is updated
+                    initialEntryMap.put(e.row_index, new DictionaryEntry(e));
 
+                    if (e.statusCode == StatusCode.VALID) {
                         // At this point the spreadsheet row has passed some rudimentary
                         // sanity checks.  The following method fetches or creates the
                         // corresponding SBOL Document and updates the document according
                         // to the spreadsheet row.  The method returns the "original"
                         // spreadsheet row, based on data in SynBioHub
-                        originalEntry = update_entry(e, spreadsheetUpdates);
+                        originalEntry = update_entry(e);
                     }
 
                     Color statusColor;
@@ -1128,9 +1144,6 @@ public final class MaintainDictionary {
                             originalEntries.add(originalEntry);
                         }
 
-                        if(e.changed) {
-                            ++mod_count;
-                        }
                         statusColor = green;
                     } else {
                         // There is a problem with this row
@@ -1156,7 +1169,7 @@ public final class MaintainDictionary {
                             statusColor = red;
                             break;
                         case SBH_CONNECTION_FAILED:
-                            log.warning("Failed to connect to SynBioHub");
+                            log.warning("SynBioHub failure");
                             statusColor = gray;
                             break;
                         case GOOGLE_SHEETS_CONNECTION_FAILED:
@@ -1166,49 +1179,56 @@ public final class MaintainDictionary {
                             statusColor = red;
                             break;
                         }
-
-                        bad_count++;
                     }
 
                     e.statusColor = statusColor;
+                    updatedEntryMap.put(e.row_index, new DictionaryEntry(e));
                 }
 
                 // Check for deleted cells that caused column values to shift up
-                // If a deleted cell if found, an exception will be thrown
+                // If a deleted cell is found, an exception will be thrown
                 checkShifts(currentEntries, originalEntries);
 
                 // List of requests to re-read spreadsheet rows
                 List<String> rowRanges = new ArrayList<>();
 
-                // Lock spread sheet to prevent race coditions before updating
+                // Lock tab to prevent race conditions before updating
                 rangeId = DictionaryAccessor.protectTab(tab);
 
                 // Make sure columns have not moved
-                if(!spreadsheetUpdates.isEmpty()) {
-                    Map<String, Integer> oldHeaderMap =
-                        DictionaryAccessor.getDictionaryHeaders(tab);
+                Map<String, Integer> oldHeaderMap =
+                    DictionaryAccessor.getDictionaryHeaders(tab);
 
-                    DictionaryAccessor.cacheTabHeaders(tab);
+                DictionaryAccessor.cacheTabHeaders(tab);
 
-                    Map<String, Integer> newHeaderMap =
-                        DictionaryAccessor.getDictionaryHeaders(tab);
+                Map<String, Integer> newHeaderMap =
+                    DictionaryAccessor.getDictionaryHeaders(tab);
 
-                    for(String header : oldHeaderMap.keySet()) {
-                        int oldIndex = oldHeaderMap.get(header);
-                        int newIndex = newHeaderMap.get(header);
+                for(String header : oldHeaderMap.keySet()) {
+                    int oldIndex = oldHeaderMap.get(header);
+                    int newIndex = newHeaderMap.get(header);
 
-                        if(oldIndex != newIndex) {
-                            throw new Exception("Column " + header + " on tab \"" +
-                                                tab + "\" moved during processing");
-                        }
+                    if(oldIndex != newIndex) {
+                        throw new Exception("Column " + header + " on tab \"" +
+                                            tab + "\" moved during processing");
                     }
                 }
 
-                // Make sure updated rows did not change during processing
-                if(!rowRanges.isEmpty()) {
-                    Map<String, Integer> newHeaderMap =
-                        DictionaryAccessor.getDictionaryHeaders(tab);
+                // Determine which rows either have changed or are invalid
+                for(DictionaryEntry e : currentEntries) {
+                    if(e.changed || (e.statusCode != StatusCode.VALID)) {
+                        String rowRange = tab + "!" + e.row_index + ":" + e.row_index;
+                        rowRanges.add(rowRange);
+                    }
+                }
 
+                // Maps row index to current row contents
+                Map<Integer, DictionaryEntry> currentEntryMap = new TreeMap<>();
+
+                // Read contents of rows that need to updated, in
+                // order to ensure they have not changed during
+                // processing.
+                if(!rowRanges.isEmpty()) {
                     // Re-read spreadsheet rows that are about to be
                     // updated
                     List<ValueRange> valueRanges = DictionaryAccessor.batchGet(rowRanges);
@@ -1223,44 +1243,49 @@ public final class MaintainDictionary {
                         // Create a dictionary entry what is currently
                         // in the spreadsheet
                         int row = (int)Integer.parseInt(rowStr);
-                        DictionaryEntry e =
+                        DictionaryEntry currentEntry =
                             new DictionaryEntry(tab, newHeaderMap, row,
                                                 valueRange.getValues().get(0));
 
-                        DictionaryEntry initialEntry = initialEntryMap.get(e.row_index);
-                        if(initialEntry == null) {
-                            throw new Exception("Internal Error - no initial entry for row "
-                                                + e.row_index + " on tab \"" + tab + "\"");
-                        }
-
-                        // Make sure row has not changed during processing
-                        if(!initialEntry.equals(e)) {
-                            throw new Exception("Aborting update - Row " + e.row_index
-                                                + " on tab \"" + tab +
-                                                "\" changed during processing");
-                        }
+                        currentEntryMap.put(row, currentEntry);
                     }
                 }
 
-                // Commit changes to SynBioHub
-                for(DictionaryEntry e : currentEntries) {
-                    if(e.changed) {
-                        // Create a request to re-read the spreadsheet
-                        // row that was modified
-                        String rowRange = tab + "!" + e.row_index + ":" + e.row_index;
-                        rowRanges.add(rowRange);
+                // Loop through entries that have either been updated
+                // or are invalid
+                for(Integer row : currentEntryMap.keySet()) {
+                    DictionaryEntry e = updatedEntryMap.get( row );
 
+                    // This is the entry before it was processed
+                    DictionaryEntry initialEntry = initialEntryMap.get(e.row_index);
+
+                    // This entry represents the spreadsheet contents
+                    // of the entry row after processing
+                    DictionaryEntry currentEntry = currentEntryMap.get(e.row_index);
+
+                    // Make sure entry was not edited during processing
+                    if(!initialEntry.equals(currentEntry)) {
+                        continue;
+                    }
+
+                    // Add any queued up spreadsheet updates
+                    // associated with this entry
+                    spreadsheetUpdates.addAll( e.spreadsheetUpdates );
+
+                    if(e.changed) {
+                        // Commit changes to SynBioHub
                         try {
                             URI local_uri = e.document.getTopLevels().iterator().next().getIdentity();
                             TopLevel entity = e.document.getTopLevel(local_uri);
                             replaceOldAnnotations(entity, MODIFIED,xmlDateTimeStamp());
-                            //e.document.write(System.out);
                             SynBioHubAccessor.update(e.document);
                             e.report.success("Synchronized with SynBioHub");
+                            ++mod_count;
                         } catch(Exception exception) {
                             e.report.failure("Failed to synchronize with SynBioBub");
                             e.statusColor = red;
                         }
+
                         if(!e.attribute) {
                             spreadsheetUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
                         } else {
@@ -1268,12 +1293,12 @@ public final class MaintainDictionary {
                                 spreadsheetUpdates.add(DictionaryAccessor.writeEntryDefinition(e, e.attributeDefinition));
                             }
                         }
+                    } else {
+                        bad_count++;
                     }
 
-                    if(e.changed || (e.statusCode != StatusCode.VALID)) {
-                        spreadsheetUpdates.add(DictionaryAccessor.writeEntryNotes(e, e.report.toString()));
-                        statusFormattingUpdates.add( e.setColor("Status", e.statusColor) );
-                    }
+                    spreadsheetUpdates.add(DictionaryAccessor.writeEntryNotes(e, e.report.toString()));
+                    statusFormattingUpdates.add( e.setColor("Status", e.statusColor) );
 
                 }
 
@@ -1283,6 +1308,7 @@ public final class MaintainDictionary {
                     DictionaryAccessor.batchUpdateValues(spreadsheetUpdates);
                 }
 
+                // Commit formatting updates to spreadsheet
                 if(!statusFormattingUpdates.isEmpty()) {
                     DictionaryAccessor.submitRequests(statusFormattingUpdates);
                 }
@@ -1306,7 +1332,7 @@ public final class MaintainDictionary {
                     rangeId = -1;
                 }
             } catch(Exception e) {
-                log.warning("Failed to unprotect sheet");
+                log.warning("Failed to unprotect tab \"" + tab + "\"");
             }
 
             try {
@@ -1344,8 +1370,5 @@ public final class MaintainDictionary {
         }
 
         log.info("Completed certification of dictionary");
-
-
-        //DictionaryAccessor.exportCSV();
     }
 }

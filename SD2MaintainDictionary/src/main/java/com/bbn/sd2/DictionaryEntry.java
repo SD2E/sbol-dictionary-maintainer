@@ -18,6 +18,7 @@ import org.sbolstandard.core2.SBOLDocument;
 
 import com.google.api.services.sheets.v4.model.Color;
 import com.google.api.services.sheets.v4.model.Request;
+import com.google.api.services.sheets.v4.model.ValueRange;
 
 public class DictionaryEntry {
     private static Logger log = Logger.getGlobal();
@@ -50,6 +51,7 @@ public class DictionaryEntry {
             }
         };
     public static Map<String, String> reverseLabUIDMap = generateReverseLabUIDMap();
+    public List<ValueRange> spreadsheetUpdates = new ArrayList<ValueRange>();
 
     private boolean compareNull(Object o1, Object o2) {
         if(o1 == null) {
@@ -140,9 +142,18 @@ public class DictionaryEntry {
         row_index = src.row_index;
         statusCode = src.statusCode;
         statusLog = src.statusLog;
+        tab = src.tab;
+        if(src.statusColor != null) {
+            statusColor = src.statusColor.clone();
+        }
         name = src.name;
         type = src.type;
         uri = src.uri;
+        report = new UpdateReport( src.report );
+
+        for(ValueRange v : src.spreadsheetUpdates) {
+            spreadsheetUpdates.add( v.clone() );
+        }
 
         labUIDs = new HashMap<>();
         for(String key : src.labUIDs.keySet()) {
