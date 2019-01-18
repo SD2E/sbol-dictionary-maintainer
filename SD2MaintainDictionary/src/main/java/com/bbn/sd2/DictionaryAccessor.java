@@ -354,7 +354,7 @@ public class DictionaryAccessor {
         tab_headers.put(tab, header_map);
     }
 
-    public static Map<String, Integer> getDictionaryHeaders(String tab) throws IOException {
+    public static Map<String, Integer> getDictionaryHeaders(String tab) {
         return tab_headers.get(tab);
     }
 
@@ -379,7 +379,7 @@ public class DictionaryAccessor {
      * @throws IOException
      * @throw GeneralSecurityException
      */
-    public static void validateUniquenessOfEntries(String header_name, List<DictionaryEntry> entries) throws IOException, GeneralSecurityException {
+    public static void validateUniquenessOfEntries(String header_name, List<DictionaryEntry> entries) {
         final Map<String, String> uidMap = DictionaryEntry.labUIDMap;
         Map<String, DictionaryEntry> nameToEntry = new TreeMap<String, DictionaryEntry>();
         boolean commonName = false;
@@ -660,11 +660,7 @@ public class DictionaryAccessor {
 
         for(String tab : MaintainDictionary.tabs()) {
             Map<String, Integer> header_map;
-            try {
-                header_map = getDictionaryHeaders(tab);
-            } catch (Exception e) {
-                throw new IOException("Failed to get dictionary headers for tab " + tab);
-            }
+            header_map = getDictionaryHeaders(tab);
 
             int colInt = header_map.get("Status");
             char col = (char) ('A' + (char)colInt);
@@ -673,6 +669,27 @@ public class DictionaryAccessor {
 
             updates.add(writeLocationText(location, status));
         }
+
+        batchUpdateValues(updates);
+    }
+
+    /**
+     * Write the status at the end of each round
+     * @param status string to be written
+     * @throws IOException
+     */
+    public static void writeStatusUpdate(String tab, String status) throws IOException {
+        List<ValueRange> updates = new ArrayList<ValueRange>();
+
+        Map<String, Integer> header_map;
+        header_map = getDictionaryHeaders(tab);
+
+        int colInt = header_map.get("Status");
+        char col = (char) ('A' + (char)colInt);
+
+        String location = tab + "!"  + col + "1";
+
+        updates.add(writeLocationText(location, status));
 
         batchUpdateValues(updates);
     }

@@ -1041,15 +1041,13 @@ public final class MaintainDictionary {
         mappingFailureToList = emailLists.get("To");
         mappingFailureCCList = emailLists.get("CC");
 
-        UpdateReport report = new UpdateReport();
-        int rangeId = -1;
+        List<DictionaryEntry> allTabEntries = new ArrayList<>();
+        Map<String, List<DictionaryEntry>> tabEntries = new TreeMap<>();
+
+        // Read the Google Spreadsheet
         try {
             log.info("Beginning dictionary update");
             DictionaryAccessor.cacheSheetProperties();
-
-            List<DictionaryEntry> allTabEntries = new ArrayList<>();
-            Map<String, List<DictionaryEntry>> tabEntries = new TreeMap<>();
-            int mod_count = 0, bad_count = 0;
 
             for(String tab : MaintainDictionary.tabs()) {
                 DictionaryAccessor.cacheTabHeaders(tab);
@@ -1060,13 +1058,36 @@ public final class MaintainDictionary {
                 tabEntries.put(tab, entries);
                 allTabEntries.addAll(entries);
             }
-
-            DictionaryAccessor.validateUniquenessOfEntries("Common Name", allTabEntries);
-            for(String uidTag : DictionaryEntry.labUIDMap.keySet()) {
-                DictionaryAccessor.validateUniquenessOfEntries(uidTag, allTabEntries);
+        } catch(Exception e) {
+            UpdateReport report = new UpdateReport();
+            e.printStackTrace();
+            report.failure("Failed to read dictionary spreadsheet: " + e.getMessage());
+            try {
+                DictionaryAccessor.writeStatusUpdate("SD2 Dictionary ("
+                                                     + DictionaryMaintainerApp.VERSION
+                                                     + ") "
+                                                     + report.toString());
+            } catch(Exception e2) {
+                e2.printStackTrace();
             }
+            return;
+        }
 
-            for(String tab : MaintainDictionary.tabs()) {
+        // Check for duplicate names.  Dictionary entries with
+        // duplicate names are marked as invalid
+        DictionaryAccessor.validateUniquenessOfEntries("Common Name", allTabEntries);
+        for(String uidTag : DictionaryEntry.labUIDMap.keySet()) {
+            DictionaryAccessor.validateUniquenessOfEntries(uidTag, allTabEntries);
+        }
+
+        for(String tab : MaintainDictionary.tabs()) {
+            int rangeId = -1;
+            UpdateReport report = new UpdateReport();
+            int mod_count = 0, bad_count = 0;
+
+            log.info("Processing \"" + tab + "\" tab");
+
+            try {
                 List<DictionaryEntry> currentEntries = tabEntries.get(tab);
 
                 // This will contain updates to be made to the spreadsheet
@@ -1159,44 +1180,11 @@ public final class MaintainDictionary {
                 // List of requests to re-read spreadsheet rows
                 List<String> rowRanges = new ArrayList<>();
 
-                // Commit changes to SynBioHub
-                for(DictionaryEntry e : currentEntries) {
-                    if(e.changed) {
-                        // Create a request to re-read the spreadsheet
-                        // row that was modified
-                        String rowRange = tab + "!" + e.row_index + ":" + e.row_index;
-                        rowRanges.add(rowRange);
-
-                        try {
-                            URI local_uri = e.document.getTopLevels().iterator().next().getIdentity();
-                            TopLevel entity = e.document.getTopLevel(local_uri);
-                            replaceOldAnnotations(entity, MODIFIED,xmlDateTimeStamp());
-                            //e.document.write(System.out);
-                            SynBioHubAccessor.update(e.document);
-                            e.report.success("Synchronized with SynBioHub");
-                        } catch(Exception exception) {
-                            e.report.failure("Failed to synchronize with SynBioBub");
-                            e.statusColor = red;
-                        }
-                        if(!e.attribute) {
-                            spreadsheetUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
-                        } else {
-                            if(e.attributeDefinition!=null) {
-                                spreadsheetUpdates.add(DictionaryAccessor.writeEntryDefinition(e, e.attributeDefinition));
-                            }
-                        }
-                    }
-
-                    spreadsheetUpdates.add(DictionaryAccessor.writeEntryNotes(e, e.report.toString()));
-                    statusFormattingUpdates.add( e.setColor("Status", e.statusColor) );
-                }
-
                 // Lock spread sheet to prevent race coditions before updating
                 rangeId = DictionaryAccessor.protectTab(tab);
 
-                // Commit updates to spreadsheet
+                // Make sure columns have not moved
                 if(!spreadsheetUpdates.isEmpty()) {
-                    // Make sure columns have not moved
                     Map<String, Integer> oldHeaderMap =
                         DictionaryAccessor.getDictionaryHeaders(tab);
 
@@ -1216,6 +1204,7 @@ public final class MaintainDictionary {
                     }
                 }
 
+                // Make sure updated rows did not change during processing
                 if(!rowRanges.isEmpty()) {
                     Map<String, Integer> newHeaderMap =
                         DictionaryAccessor.getDictionaryHeaders(tab);
@@ -1246,24 +1235,49 @@ public final class MaintainDictionary {
 
                         // Make sure row has not changed during processing
                         if(!initialEntry.equals(e)) {
-                            log.warning("Aborting update - Row " + e.row_index
-                                        + " on tab \"" + tab +
-                                        "\" changed during processing");
-
-                            // Delay to throttle Google requests
-                            Thread.sleep(2000);
-
-                            DictionaryAccessor.unprotectRange(rangeId);
-                            rangeId = -1;
-                            break;
+                            throw new Exception("Aborting update - Row " + e.row_index
+                                                + " on tab \"" + tab +
+                                                "\" changed during processing");
                         }
-                    }
-
-                    if(rangeId < 0) {
-                        continue;
                     }
                 }
 
+                // Commit changes to SynBioHub
+                for(DictionaryEntry e : currentEntries) {
+                    if(e.changed) {
+                        // Create a request to re-read the spreadsheet
+                        // row that was modified
+                        String rowRange = tab + "!" + e.row_index + ":" + e.row_index;
+                        rowRanges.add(rowRange);
+
+                        try {
+                            URI local_uri = e.document.getTopLevels().iterator().next().getIdentity();
+                            TopLevel entity = e.document.getTopLevel(local_uri);
+                            replaceOldAnnotations(entity, MODIFIED,xmlDateTimeStamp());
+                            //e.document.write(System.out);
+                            SynBioHubAccessor.update(e.document);
+                            e.report.success("Synchronized with SynBioHub");
+                        } catch(Exception exception) {
+                            e.report.failure("Failed to synchronize with SynBioBub");
+                            e.statusColor = red;
+                        }
+                        if(!e.attribute) {
+                            spreadsheetUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
+                        } else {
+                            if(e.attributeDefinition!=null) {
+                                spreadsheetUpdates.add(DictionaryAccessor.writeEntryDefinition(e, e.attributeDefinition));
+                            }
+                        }
+                    }
+
+                    if(e.changed || (e.statusCode != StatusCode.VALID)) {
+                        spreadsheetUpdates.add(DictionaryAccessor.writeEntryNotes(e, e.report.toString()));
+                        statusFormattingUpdates.add( e.setColor("Status", e.statusColor) );
+                    }
+
+                }
+
+                // Commit updates to spreadsheet
                 if(!spreadsheetUpdates.isEmpty()) {
                     log.info("Updating " + tab + " tab in spreadsheet");
                     DictionaryAccessor.batchUpdateValues(spreadsheetUpdates);
@@ -1273,46 +1287,65 @@ public final class MaintainDictionary {
                     DictionaryAccessor.submitRequests(statusFormattingUpdates);
                 }
 
-                // Delay to throttle Google requests
-                Thread.sleep(2000);
-                DictionaryAccessor.unprotectRange(rangeId);
-                rangeId = -1;
+                report.success(currentEntries.size()+" entries", true);
+                report.success(mod_count+" modified",true);
+                if(bad_count>0) {
+                    report.failure(bad_count+" invalid", true);
+                }
+            } catch(Exception e) {
+                e.printStackTrace();
+                report.failure("Dictionary update failed: " + e.getMessage());
             }
 
-            // Process Mapping Failures Tab in the spreadsheet
-            log.info("Processing Mapping Failures");
-            processMappingFailures(allTabEntries);
-
-            // Delay to throttle Google requests
-            Thread.sleep(30000);
-
-            log.info("Checking protections...");
-            DictionaryAccessor.checkProtections();
-
-            // Delay to throttle Google requests
-            Thread.sleep(30000);
-
-            log.info("Completed certification of dictionary");
-            report.success(allTabEntries.size()+" entries",true);
-            report.success(mod_count+" modified",true);
-            if(bad_count>0) report.failure(bad_count+" invalid",true);
-        } catch(Exception e) {
-            e.printStackTrace();
-            //report.failure("Dictionary update failed with exception of type "+e.getClass().getName(), true);
-            report.failure("Dictionary update failed: " + e.getMessage());
-        }
-
-        if(rangeId >= 0) {
             try {
                 // Delay to throttle Google requests
-                Thread.sleep(2000);
-                DictionaryAccessor.unprotectRange(rangeId);
+                Thread.sleep(5000);
+
+                if(rangeId >= 0) {
+                    DictionaryAccessor.unprotectRange(rangeId);
+                    rangeId = -1;
+                }
             } catch(Exception e) {
                 log.warning("Failed to unprotect sheet");
             }
+
+            try {
+                DictionaryAccessor.writeStatusUpdate(tab,
+                                                     "SD2 Dictionary ("
+                                                     + DictionaryMaintainerApp.VERSION
+                                                     + ") "
+                                                     + report.toString());
+            } catch(Exception e2) {
+                e2.printStackTrace();
+            }
         }
 
-        DictionaryAccessor.writeStatusUpdate("SD2 Dictionary ("+DictionaryMaintainerApp.VERSION+") "+report.toString());
+        try {
+            // Delay to throttle Google requests
+            Thread.sleep(30000);
+
+            // Process Mapping Failures Tab in the spreadsheet
+            log.info("Processing Mapping Failures ...");
+            processMappingFailures(allTabEntries);
+            log.info("Finished processing Mapping Failures");
+        } catch(Exception e) {
+            e.printStackTrace();
+        }
+
+        try {
+            // Delay to throttle Google requests
+            Thread.sleep(30000);
+
+            log.info("Checking protections ...");
+            DictionaryAccessor.checkProtections();
+            log.info("Finished checking protections ...");
+        } catch(Exception e) {
+            e.printStackTrace();
+        }
+
+        log.info("Completed certification of dictionary");
+
+
         //DictionaryAccessor.exportCSV();
     }
 }
