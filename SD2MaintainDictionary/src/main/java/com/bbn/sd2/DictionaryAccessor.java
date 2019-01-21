@@ -1137,7 +1137,9 @@ public class DictionaryAccessor {
         return req;
     }
 
-    public static void checkProtections() throws Exception {
+    public static long checkProtections() throws Exception {
+        long requestCount = 1;
+
         // Get the list of tabs to process
         Set<String> tabList = MaintainDictionary.tabs();
 
@@ -1182,10 +1184,13 @@ public class DictionaryAccessor {
             try {
                 // Execute request to add new protected ranges
                 execute(sheetsService.spreadsheets().batchUpdate(spreadsheetId, breq));
+                requestCount += (long)updateRangeRequests.size();
             } catch(Exception e) {
                 e.printStackTrace();
             }
         }
+
+        return requestCount;
     }
 
     public static void importTabFromCSV(String tab, InputStream csvData) throws IOException {

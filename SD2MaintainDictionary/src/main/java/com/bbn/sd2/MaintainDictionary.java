@@ -51,6 +51,9 @@ public final class MaintainDictionary {
     /** The ID for the default Dictionary Spreadsheet, currently the "staging instance" */
     private static final String SD2E_DICTIONARY = STAGING_DICTIONARY;
 
+    private static final double googleRequestsPerSecond = 0.5;
+    private static final long msPerGoogleRequest = (long)(1000.0 / googleRequestsPerSecond);
+
     /** Each spreadsheet tab is only allowed to contain objects of certain types, as determined by this mapping */
     private static Map<String, Set<String>> typeTabs = new HashMap<String,Set<String>>() {{
             put("Attribute", new HashSet<>(Arrays.asList("Attribute")));
@@ -683,6 +686,13 @@ public final class MaintainDictionary {
 
         if(!updates.isEmpty()) {
             DictionaryAccessor.batchUpdateValues(updates);
+
+            try {
+                long requestCount = (long)updates.size();
+                Thread.sleep(requestCount * msPerGoogleRequest);
+            } catch(InterruptedException e) {
+
+            }
         }
     }
 
@@ -883,6 +893,13 @@ public final class MaintainDictionary {
 
         DictionaryAccessor.batchUpdateRequests(deleteRequests);
 
+        try {
+            long requestCount = (long)deleteRequests.size();
+            Thread.sleep(requestCount * msPerGoogleRequest);
+        } catch(InterruptedException e) {
+
+        }
+
         return notification;
     }
 
@@ -1068,6 +1085,11 @@ public final class MaintainDictionary {
                 tabEntries.put(tab, entries);
                 allTabEntries.addAll(entries);
             }
+
+            // Throttle Google requests
+            long requestCount = (long)MaintainDictionary.tabs().size() * 2
+                + 2;
+            Thread.sleep( requestCount * msPerGoogleRequest );
         } catch(Exception e) {
             UpdateReport report = new UpdateReport();
             e.printStackTrace();
@@ -1095,16 +1117,16 @@ public final class MaintainDictionary {
             UpdateReport report = new UpdateReport();
             int mod_count = 0, bad_count = 0;
 
+            // This will contain updates to be made to the spreadsheet
+            List<ValueRange> spreadsheetUpdates = new ArrayList<ValueRange>();
+
+            // This will contain the status column formatting updates
+            List<Request> statusFormattingUpdates = new ArrayList<>();
+
             log.info("Processing \"" + tab + "\" tab");
 
             try {
                 List<DictionaryEntry> currentEntries = tabEntries.get(tab);
-
-                // This will contain updates to be made to the spreadsheet
-                List<ValueRange> spreadsheetUpdates = new ArrayList<ValueRange>();
-
-                // This will contain the status column formatting updates
-                List<Request> statusFormattingUpdates = new ArrayList<>();
 
                 // This will contain the SynBioHub view of the
                 // dictionary entries
@@ -1323,13 +1345,16 @@ public final class MaintainDictionary {
             }
 
             try {
-                // Delay to throttle Google requests
-                Thread.sleep(5000);
-
                 if(rangeId >= 0) {
                     DictionaryAccessor.unprotectRange(rangeId);
                     rangeId = -1;
                 }
+
+                // Delay to throttle Google requests
+                long requestCount = (long)spreadsheetUpdates.size() +
+                    (long)statusFormattingUpdates.size() + 4;
+                Thread.sleep(requestCount * msPerGoogleRequest);
+
             } catch(Exception e) {
                 log.warning("Failed to unprotect tab \"" + tab + "\"");
             }
@@ -1346,9 +1371,6 @@ public final class MaintainDictionary {
         }
 
         try {
-            // Delay to throttle Google requests
-            Thread.sleep(30000);
-
             // Process Mapping Failures Tab in the spreadsheet
             log.info("Processing Mapping Failures ...");
             processMappingFailures(allTabEntries);
@@ -1359,11 +1381,11 @@ public final class MaintainDictionary {
 
         try {
             // Delay to throttle Google requests
-            Thread.sleep(30000);
-
             log.info("Checking protections ...");
-            DictionaryAccessor.checkProtections();
+            long requestCount = DictionaryAccessor.checkProtections();
             log.info("Finished checking protections ...");
+
+            Thread.sleep(requestCount * msPerGoogleRequest);
         } catch(Exception e) {
             e.printStackTrace();
         }
