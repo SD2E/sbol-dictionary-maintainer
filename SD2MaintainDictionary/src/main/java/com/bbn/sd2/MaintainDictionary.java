@@ -186,10 +186,49 @@ public final class MaintainDictionary {
         return s.toString();
     }
 
+    private static boolean chebiTypeIsInRole(TopLevel entity, String type) {
+        if(!type.equals("CHEBI")) {
+            return false;
+        }
+
+        if(!(entity instanceof ComponentDefinition)) {
+            return false;
+        }
+
+        ComponentDefinition cd = (ComponentDefinition)entity;
+
+        String prefix = "http://identifiers.org/chebi/CHEBI:";
+        for(URI cRoleURI : cd.getRoles()) {
+            String cRole = cRoleURI.toString();
+            if(cRole.length() < prefix.length()) {
+                continue;
+            }
+            if(cRole.substring(0, prefix.length()).equals(prefix)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static boolean validateEntityType(TopLevel entity, String type) {
         if(componentTypes.containsKey(type)) {
             if(entity instanceof ComponentDefinition) {
                 ComponentDefinition cd = (ComponentDefinition)entity;
+
+                if(type.equals("CHEBI")) {
+                    String prefix = "http://identifiers.org/chebi/CHEBI:";
+                    for(URI cTypeURI : cd.getTypes()) {
+                        String cType = cTypeURI.toString();
+                        if(cType.length() < prefix.length()) {
+                            continue;
+                        }
+                        if(cType.substring(0, prefix.length()).equals(prefix)) {
+                            return true;
+                        }
+                    }
+                }
+
                 return cd.getTypes().contains(componentTypes.get(type));
             }
         } else if(moduleTypes.containsKey(type)) {
@@ -348,8 +387,13 @@ public final class MaintainDictionary {
 
             // Check if typing is valid
             if(!validateEntityType(entity,e.type)) {
-                e.report.failure("Type does not match '"+e.type+"'", true);
-                e.statusCode = StatusCode.INVALID_TYPE;
+                if(chebiTypeIsInRole(entity, e.type)) {
+                    e.statusCode = StatusCode.TYPE_IN_ROLE;
+                } else {
+                    e.report.failure("Type does not match '"+e.type+"'", true);
+                    e.statusCode = StatusCode.INVALID_TYPE;
+                }
+
                 return originalEntry;
             }
 
@@ -1184,6 +1228,11 @@ public final class MaintainDictionary {
                             e.report.failure("Type must be one of "+ typeTabs.get(e.tab).toString());
                             statusColor = red;
                             break;
+                        case TYPE_IN_ROLE:
+                            log.info("Chebi type is role");
+                            e.report.failure("CHEBI type is in role");
+                            statusColor = red;
+                            break;
                         case DUPLICATE_VALUE:
                             log.info("Invalid entry for name "+e.name+", skipping");
                             e.report.failure(e.statusLog);
@@ -1350,11 +1399,6 @@ public final class MaintainDictionary {
                     rangeId = -1;
                 }
 
-                // Delay to throttle Google requests
-                long requestCount = (long)spreadsheetUpdates.size() +
-                    (long)statusFormattingUpdates.size() + 4;
-                Thread.sleep(requestCount * msPerGoogleRequest);
-
             } catch(Exception e) {
                 log.warning("Failed to unprotect tab \"" + tab + "\"");
             }
@@ -1365,6 +1409,12 @@ public final class MaintainDictionary {
                                                      + DictionaryMaintainerApp.VERSION
                                                      + ") "
                                                      + report.toString());
+
+                // Delay to throttle Google requests
+                long requestCount = (long)spreadsheetUpdates.size() +
+                    (long)statusFormattingUpdates.size() + 4;
+                Thread.sleep(requestCount * msPerGoogleRequest);
+
             } catch(Exception e2) {
                 e2.printStackTrace();
             }
