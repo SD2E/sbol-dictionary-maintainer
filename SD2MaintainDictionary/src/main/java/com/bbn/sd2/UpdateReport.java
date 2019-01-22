@@ -10,23 +10,37 @@ class UpdateReport {
     private static Logger log = Logger.getGlobal();
     List<List<String>> reports = new ArrayList<>();
     int condition = 0; // +1 = good report, -1 = failure
-    
+
     public UpdateReport() {
     }
-    
+
+    public UpdateReport(UpdateReport src) {
+        condition = src.condition;
+
+        for(List<String> reportList : src.reports) {
+            List<String> cloneReportList = new ArrayList<>();
+
+            for(String report : reportList) {
+                cloneReportList.add(report);
+            }
+
+            reports.add(cloneReportList);
+        }
+    }
+
     /** Create a new subsection of the report */
     public void subsection(String header) {
         List<String> section = new ArrayList<>();
         section.add(header);
         reports.add(section);
     }
-    
+
     private void addToLastSubsection(String report) {
         if(reports.size()==0) reports.add(new ArrayList<>()); // insert at front if needed
         reports.get(reports.size()-1).add(report); // add to end of subsection
-        
+
     }
-    
+
     /** Report a success in a subsection */
     public void success(String report) { success(report,false); }
     /** Report a success, either in a subsection or standalone */
@@ -36,7 +50,7 @@ class UpdateReport {
         if(standalone) reports.add(new ArrayList<>());
         addToLastSubsection(report);
     }
-    
+
     /** Report a failure in a subsection */
     public void failure(String report) { failure(report,false); }
     /** Report a failure, either in a subsection or standalone */
@@ -46,7 +60,7 @@ class UpdateReport {
         if(standalone) reports.add(new ArrayList<>());
         addToLastSubsection(report);
     }
-    
+
     /** Report a note in a subsection */
     public void note(String report) { note(report,false); }
     /** Report a note, either in a subsection or standalone */
@@ -55,14 +69,14 @@ class UpdateReport {
         if(standalone) reports.add(new ArrayList<>());
         addToLastSubsection(report);
     }
-    
+
     private String getCurrentTimeStamp() {
         SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
         Date now = new Date();
         String strDate = sdfDate.format(now);
         return strDate;
     }
-    
+
     public String toString() {
         String report = "Updated "+getCurrentTimeStamp();
         for(int i=0;i<reports.size();i++) {

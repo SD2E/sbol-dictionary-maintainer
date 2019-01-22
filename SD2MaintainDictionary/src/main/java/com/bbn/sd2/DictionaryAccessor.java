@@ -7,6 +7,9 @@ import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.googleapis.json.GoogleJsonError;
+import com.google.api.client.googleapis.json.GoogleJsonResponseException;
+import com.google.api.client.googleapis.services.AbstractGoogleClientRequest;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
@@ -18,6 +21,7 @@ import com.google.api.services.drive.DriveScopes;
 import com.google.api.services.sheets.v4.Sheets;
 import com.google.api.services.sheets.v4.SheetsScopes;
 import com.google.api.services.sheets.v4.model.AddProtectedRangeRequest;
+import com.google.api.services.sheets.v4.model.AddProtectedRangeResponse;
 import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
 import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetResponse;
 import com.google.api.services.sheets.v4.model.CopySheetToAnotherSpreadsheetRequest;
@@ -30,6 +34,7 @@ import com.google.api.services.sheets.v4.model.GridRange;
 import com.google.api.services.sheets.v4.model.ProtectedRange;
 import com.google.api.services.sheets.v4.model.RepeatCellRequest;
 import com.google.api.services.sheets.v4.model.Request;
+import com.google.api.services.sheets.v4.model.Response;
 import com.google.api.services.sheets.v4.model.RowData;
 import com.google.api.services.sheets.v4.model.Sheet;
 import com.google.api.services.sheets.v4.model.SheetProperties;
@@ -44,6 +49,7 @@ import com.google.api.services.sheets.v4.model.CellFormat;
 import com.google.api.services.sheets.v4.model.Color;
 import com.google.api.services.sheets.v4.model.ValueRange;
 import com.google.api.services.sheets.v4.model.UpdateSheetPropertiesRequest;
+import com.google.api.services.sheets.v4.model.UpdateValuesResponse;
 import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.GmailScopes;
 import com.google.api.services.gmail.model.Message;
@@ -62,7 +68,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -90,6 +95,8 @@ public class DictionaryAccessor {
     private DictionaryAccessor() {} // static-only class
 
     private static Map<String, Sheet> cachedSheetProperties = null;
+
+    private static Map< String, Map<String, Integer> > tab_headers = new TreeMap<>();
 
     /** Configure from command-line arguments */
     public static void configure(CommandLine cmd) {
@@ -195,7 +202,7 @@ public class DictionaryAccessor {
         email.setText(bodyText);
 
         Message message = createMessageWithEmail(email);
-        gmailService.users().messages().send("me", message).execute();
+        execute(gmailService.users().messages().send("me", message));
     }
 
     /**
@@ -236,38 +243,37 @@ public class DictionaryAccessor {
 
     // TODO: generalize the readRange
     private final static int row_offset = 2; // number of header rows
-    public static List<DictionaryEntry> snapshotCurrentDictionary() throws Exception {
+    public static List<DictionaryEntry> snapshotCurrentDictionary(String tab) throws Exception {
         log.info("Taking snapshot");
         ensureSheetsService();
         // Go to each tab in turn, collecting entries
         List<DictionaryEntry> entries = new ArrayList<>();
-        for(String tab : MaintainDictionary.tabs()) {
-            log.info("Scanning tab " + tab);
-            Hashtable<String, Integer> header_map = getDictionaryHeaders(tab);
+        log.info("Scanning tab " + tab);
+        Map<String, Integer> header_map = getDictionaryHeaders(tab);
 
-            Collection<Integer> columns = header_map.values();
+        Collection<Integer> columns = header_map.values();
 
-            char last_column = 'A';
-            for(Integer column : columns) {
-                char columnChar = (char)('A' + column);
-                if(columnChar > last_column) {
-                    last_column = columnChar;
-                }
-            }
-
-            // Pull the current range
-            String readRange = tab + "!A" + (row_offset+1) + ":" + last_column;
-            ValueRange response = sheetsService.spreadsheets().values().get(spreadsheetId, readRange).execute();
-            if(response.getValues()==null) {
-                log.info("No entries found on this tab");
-                continue; // skip empty sheets
-            }
-            int row_index = row_offset;
-
-            for(List<Object> value : response.getValues()) {
-                entries.add(new DictionaryEntry(tab, header_map, ++row_index, value));
+        char last_column = 'A';
+        for(Integer column : columns) {
+            char columnChar = (char)('A' + column);
+            if(columnChar > last_column) {
+                last_column = columnChar;
             }
         }
+
+        // Pull the current range
+        String readRange = tab + "!A" + (row_offset+1) + ":" + last_column;
+        ValueRange response = getTabData(readRange);
+        if(response.getValues()==null) {
+            log.info("No entries found on this tab");
+            return entries;
+        }
+        int row_index = row_offset;
+
+        for(List<Object> value : response.getValues()) {
+            entries.add(new DictionaryEntry(tab, header_map, ++row_index, value));
+        }
+
         log.info("Read " + entries.size());
 
         return entries;
@@ -289,12 +295,12 @@ public class DictionaryAccessor {
             .setApplicationName(APPLICATION_NAME)
             .build();
         try {
-            String backup_filename = drive.files().get(spreadsheetId).execute().getName();
+            String backup_filename = execute(drive.files().get(spreadsheetId)).getName();
             backup_filename += "_backup_" + MaintainDictionary.xmlDateTimeStamp();
             com.google.api.services.drive.model.File copiedFile = new com.google.api.services.drive.model.File();
             copiedFile.setName(backup_filename);
             copiedFile.setParents(Collections.singletonList(GDRIVE_BACKUP_FOLDER));
-            drive.files().copy(spreadsheetId, copiedFile).execute();
+            execute(drive.files().copy(spreadsheetId, copiedFile));
             System.out.println("Successfully wrote back-up to " + backup_filename);
         } catch (IOException e) {
             e.printStackTrace();
@@ -304,7 +310,7 @@ public class DictionaryAccessor {
     public static void exportCSV() throws IOException {
         for(String tab : MaintainDictionary.tabs()) {
             String readRange = tab;
-            ValueRange response = sheetsService.spreadsheets().values().get(spreadsheetId, readRange).execute();
+            ValueRange response = getTabData(readRange);
             if(response.getValues()==null) continue; // skip empty sheets
             File file = new File("./" + tab + ".txt");
             if (!file.exists()) {
@@ -329,11 +335,15 @@ public class DictionaryAccessor {
     }
 
 
-    public static Hashtable<String, Integer> getDictionaryHeaders(String tab) throws IOException {
-        Hashtable<String, Integer> header_map = new Hashtable<>();
+    public static void cacheTabHeaders(String tab) throws IOException {
+        Map<String, Integer> header_map = new TreeMap<>();
         String headerRange = tab + "!" + row_offset + ":" + row_offset;
-        ValueRange response = sheetsService.spreadsheets().values().get(spreadsheetId, headerRange).execute();
-        if(response.getValues()==null) return header_map; // skip empty sheets
+        ValueRange response = getTabData(headerRange);
+
+        if(response.getValues()==null) {
+            return; // skip empty sheets
+        }
+
         List<Object> headers = response.getValues().get(0);
         // TODO: validate required headers Type, Common Name, etc.
         // TODO: if header cells aren't locked, might need to check for duplicate header entries
@@ -343,22 +353,13 @@ public class DictionaryAccessor {
                 header_map.put(header, i_h);
             }
         }
-        return header_map;
+
+        tab_headers.put(tab, header_map);
     }
 
-    //    // Reads one column
-    //    public static List<String> snapshotColumn(char column_id) throws IOException, GeneralSecurityException {
-    //      String column_range = "!" + column_id + (row_offset+1) + ":" + (char)(column_id+1);
-    //      List<String> cell_vals = new ArrayList<>();
-    //      Sheets.Spreadsheets.Values.Get request = service.spreadsheets().values().get(spreadsheetId, column_range);
-    //      request.setMajorDimension("COLUMNS");
-    //      ValueRange result = request.execute();
-    //        List<Object> column = result.getValues().get(0);
-    //        for (Object cell : column) {
-    //          cell_vals.add(cell.toString());
-    //        }
-    //      return cell_vals;
-    //    }
+    public static Map<String, Integer> getDictionaryHeaders(String tab) {
+        return tab_headers.get(tab);
+    }
 
     /**
      * Checks if entries under the given header are unique across all sheets in the Dictionary
@@ -367,7 +368,7 @@ public class DictionaryAccessor {
      * @throws IOException
      * @throw GeneralSecurityException
      */
-    public static void validateUniquenessOfEntries(String header_name, List<DictionaryEntry> entries) throws IOException, GeneralSecurityException {
+    public static void validateUniquenessOfEntries(String header_name, List<DictionaryEntry> entries) {
         final Map<String, String> uidMap = DictionaryEntry.labUIDMap;
         Map<String, DictionaryEntry> nameToEntry = new TreeMap<String, DictionaryEntry>();
         boolean commonName = false;
@@ -460,23 +461,32 @@ public class DictionaryAccessor {
         req.setData(values);
         req.setValueInputOption("RAW");
 
-        return sheetsService.spreadsheets().values().batchUpdate(spreadsheetId, req).execute();
+        return execute(sheetsService.spreadsheets().values().batchUpdate(spreadsheetId, req));
     }
 
     public static BatchUpdateSpreadsheetResponse batchUpdateRequests(List<Request> requestList) throws IOException {
         BatchUpdateSpreadsheetRequest breq = new BatchUpdateSpreadsheetRequest();
         breq.setRequests(requestList);
-        return sheetsService.spreadsheets().batchUpdate(spreadsheetId, breq).execute();
+        return execute(sheetsService.spreadsheets().batchUpdate(spreadsheetId, breq));
     }
 
-    public static void submitRequests(List<Request> requests) throws IOException {
-        BatchUpdateSpreadsheetRequest update_sheet_request =
+    public static List<ValueRange> batchGet(List<String> ranges) throws IOException {
+        Values.BatchGet request = sheetsService.spreadsheets().values().batchGet(spreadsheetId);
+        request.setSpreadsheetId(spreadsheetId);
+        request.setRanges(ranges);
+
+        return execute(request).getValueRanges();
+    }
+
+    public static BatchUpdateSpreadsheetResponse submitRequests(List<Request> requests) throws IOException {
+        BatchUpdateSpreadsheetRequest request =
             new BatchUpdateSpreadsheetRequest().setRequests(requests);
-        sheetsService.spreadsheets().batchUpdate(spreadsheetId, update_sheet_request).execute();
+
+        return execute(sheetsService.spreadsheets().batchUpdate(spreadsheetId, request));
     }
 
     private static char columnNameToIndex(String tab, String colName) throws IOException {
-        Hashtable<String, Integer> header_map = getDictionaryHeaders(tab);
+        Map<String, Integer> header_map = getDictionaryHeaders(tab);
 
         Integer colVal = header_map.get(colName);
         if(colVal == null) {
@@ -490,7 +500,7 @@ public class DictionaryAccessor {
         char col = columnNameToIndex(tab, colName);
 
         String readRange = tab + "!" + col + row + ":" + col;
-        ValueRange response = sheetsService.spreadsheets().values().get(spreadsheetId, readRange).execute();
+        ValueRange response = getTabData(readRange);
 
         List<List<Object>> values = response.getValues();
         if(values == null) {
@@ -511,9 +521,7 @@ public class DictionaryAccessor {
             ":" + col + lastRow;
 
         response.setRange(writeRange);
-        sheetsService.spreadsheets().values().update(spreadsheetId, writeRange, response)
-            .setValueInputOption("RAW")
-            .execute();
+        setTabData(writeRange, response);
     }
 
     public static String getCellData(String tab, String colName, int row) throws Exception {
@@ -521,7 +529,7 @@ public class DictionaryAccessor {
 
         String readRange = tab + "!" + col + row;
 
-        ValueRange response = sheetsService.spreadsheets().values().get(spreadsheetId, readRange).execute();
+        ValueRange response = getTabData(readRange);
 
         List<List<Object>> values = response.getValues();
 
@@ -558,9 +566,7 @@ public class DictionaryAccessor {
 
         updatedValue.setValues(values);
 
-        Values.Update update = sheetsService.spreadsheets().values().update(spreadsheetId, writeRange, updatedValue);
-        update.setValueInputOption("RAW");
-        update.execute();
+        setTabData(writeRange, updatedValue);
     }
 
     /**
@@ -636,12 +642,8 @@ public class DictionaryAccessor {
         List<ValueRange> updates = new ArrayList<ValueRange>();
 
         for(String tab : MaintainDictionary.tabs()) {
-            Hashtable<String, Integer> header_map;
-            try {
-                header_map = getDictionaryHeaders(tab);
-            } catch (Exception e) {
-                throw new IOException("Failed to get dictionary headers for tab " + tab);
-            }
+            Map<String, Integer> header_map;
+            header_map = getDictionaryHeaders(tab);
 
             int colInt = header_map.get("Status");
             char col = (char) ('A' + (char)colInt);
@@ -650,6 +652,27 @@ public class DictionaryAccessor {
 
             updates.add(writeLocationText(location, status));
         }
+
+        batchUpdateValues(updates);
+    }
+
+    /**
+     * Write the status at the end of each round
+     * @param status string to be written
+     * @throws IOException
+     */
+    public static void writeStatusUpdate(String tab, String status) throws IOException {
+        List<ValueRange> updates = new ArrayList<ValueRange>();
+
+        Map<String, Integer> header_map;
+        header_map = getDictionaryHeaders(tab);
+
+        int colInt = header_map.get("Status");
+        char col = (char) ('A' + (char)colInt);
+
+        String location = tab + "!"  + col + "1";
+
+        updates.add(writeLocationText(location, status));
 
         batchUpdateValues(updates);
     }
@@ -685,7 +708,7 @@ public class DictionaryAccessor {
 
         // Lookup the sheet properties on the destination spreadsheet
         Sheets.Spreadsheets.Get get = sheetsService.spreadsheets().get(dstSpreadsheetId).setFields("sheets.properties");
-        Spreadsheet s = get.execute();
+        Spreadsheet s = execute(get);
         List<Sheet> sheets = s.getSheets();
 
         // Loop the sheets on the source source spreadsheet
@@ -709,7 +732,7 @@ public class DictionaryAccessor {
 
         // Lookup the sheet properties on the source spreadsheet
         get = sheetsService.spreadsheets().get(srcSpreadsheetId).setFields("sheets.properties");
-        s = get.execute();
+        s = execute(get);
         sheets = s.getSheets();
 
         // Loop the sheets on the source source spreadsheet
@@ -726,9 +749,9 @@ public class DictionaryAccessor {
 
             // Copy the sheet from the source spreadsheet to the destination spreadsheet
             SheetProperties sp =
-                sheetsService.spreadsheets().sheets().copyTo(srcSpreadsheetId,
-                                                             srcProperties.getSheetId(),
-                                                             requestBody).execute();
+                execute(sheetsService.spreadsheets().sheets().copyTo(srcSpreadsheetId,
+                                                                     srcProperties.getSheetId(),
+                                                                     requestBody));
 
             // At this point the sheet as been copied, but the title is prepended with
             // "Copy of ".  It needs to be restored to the original title
@@ -752,7 +775,7 @@ public class DictionaryAccessor {
         if(!reqList.isEmpty()) {
             BatchUpdateSpreadsheetRequest breq = new BatchUpdateSpreadsheetRequest();
             breq.setRequests(reqList);
-            sheetsService.spreadsheets().batchUpdate(dstSpreadsheetId, breq).execute();
+            execute(sheetsService.spreadsheets().batchUpdate(dstSpreadsheetId, breq));
         }
     }
 
@@ -767,10 +790,10 @@ public class DictionaryAccessor {
 
         // This returns a returns a map that maps a column header to a
         // column index
-        Hashtable<String, Integer> headers = getDictionaryHeaders(sheetTitle);
+        Map<String, Integer> headers = getDictionaryHeaders(sheetTitle);
 
         // Create a map the maps a sheet index to
-        Hashtable<Integer, String> reverseLookup = new Hashtable<Integer, String>();
+        Map<Integer, String> reverseLookup = new TreeMap<Integer, String>();
         for(String header : headers.keySet()) {
             reverseLookup.put(headers.get(header), header);
         }
@@ -925,11 +948,57 @@ public class DictionaryAccessor {
         }
     }
 
+    public static int protectTab(String tab) throws IOException {
+        Sheet sheet = getCachedSheetProperties(tab);
+        SheetProperties sheetProperties = sheet.getProperties();
+        ProtectedRange newRange = new ProtectedRange();
+
+        GridRange gridRange = new GridRange();
+
+        gridRange.setSheetId(sheetProperties.getSheetId());
+        newRange.setRange(gridRange);
+
+        AddProtectedRangeRequest addProtectedRangeRequest =
+            new AddProtectedRangeRequest();
+        addProtectedRangeRequest.setProtectedRange(newRange);
+
+        Request request = new Request();
+        request.setAddProtectedRange(addProtectedRangeRequest);
+
+        List<Request> requestList = new ArrayList<>();
+        requestList.add( request );
+
+        BatchUpdateSpreadsheetResponse batchResponse =
+            submitRequests(requestList);
+
+        Response response = batchResponse.getReplies().get(0);
+
+        AddProtectedRangeResponse pResponse =
+            response.getAddProtectedRange();
+
+        ProtectedRange range = pResponse.getProtectedRange();
+
+        return range.getProtectedRangeId();
+    }
+
+    public static void unprotectRange(int rangeId) throws IOException {
+        DeleteProtectedRangeRequest deleteRequest = new DeleteProtectedRangeRequest();
+        deleteRequest.setProtectedRangeId(rangeId);
+
+        Request request = new Request();
+        request.setDeleteProtectedRange(deleteRequest);
+
+        List<Request> requestList = new ArrayList<>();
+        requestList.add( request );
+
+        submitRequests(requestList);
+    }
+
     public static void cacheSheetProperties() throws IOException {
         // Lookup the sheet properties and protected ranges on the source spreadsheet
         Sheets.Spreadsheets.Get get = sheetsService.spreadsheets().get(spreadsheetId);
         get.setFields("sheets.properties");
-        Spreadsheet s = get.execute();
+        Spreadsheet s = execute(get);
         List<Sheet> sheets = s.getSheets();
 
         if(cachedSheetProperties == null) {
@@ -963,7 +1032,7 @@ public class DictionaryAccessor {
         Sheets.Spreadsheets.Get get = sheetsService.spreadsheets().get(spreadsheetId);
         get.setFields("sheets.data.rowData.values.userEnteredFormat");
         get.setRanges(new ArrayList<String>(Arrays.asList(tab + "!" + column + ":" + column)));
-        Spreadsheet s = get.execute();
+        Spreadsheet s = execute(get);
         List<Sheet> sheets = s.getSheets();
 
         // Only one sheet should be returned since the specified range
@@ -1024,7 +1093,7 @@ public class DictionaryAccessor {
         Sheets.Spreadsheets.Get get = sheetsService.spreadsheets().get(spreadsheetId);
         get.setFields("sheets.protectedRanges");
         get.setRanges(new ArrayList<String>(Arrays.asList(tab)));
-        Spreadsheet s = get.execute();
+        Spreadsheet s = execute(get);
         List<Sheet> sheets = s.getSheets();
 
         if(sheets == null) {
@@ -1068,14 +1137,16 @@ public class DictionaryAccessor {
         return req;
     }
 
-    public static void checkProtections() throws Exception {
+    public static long checkProtections() throws Exception {
+        long requestCount = 1;
+
         // Get the list of tabs to process
         Set<String> tabList = MaintainDictionary.tabs();
 
         // Lookup the sheet properties and protected ranges on the source spreadsheet
         Sheets.Spreadsheets.Get get = sheetsService.spreadsheets().get(spreadsheetId);
         get.setFields("sheets.protectedRanges,sheets.properties");
-        Spreadsheet s = get.execute();
+        Spreadsheet s = execute(get);
         List<Sheet> sheets = s.getSheets();
 
         // This list will contain requests to add new protected ranges to the
@@ -1112,14 +1183,17 @@ public class DictionaryAccessor {
 
             try {
                 // Execute request to add new protected ranges
-                sheetsService.spreadsheets().batchUpdate(spreadsheetId, breq).execute();
+                execute(sheetsService.spreadsheets().batchUpdate(spreadsheetId, breq));
+                requestCount += (long)updateRangeRequests.size();
             } catch(Exception e) {
                 e.printStackTrace();
             }
         }
+
+        return requestCount;
     }
 
-    static void importTabFromCSV(String tab, InputStream csvData) throws IOException {
+    public static void importTabFromCSV(String tab, InputStream csvData) throws IOException {
         BufferedReader reader = new BufferedReader( new InputStreamReader(csvData) );
 
         List<List<Object>> values = new ArrayList<>();
@@ -1144,12 +1218,66 @@ public class DictionaryAccessor {
         batchUpdateValues(valueRangeUpdates);
     }
 
-    static ValueRange getTabData(String tab) throws IOException {
-        return sheetsService.spreadsheets().values().get(spreadsheetId, tab).execute();
+    public static ValueRange getTabData(String tab) throws IOException {
+        return execute(sheetsService.spreadsheets().values().get(spreadsheetId, tab));
     }
 
-    static final String getSpreadsheetId() {
+    public static UpdateValuesResponse setTabData(String tab, ValueRange update) throws IOException {
+        Values.Update updateRequest =
+            sheetsService.spreadsheets().values().update(spreadsheetId, tab, update);
+
+        updateRequest.setValueInputOption("RAW");
+
+        return execute(updateRequest);
+    }
+
+    public static Values.Get getTabDataRequest(String tab) throws IOException {
+        return sheetsService.spreadsheets().values().get(spreadsheetId, tab);
+    }
+
+    public static final String getSpreadsheetId() {
         return spreadsheetId;
+    }
+
+    public static <T> T execute(AbstractGoogleClientRequest<T> request) throws IOException {
+        long delayExtraMS = 60000;
+        long delayBaseMS = 60000;
+        int retriesLeft = 3;
+
+        while(true) {
+            try {
+                return request.execute();
+            } catch(GoogleJsonResponseException e) {
+                if(retriesLeft == 0) {
+                    throw e;
+                }
+
+                GoogleJsonError err = e.getDetails();
+                if(err == null) {
+                    throw e;
+                }
+
+                // If the error code is 429 it means that
+                // there were too man requests to Google
+                if(err.getCode() != 429) {
+                    throw e;
+                }
+
+                long delayMS = delayExtraMS + delayBaseMS;
+
+                // Wait a bit and try again
+                try {
+                    log.warning("Too many Google requests.  Re-trying in "
+                            + (delayMS / 1000L) + " seconds ...");
+                    Thread.sleep(delayMS);
+                } catch(InterruptedException e2) {
+                    // Might as well retry request
+                }
+
+                --retriesLeft;
+                delayExtraMS *= 2;
+            }
+        }
     }
     //    public static void main(String... args) throws IOException, GeneralSecurityException {
     //        List<DictionaryEntry> entries = snapshotCurrentDictionary();

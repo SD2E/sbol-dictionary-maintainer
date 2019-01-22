@@ -12,6 +12,7 @@ import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.googleapis.services.AbstractGoogleClientRequest;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
@@ -39,8 +40,8 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.Hashtable;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -62,7 +63,11 @@ public class TestMaintainDictionary {
     private static Logger log = Logger.getGlobal();
 
     public static Spreadsheet getSratchSheet() throws IOException {
-            return sheetsService.spreadsheets().get(sheetId).execute();
+        return execute(sheetsService.spreadsheets().get(sheetId));
+    }
+
+    public static <T> T execute(AbstractGoogleClientRequest<T> request) throws IOException {
+        return DictionaryAccessor.execute(request);
     }
 
     @BeforeClass
@@ -83,7 +88,7 @@ public class TestMaintainDictionary {
 
         sheetsService = new Sheets.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential).setApplicationName(APPLICATION_NAME).build();
         Sheets.Spreadsheets.Create create_sheet_request = sheetsService.spreadsheets().create(new Spreadsheet());
-        Spreadsheet SCRATCH_SHEET = create_sheet_request.execute();
+        Spreadsheet SCRATCH_SHEET = execute(create_sheet_request);
         sheetId = SCRATCH_SHEET.getSpreadsheetId();
         log.info("Created " + SCRATCH_SHEET.getSpreadsheetId());
 
@@ -104,7 +109,7 @@ public class TestMaintainDictionary {
         // Send requests to Google
         BatchUpdateSpreadsheetRequest update_sheet_request =
             new BatchUpdateSpreadsheetRequest().setRequests(add_sheet_requests);
-        sheetsService.spreadsheets().batchUpdate(sheetId, update_sheet_request).execute();
+        execute(sheetsService.spreadsheets().batchUpdate(sheetId, update_sheet_request));
 
         // Write headers to tabs
         List<ValueRange> vrList = new ArrayList<>();
@@ -136,7 +141,7 @@ public class TestMaintainDictionary {
         req.setData(vrList);
         req.setValueInputOption("RAW");
 
-        sheetsService.spreadsheets().values().batchUpdate(sheetId, req).execute();
+        execute(sheetsService.spreadsheets().values().batchUpdate(sheetId, req));
 
         DictionaryTestShared.initializeTestEnvironment(sheetId);
         //              DictionaryMaintainerApp.main(options);
@@ -166,7 +171,7 @@ public class TestMaintainDictionary {
         requests.add(request);
         BatchUpdateSpreadsheetRequest update_sheet_request =
                 new BatchUpdateSpreadsheetRequest().setRequests(requests);
-        sheetsService.spreadsheets().batchUpdate(sheetId, update_sheet_request).execute();
+        execute(sheetsService.spreadsheets().batchUpdate(sheetId, update_sheet_request));
     }
 
     private void validateProtections() throws Exception {
@@ -188,7 +193,7 @@ public class TestMaintainDictionary {
             List<ProtectedRange> protectedRanges = DictionaryAccessor.getProtectedRanges(tab);
 
             // This maps the column header name to its index
-            Hashtable<String, Integer> headerMap =
+            Map<String, Integer> headerMap =
                     DictionaryAccessor.getDictionaryHeaders(tab);
 
             for(String key : headerMap.keySet()) {
@@ -296,7 +301,7 @@ public class TestMaintainDictionary {
             // Form entries
             List<List<Object>> values = new ArrayList<List<Object>>();
 
-            Hashtable<String, Integer> header_map = DictionaryAccessor.getDictionaryHeaders(tab);
+            Map<String, Integer> header_map = DictionaryAccessor.getDictionaryHeaders(tab);
 
             // Populate a dummy object for each allowed type
             int itemIdIndex = 10;
@@ -483,7 +488,7 @@ public class TestMaintainDictionary {
                 .setApplicationName(APPLICATION_NAME)
                 .build();
             try {
-                service.files().delete(sheetId).execute();
+                execute(service.files().delete(sheetId));
                 log.info("Successfully deleted scratch sheet " + sheetId);
             } catch (IOException e) {
                 log.info("An error tearing down scratch sheet occurred: " + e);
