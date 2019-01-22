@@ -62,6 +62,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
@@ -1273,6 +1274,20 @@ public class DictionaryAccessor {
                 // Wait a bit and try again
                 try {
                     log.warning("Too many Google requests.  Re-trying in "
+                            + (delayMS / 1000L) + " seconds ...");
+                    Thread.sleep(delayMS);
+                } catch(InterruptedException e2) {
+                    // Might as well retry request
+                }
+
+                --retriesLeft;
+                delayExtraMS *= 2;
+            } catch(SocketTimeoutException e) {
+                long delayMS = delayExtraMS + delayBaseMS;
+
+                // Wait a bit and try again
+                try {
+                    log.warning("Google request timed out.  Re-trying in "
                             + (delayMS / 1000L) + " seconds ...");
                     Thread.sleep(delayMS);
                 } catch(InterruptedException e2) {
