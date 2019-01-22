@@ -1,12 +1,13 @@
 package com.bbn.sd2;
 
-
 import java.io.IOException;
 import java.net.URI;
 import java.security.GeneralSecurityException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -14,9 +15,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.logging.Logger;
-import java.util.regex.Pattern;
 
+import javax.mail.MessagingException;
 import javax.xml.namespace.QName;
 
 import org.sbolstandard.core2.Annotation;
@@ -31,8 +33,6 @@ import org.sbolstandard.core2.TopLevel;
 import org.synbiohub.frontend.SynBioHubException;
 
 import com.bbn.sd2.DictionaryEntry.StubStatus;
-import com.google.api.services.sheets.v4.Sheets;
-import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
 import com.google.api.services.sheets.v4.model.Color;
 import com.google.api.services.sheets.v4.model.Request;
 import com.google.api.services.sheets.v4.model.ValueRange;
@@ -54,20 +54,22 @@ public final class MaintainDictionary {
 
     /** Each spreadsheet tab is only allowed to contain objects of certain types, as determined by this mapping */
     private static Map<String, Set<String>> typeTabs = new HashMap<String,Set<String>>() {{
-        put("Attribute", new HashSet<>(Arrays.asList("Attribute")));
-        put("Reagent", new HashSet<>(Arrays.asList("Bead", "CHEBI", "DNA", "Protein", "RNA", "Media", "Stain", "Buffer", "Solution")));
-        put("Genetic Construct", new HashSet<>(Arrays.asList("DNA", "RNA")));
-        put("Strain", new HashSet<>(Arrays.asList("Strain")));
-        put("Protein", new HashSet<>(Arrays.asList("Protein")));
-        put("Collections", new HashSet<>(Arrays.asList("Challenge Problem")));
-    }};
+            put("Attribute", new HashSet<>(Arrays.asList("Attribute")));
+            put("Reagent", new HashSet<>(Arrays.asList("Bead", "CHEBI", "DNA", "Protein", "RNA", "Media", "Stain", "Buffer", "Solution")));
+            put("Genetic Construct", new HashSet<>(Arrays.asList("DNA", "RNA")));
+            put("Strain", new HashSet<>(Arrays.asList("Strain")));
+            put("Protein", new HashSet<>(Arrays.asList("Protein")));
+            put("Collections", new HashSet<>(Arrays.asList("Challenge Problem")));
+        }
+            static final long serialVersionUID = 0;
+        };
 
     /** Expected headers */
     private static final Set<String> validHeaders = new HashSet<>(Arrays.asList("Common Name", "Type", "SynBioHub URI",
-                "Stub Object?", "Definition URI", "Status"));
+                                                                                "Stub Object?", "Definition URI", "Status"));
 
     private static final Set<String> protectedColumns = new HashSet<>(Arrays.asList("SynBioHub URI",
-                "Stub Object?", "Status"));
+                                                                                    "Stub Object?", "Status"));
 
     public static final List<String> editors = Arrays.asList("bartleyba@sbolstandard.org",
                                                              "nicholasroehner@gmail.com",
@@ -78,37 +80,54 @@ public final class MaintainDictionary {
     /** These columns, along with the lab UID columns, will be checked for deleted cells that
      *  cause other cells to shift up */
     private static final Set<String> shiftCheckColumns = new HashSet<>(Arrays.asList("Common Name",
-                "Definition URI"));
+                                                                                     "Definition URI"));
 
     /** Classes of object that are implemented as a ComponentDefinition */
     private static Map<String,URI> componentTypes = new HashMap<String,URI>() {{
-        put("Bead",URI.create("http://purl.obolibrary.org/obo/NCIT_C70671"));
-        put("CHEBI",URI.create("http://identifiers.org/chebi/CHEBI:24431"));
-        put("DNA",ComponentDefinition.DNA);
-        put("Protein",ComponentDefinition.PROTEIN);
-        put("RNA",ComponentDefinition.RNA);
-    }};
+            put("Bead",URI.create("http://purl.obolibrary.org/obo/NCIT_C70671"));
+            put("CHEBI",URI.create("http://identifiers.org/chebi/CHEBI:24431"));
+            put("DNA",ComponentDefinition.DNA_REGION);
+            put("Protein",ComponentDefinition.PROTEIN);
+            put("RNA",ComponentDefinition.RNA_REGION);
+        }
+            static final long serialVersionUID = 0;
+        };
 
     /** Classes of object that are implemented as a ModuleDefinition */
     private static Map<String,URI> moduleTypes = new HashMap<String,URI>(){{
-        put("Strain",URI.create("http://purl.obolibrary.org/obo/NCIT_C14419"));
-        put("Media",URI.create("http://purl.obolibrary.org/obo/NCIT_C85504"));
-        put("Stain",URI.create("http://purl.obolibrary.org/obo/NCIT_C841"));
-        put("Buffer",URI.create("http://purl.obolibrary.org/obo/NCIT_C70815"));
-        put("Solution",URI.create("http://purl.obolibrary.org/obo/NCIT_C70830"));
-    }};
+            put("Strain",URI.create("http://purl.obolibrary.org/obo/NCIT_C14419"));
+            put("Media",URI.create("http://purl.obolibrary.org/obo/NCIT_C85504"));
+            put("Stain",URI.create("http://purl.obolibrary.org/obo/NCIT_C841"));
+            put("Buffer",URI.create("http://purl.obolibrary.org/obo/NCIT_C70815"));
+            put("Solution",URI.create("http://purl.obolibrary.org/obo/NCIT_C70830"));
+        }
+            static final long serialVersionUID = 0;
+        };
 
     /** Classes of object that are implemented as a Collection.
      *  Currently no subtypes of Collections other than Challenge Problem are
      *  specified, though that may change in the future */
     private static Map<String,URI> collectionTypes = new HashMap<String,URI>(){{
-        put("Challenge Problem",URI.create(""));
-    }};
+            put("Challenge Problem",URI.create(""));
+        }
+            static final long serialVersionUID = 0;
+        };
 
     /** Classes of object that are not stored in SynBioHub, but are grounded in external definitions */
     private static Map<String,QName> externalTypes = new HashMap<String,QName>(){{
-        put("Attribute",new QName("http://sd2e.org/types/#","attribute","sd2"));
-    }};
+            put("Attribute",new QName("http://sd2e.org/types/#","attribute","sd2"));
+        }
+            static final long serialVersionUID = 0;
+        };
+
+    /** Email addresses mapping failures are sent to */
+    private static Map<String,String> mappingFailureToList = null;
+    private static Map<String,String> mappingFailureCCList = null;
+
+    /** The amount of time, in seconds, before notification email messages
+     * for the mapping failures tab
+     */
+    private static final long minumumMappingFailureNotificationTime = 86400;
 
     /**
      * @param tab String name of a spreadsheet tab
@@ -158,7 +177,7 @@ public final class MaintainDictionary {
 
 
     /** @return A string listing all valid types */
-    private static String allTypes() {
+    public static String allTypes() {
         Set<String> s = new HashSet<>(componentTypes.keySet());
         s.addAll(moduleTypes.keySet());
         s.addAll(externalTypes.keySet());
@@ -244,7 +263,7 @@ public final class MaintainDictionary {
      * @throws SBOLValidationException
      */
     private static void replaceOldAnnotations(TopLevel entity, QName key, String new_value) throws SBOLValidationException {
-        Set<String> new_values = new HashSet<String>() {{ add(new_value); }};
+        Set<String> new_values = new HashSet<String>() {{ add(new_value); } static final long serialVersionUID = 0;};
         replaceOldAnnotations(entity, key, new_values);
     }
 
@@ -266,170 +285,162 @@ public final class MaintainDictionary {
      * @return true if anything has been changed
      * @throws Exception
      */
-    private static DictionaryEntry update_entry(DictionaryEntry e, List<ValueRange> valueUpdates) throws SBOLConversionException, IOException, SBOLValidationException, SynBioHubException {
+    private static DictionaryEntry update_entry(DictionaryEntry e, List<ValueRange> valueUpdates) throws SBOLConversionException, IOException, SBOLValidationException {
         assert(e.statusCode == StatusCode.VALID);
 
-        UpdateReport report = new UpdateReport();
         // This is never called unless the entry is known valid
         URI local_uri = null;
         DictionaryEntry originalEntry = null;
+        String synBioHubAction = null;
 
-        // If the URI is null and the name is not, attempt to resolve:
-        if(e.uri==null && e.name!=null) {
-            try {
+        try {
+            // If the URI is null and the name is not, attempt to resolve:
+            if(e.uri==null && e.name!=null) {
+                synBioHubAction = "resolve URI to name in SynBioHub";
                 e.uri = SynBioHubAccessor.nameToURI(e.name);
                 if(e.uri!=null) {
                     // This is an update to the spreadsheet, but not to symBioHub,
                     // so "changed" is not updated
                     valueUpdates.add(DictionaryAccessor.writeEntryURI(e, e.uri));
                 }
-            } catch (SynBioHubException exception) {
-                e.statusCode = StatusCode.SBH_CONNECTION_FAILED; // Don't try to make anything if we couldn't check if it exists
-                exception.printStackTrace();
-                log.warning("SynBioHub connection failed in trying to resolve URI to name");
-                return originalEntry;
             }
-        }
 
-        // if the entry has no URI, create per type
-        if(e.uri==null) {
-            e.document = createStubOfType(e.name, e.type);
-            if(e.document==null) {
-                report.failure("Could not make object "+e.name, true);
-                valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
-                return originalEntry;
-            }
-            // pull out the first (and only) element to get the URI
-            local_uri = e.document.getTopLevels().iterator().next().getIdentity();
-            e.uri = SynBioHubAccessor.translateLocalURI(local_uri);
-            report.success("Created stub in SynBioHub",true);
-            valueUpdates.add(DictionaryAccessor.writeEntryURI(e, e.uri));
-            e.changed = true;
-        } else { // otherwise get a copy from SynBioHub
-            local_uri = SynBioHubAccessor.translateURI(e.uri);
-            try {
+            // if the entry has no URI, create per type
+            if(e.uri==null) {
+                synBioHubAction = "create document for " + e.name + " in SynBioHub";
+                e.document = createStubOfType(e.name, e.type);
+                if(e.document==null) {
+                    e.report.failure("Could not make object "+e.name, true);
+                    e.statusCode = StatusCode.SBH_CONNECTION_FAILED;
+                    return originalEntry;
+                }
+                // pull out the first (and only) element to get the URI
+                local_uri = e.document.getTopLevels().iterator().next().getIdentity();
+                synBioHubAction = "translate local URI";
+                e.uri = SynBioHubAccessor.translateLocalURI(local_uri);
+                e.report.success("Created stub in SynBioHub",true);
+                valueUpdates.add(DictionaryAccessor.writeEntryURI(e, e.uri));
+                e.changed = true;
+            } else { // otherwise get a copy from SynBioHub
+                synBioHubAction = "translate local URI";
+                local_uri = SynBioHubAccessor.translateURI(e.uri);
+                synBioHubAction = "retrieve linked object from SynBioHub";
                 e.document = SynBioHubAccessor.retrieve(e.uri, false);
                 originalEntry = new DictionaryEntry(e);
-            } catch(SynBioHubException sbhe) {
-                report.failure("Could not retrieve linked object from SynBioHub", true);
-                log.severe(sbhe.getMessage());
-                valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
+            }
+
+            // Check if object belongs to the target Collection
+            if(e.uri.equals(local_uri)) { // this condition occurs when the entry does not belong to the target collection, probably a more explicit and better way to check for it
+                e.report.failure("Object does not belong to Dictionary collection " + SynBioHubAccessor.getCollectionID());
+                e.statusCode = StatusCode.SBH_CONNECTION_FAILED;
                 return originalEntry;
             }
-        }
 
-        // Check if object belongs to the target Collection
-        if(e.uri.equals(local_uri)) { // this condition occurs when the entry does not belong to the target collection, probably a more explicit and better way to check for it
-            report.failure("Object does not belong to Dictionary collection " + SynBioHubAccessor.getCollectionID());
-            valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
-            return originalEntry;
-        }
-
-        // Make sure we've got the entity to update in our hands:
-        TopLevel entity = e.document.getTopLevel(local_uri);
-        if(entity==null) {
-            report.failure("Could not find or make object", true);
-            valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
-            return originalEntry;
-        }
-
-        // Check if typing is valid
-        if(!validateEntityType(entity,e.type)) {
-            report.failure("Type does not match '"+e.type+"'", true);
-        }
-
-        // Note that the "stub" field is defined by the SynBioHub document.
-        // The spreadsheet is updated to be consistent with the SynBioHub
-        // document, but "changed" flag is not updated since the SynBioHub
-        // document is not updated.
-        if(e.attribute) {
-            if(e.stub != StubStatus.UNDEFINED) {
-                e.stub = StubStatus.UNDEFINED;
-                valueUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
+            // Make sure we've got the entity to update in our hands:
+            TopLevel entity = e.document.getTopLevel(local_uri);
+            if(entity==null) {
+                e.report.failure("Could not find or make object", true);
+                e.statusCode = StatusCode.SBH_CONNECTION_FAILED;
+                return originalEntry;
             }
-        } else {
-            boolean entity_is_stub = (entity.getAnnotation(STUB_ANNOTATION) != null);
-            if((entity_is_stub && e.stub!=StubStatus.YES) || (!entity_is_stub && e.stub!=StubStatus.NO)) {
-                e.stub = entity_is_stub ? StubStatus.YES : StubStatus.NO;
-                valueUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
-                report.note(entity_is_stub?"Stub object":"Linked with non-stub object", true);
-            }
-        }
 
-        // update entity name if needed
-        if(e.name!=null && !e.name.equals(entity.getName())) {
-            if(originalEntry != null) {
-                originalEntry.name = entity.getName();
+            // Check if typing is valid
+            if(!validateEntityType(entity,e.type)) {
+                e.report.failure("Type does not match '"+e.type+"'", true);
+                e.statusCode = StatusCode.INVALID_TYPE;
+                return originalEntry;
             }
-            entity.setName(e.name);
-            e.changed = true;
-            report.success("Name changed to '"+e.name+"'",true);
-        }
 
-        // if the entry has lab entries, check if they match and (re)annotate if different
-        for(String labKey : e.labUIDs.keySet()) {
-            QName labQKey = new QName("http://sd2e.org#",labKey,"sd2");
-            String labEntry = e.labUIDs.get(labKey);
-            Set<String> labIds = new HashSet<String>();
-            if(labEntry != null)
-                labIds.addAll(Arrays.asList(labEntry.split("\\s*,\\s*")));  // Separate by comma and whitespace
-            Set<String> currentIds = new HashSet<String>();
-            List<Annotation> annotations = entity.getAnnotations();
-            for (Annotation ann : annotations) {
-                if(ann.getQName().equals(labQKey)) {
-                    currentIds.add(ann.getStringValue());
+            // Note that the "stub" field is defined by the SynBioHub document.
+            // The spreadsheet is updated to be consistent with the SynBioHub
+            // document, but "changed" flag is not updated since the SynBioHub
+            // document is not updated.
+            if(e.attribute) {
+                if(e.stub != StubStatus.UNDEFINED) {
+                    e.stub = StubStatus.UNDEFINED;
+                    valueUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
+                }
+            } else {
+                boolean entity_is_stub = (entity.getAnnotation(STUB_ANNOTATION) != null);
+                if((entity_is_stub && e.stub!=StubStatus.YES) || (!entity_is_stub && e.stub!=StubStatus.NO)) {
+                    e.stub = entity_is_stub ? StubStatus.YES : StubStatus.NO;
+                    valueUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
+                    e.report.note(entity_is_stub?"Stub object":"Linked with non-stub object", true);
                 }
             }
 
-            if(!labIds.equals(currentIds)) {
+            // update entity name if needed
+            if(e.name!=null && !e.name.equals(entity.getName())) {
                 if(originalEntry != null) {
-                    // Extract lab IDs from document
-                    String originalLabIDs = null;
-                    for(String labId : currentIds) {
-                        if(originalLabIDs == null) {
-                            originalLabIDs = labId;
-                        } else {
-                            originalLabIDs = originalLabIDs + "," + labId;
-                        }
+                    originalEntry.name = entity.getName();
+                }
+                entity.setName(e.name);
+                e.changed = true;
+                e.report.success("Name changed to '"+e.name+"'",true);
+            }
+
+            // if the entry has lab entries, check if they match and (re)annotate if different
+            for(String labKey : e.labUIDs.keySet()) {
+                // Extra lab ids from entry (spreadsheet)
+                Set<String> labIds = new HashSet<String>();
+
+                Set<String> labEntries = e.labUIDs.get(labKey);
+                if(labEntries != null) {
+                    labIds.addAll(labEntries);
+                }
+
+                // Extract lab ids from SynBioHub
+                Set<String> synBioHubIds = new HashSet<String>();
+
+                QName labQKey = new QName("http://sd2e.org#",labKey,"sd2");
+                List<Annotation> annotations = entity.getAnnotations();
+                for (Annotation ann : annotations) {
+                    if(ann.getQName().equals(labQKey)) {
+                        synBioHubIds.add(ann.getStringValue());
+                    }
+                }
+
+                // Compare lab ids
+                if(!labIds.equals(synBioHubIds)) {
+                    if(originalEntry != null) {
+                        // Update originalEntry with values from SynBioHub
+                        originalEntry.labUIDs.put(labKey, synBioHubIds);
                     }
 
-                    if(originalLabIDs == null) {
-                        originalEntry.labUIDs.remove(labKey);
+                    replaceOldAnnotations(entity, labQKey, labIds);
+                    e.changed = true;
+                    if(labIds.size() > 0)
+                        e.report.success(labKey+" for " + e.name + " is "+String.join(", ", labIds),true);
+                    else
+                        e.report.success("Deleted " + labKey + " for " + e.name, true);
+                }
+            }
+
+            if(e.attribute && e.attributeDefinition!=null) {
+                Set<URI> derivations = entity.getWasDerivedFroms();
+                if(originalEntry != null) {
+                    if(derivations.size() == 0) {
+                        originalEntry.attributeDefinition = null;
                     } else {
-                        originalEntry.labUIDs.put(labKey, originalLabIDs);
+                        originalEntry.attributeDefinition =
+                            derivations.iterator().next();
                     }
                 }
 
-                replaceOldAnnotations(entity,labQKey,labIds);
-                e.changed = true;
-                if(labIds.size() > 0)
-                    report.success(labKey+" for "+e.name+" is "+String.join(", ", labIds),true);
-                else
-                    report.success("Deleted lab UID", true);
-            }
-        }
-
-        if(e.attribute && e.attributeDefinition!=null) {
-            Set<URI> derivations = entity.getWasDerivedFroms();
-            if(originalEntry != null) {
-                if(derivations.size() == 0) {
-                    originalEntry.attributeDefinition = null;
-                } else {
-                    originalEntry.attributeDefinition =
-                            derivations.iterator().next();
+                if(derivations.size()==0 || !e.attributeDefinition.equals(derivations.iterator().next())) {
+                    derivations.clear(); derivations.add(e.attributeDefinition);
+                    entity.setWasDerivedFroms(derivations);
+                    e.changed = true;
+                    e.report.success("Definition for "+e.name+" is '"+e.attributeDefinition+"'",true);
                 }
             }
 
-            if(derivations.size()==0 || !e.attributeDefinition.equals(derivations.iterator().next())) {
-                derivations.clear(); derivations.add(e.attributeDefinition);
-                entity.setWasDerivedFroms(derivations);
-                e.changed = true;
-                report.success("Definition for "+e.name+" is '"+e.attributeDefinition+"'",true);
-            }
+            // Update the spreadsheet with the entry notes
+        } catch (SynBioHubException exception) {
+            log.severe(exception.getMessage());
+            e.report.failure("Could not " + synBioHubAction, true);
+            e.statusCode = StatusCode.SBH_CONNECTION_FAILED;
         }
-
-        // Update the spreadsheet with the entry notes
-        valueUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
 
         return originalEntry;
     }
@@ -482,8 +493,8 @@ public final class MaintainDictionary {
             }
 
             if(e.uri == null) {
-                log.severe("Row " + e.row_index + " in tab \"" + e.tab
-                                   + " is missing a uri ");
+                log.severe("Row " + e.row_index + " of tab \"" + e.tab
+                           + "\" is missing a uri ");
                 continue;
             }
 
@@ -541,7 +552,7 @@ public final class MaintainDictionary {
                     count = upShiftCounts.get(key);
                     if(count == maxShifts) {
                         String errMsg = "Found potential shift in column \"" +
-                                    key + "\" of tab \"" + tab + "\"";
+                            key + "\" of tab \"" + tab + "\"";
                         log.severe(errMsg);
                         throw new Exception(errMsg);
                     }
@@ -576,13 +587,459 @@ public final class MaintainDictionary {
         return makeColor(146, 146, 146);
     }
 
+    private static List<MappingFailureEntry> getMappingFailures() throws IOException {
+        List<MappingFailureEntry> entries = new ArrayList<>();
+
+        // First, read the data from the Mapping Failures tab
+        ValueRange tabData = DictionaryAccessor.getTabData("Mapping Failures");
+
+        List<List<Object>> values = tabData.getValues();
+        if(values == null) {
+            return entries;
+        }
+
+        List<Object> columnHeaders = values.get(1);
+
+        // Make sure there is a "Status" Column
+        Set<String> columnHeaderSet = new TreeSet<>();
+        for(Object columnHeader : columnHeaders) {
+            columnHeaderSet.add((String)columnHeader);
+        }
+
+        if(!columnHeaderSet.contains("Status")) {
+            throw new IOException("Mapping Failures tab does not contain a Status column");
+        }
+
+        // Create data structures from the spreadsheet data
+        for(int i=2; i<values.size(); ++i) {
+            List<Object> rowData = values.get(i);
+
+            Map<String, String> rowEntries = new HashMap<>();
+
+            for(int j=0; j<rowData.size(); ++j) {
+                String columnHeader = (String)columnHeaders.get(j);
+                String cellValue = (String)rowData.get(j);
+
+                rowEntries.put(columnHeader, cellValue);
+            }
+
+            entries.add(new MappingFailureEntry(rowEntries, i));
+        }
+
+        return entries;
+    }
+
+    private static String generateNotificationReport(Map<String, List<MappingFailureEntry>> itemToExperiments) {
+        // Sort item list
+        Set<String> keySet = itemToExperiments.keySet();
+        String[] keyArray = keySet.toArray(new String[0]);
+        Arrays.sort(keyArray);
+
+        String lab = itemToExperiments.get(keyArray[0]).get(0).getLab();
+
+        Date notificationDate = new Date();
+
+        // Build content of notification email
+        String notificationReport = "Mapping Failures for " + lab + ":\n";
+
+        for(String item : keyArray) {
+            List<MappingFailureEntry> itemEntries = itemToExperiments.get(item);
+
+            // Sort entries by experiment name
+            class CompareExperiments implements Comparator<MappingFailureEntry> {
+                @Override
+                public int compare(MappingFailureEntry entry1, MappingFailureEntry entry2) {
+                    return entry1.getExperiment().compareTo(entry2.getExperiment());
+                }
+            }
+
+            Collections.sort(itemEntries, new CompareExperiments());
+
+            notificationReport += "\n\t" + item + ":\n";
+            for(MappingFailureEntry entry : itemEntries) {
+                entry.setLastNotificationTime(notificationDate);
+                notificationReport += "\t\t" + entry.getExperiment() + " - row " +
+                    entry.getRow() + "\n";
+            }
+        }
+
+        return notificationReport;
+    }
+
+    private static void updateMappingFailuresTab(List<MappingFailureEntry> entries,
+                                                 char statusColumn) throws IOException {
+        List<ValueRange> updates = new ArrayList<>();
+
+        // Update the Status column in the Mapping Failures tab
+        for(MappingFailureEntry entry : entries) {
+            if(!entry.getNotified() && entry.getValid()) {
+                continue;
+            }
+
+            String location = "Mapping Failures!" + statusColumn + entry.getRow();
+            String status = entry.getStatus();
+            ValueRange valueRange = DictionaryAccessor.writeLocationText(location, status);
+            updates.add(valueRange);
+        }
+
+        if(!updates.isEmpty()) {
+            DictionaryAccessor.batchUpdateValues(updates);
+        }
+    }
+
+    // Find the spreadsheet column of the Status column in the mapping
+    // failures tab
+    private static char getMappingFailuresStatusColumn() throws IOException {
+        ValueRange columnHeaders = DictionaryAccessor.getTabData("Mapping Failures!2:2");
+        List<List<Object>> values = columnHeaders.getValues();
+
+        if(values == null) {
+            throw new IOException("Did not find headers in Mapping Failures tab");
+        }
+
+        char columnName = 'A';
+
+        for(Object stringObject : values.get(0)) {
+            if(stringObject == null) {
+                continue;
+            }
+
+            String headerName = (String)stringObject;
+            if(headerName.equals("Status")) {
+                return columnName;
+            }
+
+            columnName = (char)(columnName + 1);
+        }
+
+        throw new IOException("Did not find Status column in Mapping Failures tab");
+    }
+
+    private static String findMappingFailuresForLab(List<MappingFailureEntry> entries) throws IOException {
+        if(entries.isEmpty()) {
+            return null;
+        }
+
+        Map<String, List<MappingFailureEntry>> itemToExperiments =
+            new TreeMap<String, List<MappingFailureEntry>>();
+
+        Date now = new Date();
+        long timeSinceLastNotification = now.getTime() / 1000L;
+
+        // Associate experiments with items
+        for(MappingFailureEntry entry : entries) {
+            if(!entry.getValid()) {
+                continue;
+            }
+
+            String item = entry.getItem();
+
+            List<MappingFailureEntry> experimentList = itemToExperiments.get(item);
+            if(experimentList == null) {
+                experimentList = new ArrayList<>();
+                itemToExperiments.put(item, experimentList);
+            }
+
+            experimentList.add(entry);
+
+            // Keep track of the most recent time a notification email
+            // message was sent
+            long timeSinceNotification = entry.secondsSinceLastNotification(now);
+            if(timeSinceNotification < timeSinceLastNotification) {
+                timeSinceLastNotification = timeSinceNotification;
+            }
+        }
+
+        if(timeSinceLastNotification < minumumMappingFailureNotificationTime) {
+            return null;
+        }
+
+        if(itemToExperiments.isEmpty()) {
+            return null;
+        }
+
+       return generateNotificationReport(itemToExperiments);
+    }
+
+    private static Map<String, List<MappingFailureEntry>> generateMappingFailureLabEntries(List<MappingFailureEntry> entries)
+        throws IOException  {
+
+        // Sort entries by labs
+        Map<String, List<MappingFailureEntry>> labEntries = new TreeMap<>();
+
+        for(MappingFailureEntry entry : entries) {
+            String lab = entry.getLab();
+
+            List<MappingFailureEntry> labEntryList = labEntries.get(lab);
+            if(labEntryList == null) {
+                labEntryList = new ArrayList<>();
+                labEntries.put(lab, labEntryList);
+            }
+
+            labEntryList.add(entry);
+        }
+
+        return labEntries;
+    }
+
+    private static String resolveMappingFailuresForLab(List<MappingFailureEntry> labMappingFailures,
+                                                      List<MappingFailureEntry> allMappingFailures,
+                                                      List<DictionaryEntry> dictionaryEntries)
+        throws IOException {
+        // This is the first row in the mapping failures sheet,
+        // indexed starting at 1
+        final int firstDataRow = 3;
+
+        String notification = null;
+
+        if(labMappingFailures.isEmpty()) {
+            return null;
+        }
+
+        // Extract lab name
+        String lab = labMappingFailures.get(0).getLab();
+
+        // Construct a Set of all Lab ids from this lab;
+        Set<String> labIds = new TreeSet<>();
+        Map<String, DictionaryEntry> idToEntry = new TreeMap<>();
+
+        for(DictionaryEntry entry : dictionaryEntries) {
+            Set<String> itemIds = entry.itemIdsForLabUID(lab);
+            if(itemIds == null) {
+                continue;
+            }
+
+            for(String itemId : itemIds) {
+                idToEntry.put(itemId, entry);
+            }
+
+            labIds.addAll( itemIds );
+        }
+
+        // Construct a set of the row from the Mapping Failures tab
+        // to be deleted.  Also keep track of the first row to be
+        // deleted
+        Set<Integer> rowsToDelete = new TreeSet<>();
+        int firstRowToDelete = allMappingFailures.size() + firstDataRow - 1;
+
+        for(int i=0; i<labMappingFailures.size(); ++i) {
+            MappingFailureEntry mEntry = labMappingFailures.get(i);
+
+            if(!mEntry.getValid()) {
+                continue;
+            }
+
+            String itemId = mEntry.getItemId();
+            if(mEntry.getRow() < firstRowToDelete) {
+                firstRowToDelete = mEntry.getRow();
+            }
+
+            DictionaryEntry dEntry = idToEntry.get( itemId );
+            if(dEntry == null) {
+                continue;
+            }
+
+            rowsToDelete.add(mEntry.getRow());
+        }
+
+        if(rowsToDelete.size() == 0) {
+            return null;
+        }
+
+        if(rowsToDelete.size() == 1) {
+            notification = "The following mapping failure was resolved:\n\n";
+        } else {
+            notification = "The following mapping failures were resolved:\n\n";
+        }
+
+        // Remove rows in rowsToDelete set
+        List<Request> deleteRequests = new ArrayList<>();
+
+        int decrementDelta = 0;
+        for(int i=(firstRowToDelete-firstDataRow); i<allMappingFailures.size(); ++i) {
+            MappingFailureEntry mEntry = allMappingFailures.get(i);
+            mEntry.decrementRow(decrementDelta);
+
+            int deleteIndex = i + firstDataRow + decrementDelta;
+            if(!rowsToDelete.contains(deleteIndex)) {
+                continue;
+            }
+
+            // Generate request to delete the row from the spreadsheet
+            // Note that Google API indexes rows starting at zero, so
+            // one is subtracted from the row index
+            Request req = DictionaryAccessor.deleteRowRequest("Mapping Failures",
+                                                              mEntry.getRow() - 1);
+            deleteRequests.add( req );
+
+            notification += mEntry.getExperiment() + "," +
+                mEntry.getLab() + "," +
+                mEntry.getItem() + "," +
+                mEntry.getItemId() + "\n";
+
+            // Remove mapping failure entry
+            allMappingFailures.remove( i-- );
+            ++decrementDelta;
+        }
+
+        DictionaryAccessor.batchUpdateRequests(deleteRequests);
+
+        return notification;
+    }
+
+    /*
+     * Generates notification emails for entries in the mapping
+     * failures tab.
+     *
+     * Returns a map that maps lab names to the contents of a
+     * notification email for that lab.
+     */
+    private static Map<String, String> generateMappingFailureEmails(List<MappingFailureEntry> entries) throws IOException {
+        Map<String, String> notifications = new TreeMap<>();
+
+        Map<String, List<MappingFailureEntry>> labEntries =
+            generateMappingFailureLabEntries(entries);
+
+        for(String lab : labEntries.keySet()) {
+            String emailContent = findMappingFailuresForLab(labEntries.get(lab));
+            if(emailContent != null) {
+                notifications.put(lab, emailContent);
+            }
+        }
+
+        char statusColumn = getMappingFailuresStatusColumn();
+
+        updateMappingFailuresTab(entries, statusColumn);
+
+        return notifications;
+    }
+
+    /*
+     * Generates notification emails for resolution of entries in the
+     * mapping failures tab.
+     *
+     * Returns a map that maps lab names to the contents of a
+     * notification email for that lab.
+     */
+    private static Map<String, String> generateMappingFailureResolutionEmails(List<MappingFailureEntry> mappingFailures,
+                                                                             List<DictionaryEntry> dictionaryEntries)
+        throws IOException {
+
+        Map<String, String> notifications = new TreeMap<>();
+
+        Map<String, List<MappingFailureEntry>> labEntries =
+            generateMappingFailureLabEntries(mappingFailures);
+
+        for(String lab : labEntries.keySet()) {
+            String emailContent = resolveMappingFailuresForLab(labEntries.get(lab),
+                                                               mappingFailures,
+                                                               dictionaryEntries);
+            if(emailContent != null) {
+                notifications.put(lab, emailContent);
+            }
+        }
+
+        return notifications;
+    }
+
+    /**
+     * Process mapping failures tab
+     */
+    private static void processMappingFailures(List<DictionaryEntry> dictionaryEntries) throws IOException {
+        List<MappingFailureEntry> entries = getMappingFailures();
+
+        Map<String, String> notifications = generateMappingFailureResolutionEmails(entries, dictionaryEntries);
+        if(notifications != null) {
+            for(String lab : notifications.keySet()) {
+                String toList = null;
+                if(mappingFailureToList != null) {
+                    toList = mappingFailureToList.get(lab);
+                }
+
+                String ccList = null;
+                if(mappingFailureCCList != null) {
+                    ccList = mappingFailureCCList.get(lab);
+                }
+
+                if(toList != null) {
+                    try {
+                        DictionaryAccessor.sendEmail(toList, ccList,
+                                                     "Mapping Failure Resolutions",
+                                                     notifications.get(lab));
+                        if(ccList != null) {
+                            log.info("Sent mapping failure resolution email notification for "
+                                     + lab + " to " + toList + " with cc " + ccList);
+                        } else {
+                            log.info("Sent mapping failure resolution email notification for "
+                                     + lab + " to " + toList);
+                        }
+                    } catch(MessagingException e) {
+                        if(ccList != null ) {
+                            log.warning("Failed to send mapping failure resolution email notification for "
+                                        + lab + " to " + toList + " with cc " + ccList);
+                        } else {
+                            log.warning("Failed to send mapping failure resolution email notification for "
+                                        + lab + " to " + toList);
+                        }
+
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }
+
+        notifications = generateMappingFailureEmails(entries);
+        if(notifications != null) {
+            for(String lab : notifications.keySet()) {
+                String toList = null;
+                if(mappingFailureToList != null) {
+                    toList = mappingFailureToList.get(lab);
+                }
+
+                String ccList = null;
+                if(mappingFailureCCList != null) {
+                    ccList = mappingFailureCCList.get(lab);
+                }
+
+                if(toList != null) {
+                    try {
+                        DictionaryAccessor.sendEmail(toList, ccList,
+                                                     "Mapping Failures Report",
+                                                     notifications.get(lab));
+                        if(ccList != null) {
+                            log.info("Sent mapping failure report email notification for "
+                                     + lab + " to " + toList + " with cc " + ccList);
+                        } else {
+                            log.info("Sent mapping failure report email notification for "
+                                     + lab + " to " + toList);
+                        }
+                    } catch(MessagingException e) {
+                        if(ccList != null) {
+                            log.warning("Failed to send mapping failure report email notification for "
+                                        + lab + " to " + toList + " with cc " + ccList);
+                        } else {
+                            log.warning("Failed to send mapping failure report email notification for "
+                                        + lab + " to " + toList);
+                        }
+
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }
+    }
+
     /**
      * Run one pass through the dictionary, updating all entries as needed
      */
-    public static void maintain_dictionary() throws IOException, GeneralSecurityException, SBOLValidationException, SynBioHubException, SBOLConversionException {
+    public static void maintain_dictionary(Map<String, Map<String, String>> emailLists) throws IOException, GeneralSecurityException, SBOLValidationException, SynBioHubException, SBOLConversionException {
         Color green = greenColor();
         Color red = redColor();
         Color gray = grayColor();
+
+        // Extract email address lists for mapping failure tab notifications
+        mappingFailureToList = emailLists.get("To");
+        mappingFailureCCList = emailLists.get("CC");
 
         UpdateReport report = new UpdateReport();
         try {
@@ -634,30 +1091,29 @@ public final class MaintainDictionary {
                     statusColor = green;
                 } else {
                     // There is a problem with this row
-                    UpdateReport invalidReport = new UpdateReport();
-                    invalidReport.subsection("Cannot update");
                     switch (e.statusCode) {
                     case MISSING_NAME:
                         log.info("Invalid entry, missing name, skipping");
-                        invalidReport.failure("Common name is missing");
+                        e.report.failure("Common name is missing");
                         statusColor = red;
                         break;
                     case MISSING_TYPE:
                         log.info("Invalid entry for name "+e.name+", skipping");
-                        invalidReport.failure("Type is missing");
+                        e.report.failure("Type is missing");
                         statusColor = red;
                         break;
                     case INVALID_TYPE:
                         log.info("Invalid entry for name "+e.name+", skipping");
-                        invalidReport.failure("Type must be one of "+ typeTabs.get(e.tab).toString());
+                        e.report.failure("Type must be one of "+ typeTabs.get(e.tab).toString());
                         statusColor = red;
                         break;
                     case DUPLICATE_VALUE:
                         log.info("Invalid entry for name "+e.name+", skipping");
-                        invalidReport.failure(e.statusLog);
+                        e.report.failure(e.statusLog);
                         statusColor = red;
                         break;
                     case SBH_CONNECTION_FAILED:
+                        log.warning("Failed to connect to SynBioHub");
                         statusColor = gray;
                         break;
                     case GOOGLE_SHEETS_CONNECTION_FAILED:
@@ -668,13 +1124,10 @@ public final class MaintainDictionary {
                         break;
                     }
 
-                    if(invalidReport.condition < 0) {
-                        spreadsheetUpdates.add(DictionaryAccessor.writeEntryNotes(e, invalidReport.toString()));
-                    }
                     bad_count++;
                 }
 
-                statusFormattingUpdates.add( e.setColor("Status", statusColor) );
+                e.statusColor = statusColor;
             }
 
             // Check for deleted cells that caused column values to shift up
@@ -684,12 +1137,17 @@ public final class MaintainDictionary {
             // Commit changes to SynBioHub
             for(DictionaryEntry e : currentEntries) {
                 if(e.changed) {
-                    URI local_uri = e.document.getTopLevels().iterator().next().getIdentity();
-                    TopLevel entity = e.document.getTopLevel(local_uri);
-                    replaceOldAnnotations(entity, MODIFIED,xmlDateTimeStamp());
-                    //e.document.write(System.out);
-                    SynBioHubAccessor.update(e.document);
-                    spreadsheetUpdates.add(DictionaryAccessor.writeEntryNotes(e, report.toString()));
+                    try {
+                        URI local_uri = e.document.getTopLevels().iterator().next().getIdentity();
+                        TopLevel entity = e.document.getTopLevel(local_uri);
+                        replaceOldAnnotations(entity, MODIFIED,xmlDateTimeStamp());
+                        //e.document.write(System.out);
+                        SynBioHubAccessor.update(e.document);
+                        e.report.success("Synchronized with SynBioHub");
+                    } catch(Exception exception) {
+                        e.report.failure("Failed to synchronize with SynBioBub");
+                        e.statusColor = red;
+                    }
                     if(!e.attribute) {
                         spreadsheetUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
                     } else {
@@ -698,6 +1156,9 @@ public final class MaintainDictionary {
                         }
                     }
                 }
+
+                spreadsheetUpdates.add(DictionaryAccessor.writeEntryNotes(e, e.report.toString()));
+                statusFormattingUpdates.add( e.setColor("Status", e.statusColor) );
             }
 
             // Commit updates to spreadsheet
@@ -710,18 +1171,22 @@ public final class MaintainDictionary {
                 DictionaryAccessor.submitRequests(statusFormattingUpdates);
             }
 
-            log.info("Completed certification of dictionary");
-            report.success(currentEntries.size()+" entries",true);
-            report.success(mod_count+" modified",true);
-            if(bad_count>0) report.failure(bad_count+" invalid",true);
+            // Process Mapping Failures Tab in the spreadsheet
+            processMappingFailures(currentEntries);
 
             // Delay to throttle Google requests
             Thread.sleep(30000);
 
+            log.info("Checking protections...");
             DictionaryAccessor.checkProtections();
 
             // Delay to throttle Google requests
             Thread.sleep(30000);
+
+            log.info("Completed certification of dictionary");
+            report.success(currentEntries.size()+" entries",true);
+            report.success(mod_count+" modified",true);
+            if(bad_count>0) report.failure(bad_count+" invalid",true);
         } catch(Exception e) {
             e.printStackTrace();
             //report.failure("Dictionary update failed with exception of type "+e.getClass().getName(), true);

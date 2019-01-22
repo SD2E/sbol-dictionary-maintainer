@@ -1,8 +1,5 @@
 package com.bbn.sd2;
 
-import static org.junit.Assert.*;
-
-import org.apache.commons.cli.CommandLine;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -14,10 +11,8 @@ import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInsta
 import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
-import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.http.HttpTransport;
-import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.store.FileDataStoreFactory;
@@ -25,34 +20,29 @@ import com.google.api.services.sheets.v4.Sheets;
 import com.google.api.services.sheets.v4.SheetsScopes;
 import com.google.api.services.sheets.v4.model.AddProtectedRangeRequest;
 import com.google.api.services.sheets.v4.model.AddSheetRequest;
-import com.google.api.services.sheets.v4.model.AppendValuesResponse;
 import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
+import com.google.api.services.sheets.v4.model.BatchUpdateValuesRequest;
 import com.google.api.services.sheets.v4.model.CellFormat;
 import com.google.api.services.sheets.v4.model.Color;
-import com.google.api.services.sheets.v4.model.DeleteSheetRequest;
-import com.google.api.services.sheets.v4.model.Editors;
 import com.google.api.services.sheets.v4.model.GridRange;
 import com.google.api.services.sheets.v4.model.ProtectedRange;
 import com.google.api.services.sheets.v4.model.Request;
 import com.google.api.services.sheets.v4.model.Sheet;
 import com.google.api.services.sheets.v4.model.SheetProperties;
 import com.google.api.services.sheets.v4.model.Spreadsheet;
-import com.google.api.services.sheets.v4.model.SpreadsheetProperties;
 import com.google.api.services.sheets.v4.model.ValueRange;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
-import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
-import java.util.Properties;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.logging.Logger;
 
@@ -75,58 +65,82 @@ public class TestMaintainDictionary {
             return sheetsService.spreadsheets().get(sheetId).execute();
     }
 
-        @BeforeClass
-        public static void setUpBeforeClass() throws Exception {
-                // Create scratch spreadsheet
-                // Load credentials
-            InputStream in = DictionaryAccessor.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
-            GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
+    @BeforeClass
+    public static void setUpBeforeClass() throws Exception {
+        // Create scratch spreadsheet
+        // Load credentials
+        InputStream in = DictionaryAccessor.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
+        GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
 
-            // Build flow and trigger user authorization request
-            HttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
-            GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
-                                HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, SCOPES)
-                        .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
-                        .setAccessType("offline")
-                        .build();
-            credential = new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("owner");
+        // Build flow and trigger user authorization request
+        HttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
+        GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
+                                                                                   HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, SCOPES)
+            .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
+            .setAccessType("offline")
+            .build();
+        credential = new AuthorizationCodeInstalledApp(flow, new LocalServerReceiver()).authorize("owner");
 
-            sheetsService = new Sheets.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential).setApplicationName(APPLICATION_NAME).build();
-            Sheets.Spreadsheets.Create create_sheet_request = sheetsService.spreadsheets().create(new Spreadsheet());
-            Spreadsheet SCRATCH_SHEET = create_sheet_request.execute();
-            sheetId = SCRATCH_SHEET.getSpreadsheetId();
-            log.info("Created " + SCRATCH_SHEET.getSpreadsheetId());
+        sheetsService = new Sheets.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential).setApplicationName(APPLICATION_NAME).build();
+        Sheets.Spreadsheets.Create create_sheet_request = sheetsService.spreadsheets().create(new Spreadsheet());
+        Spreadsheet SCRATCH_SHEET = create_sheet_request.execute();
+        sheetId = SCRATCH_SHEET.getSpreadsheetId();
+        log.info("Created " + SCRATCH_SHEET.getSpreadsheetId());
 
-            // Add tabs to test sheet
-            List<Request> add_sheet_requests = new ArrayList<>();
-            for (String tab : MaintainDictionary.tabs()) {
-                    Request request = new Request().setAddSheet(new AddSheetRequest().setProperties(new SheetProperties().setTitle(tab)));
-                    add_sheet_requests.add(request);
-            }
-            BatchUpdateSpreadsheetRequest update_sheet_request =
-                    new BatchUpdateSpreadsheetRequest().setRequests(add_sheet_requests);
-            sheetsService.spreadsheets().batchUpdate(sheetId, update_sheet_request).execute();
-
-            // Write headers to tabs
-                List<Object> headers = new ArrayList<Object>();
-                for (String header : MaintainDictionary.headers()) {
-                        headers.add(header);
-                }
-                List<List<Object>> values = new ArrayList<List<Object>>();
-                values.add(headers);
-                for (String tab : MaintainDictionary.tabs()) {
-                        String target_range = tab + "!A2";
-                        ValueRange body = new ValueRange()
-                                .setValues(values);
-                        AppendValuesResponse result =
-                                        sheetsService.spreadsheets().values().append(sheetId, target_range, body)
-                                        .setValueInputOption("RAW")
-                                        .execute();
-                }
-
-            DictionaryTestShared.initializeTestEnvironment(sheetId);
-//              DictionaryMaintainerApp.main(options);
+        // Add tabs to test sheet
+        List<Request> add_sheet_requests = new ArrayList<>();
+        for (String tab : MaintainDictionary.tabs()) {
+            Request request = new Request().setAddSheet(new AddSheetRequest().setProperties(new SheetProperties().setTitle(tab)));
+            add_sheet_requests.add(request);
         }
+
+        // Mapping Failures tab
+        {
+            String tab = "Mapping Failures";
+            Request request = new Request().setAddSheet(new AddSheetRequest().setProperties(new SheetProperties().setTitle(tab)));
+            add_sheet_requests.add(request);
+        }
+
+        // Send requests to Google
+        BatchUpdateSpreadsheetRequest update_sheet_request =
+            new BatchUpdateSpreadsheetRequest().setRequests(add_sheet_requests);
+        sheetsService.spreadsheets().batchUpdate(sheetId, update_sheet_request).execute();
+
+        // Write headers to tabs
+        List<ValueRange> vrList = new ArrayList<>();
+
+        // Create headers list
+        List<String> headers = new ArrayList<>();
+        for (String header : MaintainDictionary.headers()) {
+            headers.add(header);
+        }
+
+        // Create requests to add headers to each tab
+        for (String tab : MaintainDictionary.tabs()) {
+            String target_range = tab + "!2:2";
+            vrList.add( DictionaryAccessor.writeRowText(target_range, headers) );
+        }
+
+        // Write mappig failures tab headers
+        List<String> headerValues = new ArrayList<>();
+        headerValues.add("Experiment/Run");
+        headerValues.add("Lab");
+        headerValues.add("Item Name");
+        headerValues.add("Item ID");
+        headerValues.add("Status");
+        ValueRange vr = DictionaryAccessor.writeRowText("Mapping Failures!2:2",
+                                                        headerValues);
+        vrList.add(vr);
+
+        BatchUpdateValuesRequest req = new BatchUpdateValuesRequest();
+        req.setData(vrList);
+        req.setValueInputOption("RAW");
+
+        sheetsService.spreadsheets().values().batchUpdate(sheetId, req).execute();
+
+        DictionaryTestShared.initializeTestEnvironment(sheetId);
+        //              DictionaryMaintainerApp.main(options);
+    }
 
     // Adds an extra protection range on one of the tabs
     private void addExtraProtection(String tab) throws Exception {
@@ -256,9 +270,27 @@ public class TestMaintainDictionary {
 
     @Test
     public void testEntries() throws Exception {
-        List<ValueRange> valueUpdates = new ArrayList<ValueRange>();
+        // Add Mapping Failures tab
+        InputStream mappingFailureData =
+            DictionaryAccessor.class.getResourceAsStream("/mapping_failures.csv");
+
+        DictionaryAccessor.importTabFromCSV("Mapping Failures", mappingFailureData);
+
+        // Extract some lab ids
+        ValueRange mappingFailureIds = DictionaryAccessor.getTabData("Mapping Failures!D:D");
+        List<List<Object>> mappingFailureIdValues = mappingFailureIds.getValues();
+
+        // This set will contain the UIDs that are "resolved" from the
+        // Mapping Failures tab, that is, there are the UIDs thare are
+        // added to the UID column of one of the tabs.  They should be
+        // subsequently removed from the Mapping Failures tab
+        Set<String> resolvedUIDs = new TreeSet<>();
+
+        assert(mappingFailureIdValues != null);
 
         // Populate each tab with objects
+        List<ValueRange> valueUpdates = new ArrayList<ValueRange>();
+
         for (String tab : MaintainDictionary.tabs()) {
 
             // Form entries
@@ -267,19 +299,27 @@ public class TestMaintainDictionary {
             Hashtable<String, Integer> header_map = DictionaryAccessor.getDictionaryHeaders(tab);
 
             // Populate a dummy object for each allowed type
+            int itemIdIndex = 10;
             for (String type : MaintainDictionary.getAllowedTypesForTab(tab)) {
                 String[] row_entries = new String[header_map.keySet().size()];
                 for (String header : header_map.keySet()) {
                     String entry = null;
-                    if (header.equals("Type"))
+                    if (header.equals("Type")) {
                         entry = type;
-                    else if (header.equals("Common Name"))
+                    } else if (header.equals("Common Name")) {
                         entry = UUID.randomUUID().toString().substring(0,6);
-                    else if (header.equals("LBNL UID") && tab.equals("Reagent"))
-                        entry = UUID.randomUUID().toString().substring(0,6) +
-                            ", " + UUID.randomUUID().toString().substring(0,6);
-                    else
+                    } else if (header.equals("BioFAB UID") && tab.equals("Reagent")) {
+                        entry = UUID.randomUUID().toString().substring(0,6);
+                        String resolvedUID = (String)mappingFailureIdValues.get(itemIdIndex).get(0);
+                        if(!resolvedUIDs.contains(resolvedUID)) {
+                            entry += ", " + resolvedUID;
+                            resolvedUIDs.add(resolvedUID);
+
+                            itemIdIndex += 2;
+                        }
+                    } else {
                         entry = "";  // Fill empty cells, null value won't work
+                    }
                     row_entries[header_map.get(header)] = entry;
                 }
                 List<Object> row = new ArrayList<Object>(Arrays.asList(row_entries));
@@ -289,7 +329,7 @@ public class TestMaintainDictionary {
             // Write entries to spreadsheet range
             String target_range = tab + "!A3";
             ValueRange body = new ValueRange()
-                    .setValues(values).setRange(target_range);
+                .setValues(values).setRange(target_range);
             valueUpdates.add(body);
         }
 
@@ -306,6 +346,19 @@ public class TestMaintainDictionary {
 
         // Run the dictionary application
         DictionaryTestShared.initializeTestEnvironment(sheetId);
+
+        // Check mapping failures
+        ValueRange mappingFailureData1 = DictionaryAccessor.getTabData("Mapping Failures!D:E");
+        mappingFailureIdValues = mappingFailureData1.getValues();
+        assert(mappingFailureIdValues.size() == 174);
+        for(int i=2; i<mappingFailureIdValues.size(); ++i) {
+            List<Object> rowData = mappingFailureIdValues.get(i);
+            String labId = (String)rowData.get(0);
+            String status = (String)rowData.get(1);
+
+            assert(!resolvedUIDs.contains(labId));
+            assert(status.startsWith("Notification sent at "));
+        }
 
         // Check the protections
         validateProtections();
@@ -335,6 +388,19 @@ public class TestMaintainDictionary {
 
         // Run the Dictionary
         DictionaryTestShared.initializeTestEnvironment(sheetId);
+
+        // Check mapping failures.  Make sure status column did not change
+        ValueRange mappingFailureData2 = DictionaryAccessor.getTabData("Mapping Failures!E:E");
+        List<List<Object>> mappingFailureIdValues2 = mappingFailureData2.getValues();
+        assert(mappingFailureIdValues.size() == 174);
+        for(int i=2; i<mappingFailureIdValues.size(); ++i) {
+            List<Object> rowData1 = mappingFailureIdValues.get(i);
+            List<Object> rowData2 = mappingFailureIdValues2.get(i);
+            String status1 = (String)rowData1.get(1);
+            String status2 = (String)rowData2.get(0);
+
+            assert(status1.equals(status2));
+        }
 
         Color red = MaintainDictionary.redColor();
         Color green = MaintainDictionary.greenColor();
@@ -376,7 +442,7 @@ public class TestMaintainDictionary {
         }
 
         // Delete a cell
-        String deleteColumn = "LBNL UID";
+        String deleteColumn = "BioFAB UID";
 
         DictionaryAccessor.deleteCellShiftUp("Reagent", deleteColumn, 5);
 
@@ -391,7 +457,7 @@ public class TestMaintainDictionary {
 
         // Look for column shift error message in sheet status
         String errMsg = "Found potential shift in column \"" +
-                        deleteColumn + "\" of tab \"Reagent\"";
+            deleteColumn + "\" of tab \"Reagent\"";
 
         if(status.indexOf(errMsg) == -1) {
             System.err.println("Cell Delete Test Failed");

@@ -2,11 +2,10 @@ package com.bbn.sd2;
 
 import static org.junit.Assert.*;
 
-import java.io.IOException;
-import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.commons.cli.CommandLine;
-import org.apache.commons.io.IOUtils;
 import org.junit.AfterClass;
 import org.junit.Test;
 import org.mortbay.log.Log;
@@ -23,22 +22,53 @@ public class DictionaryTestShared {
 //        }
 //        CommandLine cmd = DictionaryMaintainerApp.parseArguments("-s","15","-p",password,"-l","jakebeal@ieee.org","-c","https://synbiohub.utah.edu/user/jakebeal/scratch_test_collection/","-S","https://synbiohub.utah.edu/");
 
-	    // Configure options for DictionaryMaintainer to use the staging instance of SBH and temporary Google Sheets
-		// Do not initiate tests if password for SBH instance is not provided
-		String password = System.getProperty("p");
-    	if (password == null) {
-			fail("Unable to initialize test environment. Password for SynBioHub staging instance was not provided.");
-		}
-    	if (gsheet_id == null) {
-			fail("Unable to initialize test environment. No Google Sheet was provided.");
-    	}
-    	String[] options = new String[] {"-s", "0", "-S", "https://hub-staging.sd2e.org", "-f", "https://hub.sd2e.org", "-g", gsheet_id, "-t", "true", "-p", ""};
-		options[options.length - 1] = password;  // Add password to command line
+        // Configure options for DictionaryMaintainer to use the staging instance of SBH and temporary Google Sheets
+        // Do not initiate tests if password for SBH instance is not provided
+        String password = System.getProperty("p");
+        if (password == null) {
+            fail("Unable to initialize test environment. Password for SynBioHub staging instance was not provided.");
+        }
+        if (gsheet_id == null) {
+            fail("Unable to initialize test environment. No Google Sheet was provided.");
+        }
+        String noEmailOption = System.getProperty("no_email");
 
-    	CommandLine cmd;
-    	cmd = DictionaryMaintainerApp.parseArguments(options);
-    		
-    	DictionaryAccessor.configure(cmd);
+        List<String> optionList = new ArrayList<>();
+        // Sleep zero seconds between updates
+        optionList.add("-s");
+        optionList.add("0");
+
+        // URL for SynBioHub server
+        optionList.add("-S");
+        optionList.add("https://hub-staging.sd2e.org");
+
+        // Spoofing URL prefix
+        optionList.add("-f");
+        optionList.add("https://hub.sd2e.org");
+
+        // Set Google sheets id
+        optionList.add("-g");
+        optionList.add(gsheet_id);
+
+        // Enable test mode
+        optionList.add("-t");
+        optionList.add("true");
+
+        // Set password for SynBioHub
+        optionList.add("-p");
+        optionList.add(password);
+
+        if(noEmailOption != null) {
+            // Don' generate email messages
+            optionList.add("-n");
+            optionList.add("true");
+        }
+
+        String[] options = optionList.toArray(new String[0]);
+        CommandLine cmd;
+        cmd = DictionaryMaintainerApp.parseArguments(options);
+
+        DictionaryAccessor.configure(cmd);
         SynBioHubAccessor.configure(cmd);
         DictionaryAccessor.restart();
         SynBioHubAccessor.restart();
@@ -46,19 +76,19 @@ public class DictionaryTestShared {
             Log.info("Creating Collection");
             SynBioHubAccessor.createCollection();
         }
-    	DictionaryMaintainerApp.restart();
-		DictionaryMaintainerApp.main(options);
+        DictionaryMaintainerApp.restart();
+        DictionaryMaintainerApp.main(options);
     }
-    
+
     @Test
     public void verifyDictionaryTestEnvironment() throws Exception {
         DictionaryTestShared.initializeTestEnvironment(MaintainDictionary.defaultSpreadsheet());
     }
 
-	@AfterClass
-	public static void tearDownAfterClass() throws Exception {
-		SynBioHubAccessor.logout();
-	}
+    @AfterClass
+    public static void tearDownAfterClass() throws Exception {
+        SynBioHubAccessor.logout();
+    }
 
 
 }

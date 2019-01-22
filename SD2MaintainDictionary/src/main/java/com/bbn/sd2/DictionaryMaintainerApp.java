@@ -9,7 +9,10 @@ import java.util.logging.Logger;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.HashSet;
+import java.util.Map;
+import java.util.HashMap;
 
 import org.apache.commons.cli.*;
 import org.synbiohub.frontend.SynBioHubException;
@@ -24,6 +27,39 @@ public class DictionaryMaintainerApp {
     private static Semaphore backupSem = new Semaphore(0);
     private static boolean stopWorkerThreads = false;
 
+    /** Email addresses mapping failures are sent to */
+    private static Map<String,String> mappingFailureToList = new HashMap<String,String>(){{
+            put("BioFAB", "bjkeller@uw.edu");
+            put("Transcriptic", "peter@transcriptic.com");
+            put("Ginkgo", "narendra@ginkgobioworks.com");
+        }
+            static final long serialVersionUID = 0;
+        };
+
+    private static Map<String,String> mappingFailureCCList = new HashMap<String,String>(){{
+            put("BioFAB", "jakebeal@gmail.com;weston@netrias.com");
+            put("Transcriptic", "jakebeal@gmail.com;weston@netrias.com");
+            put("Ginkgo", "jakebeal@gmail.com;weston@netrias.com");
+        }
+            static final long serialVersionUID = 0;
+        };
+
+    private static Map<String,String> mappingFailureToListTest = new HashMap<String,String>(){{
+            put("BioFAB", "dan.sumorok@raytheon.com");
+            put("Transcriptic", "dan.sumorok@raytheon.com");
+            put("Ginkgo", "dan.sumorok@raytheon.com");
+        }
+            static final long serialVersionUID = 0;
+        };
+
+    private static Map<String,String> mappingFailureCCListTest = new HashMap<String,String>(){{
+            put("BioFAB", "jakebeal@gmail.com");
+            put("Transcriptic", "jakebeal@gmail.com");
+            put("Ginkgo", "jakebeal@gmail.com");
+        }
+            static final long serialVersionUID = 0;
+        };
+
     public static void main(String... args) throws Exception {
         // Parse arguments and configure
         CommandLine cmd = parseArguments(args);
@@ -34,9 +70,22 @@ public class DictionaryMaintainerApp {
         stopWorkerThreads = false;
         kludge_heartbeat_reporter();
         final boolean backupInMainLoop = true;
+        boolean test_mode = cmd.hasOption("test_mode");
+        boolean no_email = cmd.hasOption("no_email");
+        Map<String, Map<String, String>> emailLists = new TreeMap<>();
+
+        if(!no_email) {
+            if(!test_mode) {
+                emailLists.put("To", mappingFailureToList);
+                emailLists.put("CC", mappingFailureCCList);
+            } else {
+                emailLists.put("To", mappingFailureToListTest);
+                emailLists.put("CC", mappingFailureCCListTest);
+            }
+        }
 
         if(!backupInMainLoop) {
-            if(!cmd.hasOption("test_mode")) {
+            if(!test_mode) {
                 start_backup(1);
             }
         }
@@ -82,7 +131,7 @@ public class DictionaryMaintainerApp {
             while(!stopSignal) {
                 try {
                     long start = System.currentTimeMillis();
-                    MaintainDictionary.maintain_dictionary();
+                    MaintainDictionary.maintain_dictionary(emailLists);
                     long end = System.currentTimeMillis();
                     NumberFormat formatter = new DecimalFormat("#0.00000");
                     log.info("Dictionary update executed in " + formatter.format((end - start) / 1000d) + " seconds");
@@ -90,7 +139,7 @@ public class DictionaryMaintainerApp {
                     log.severe("Exception while maintaining dictionary:");
                     e.printStackTrace();
                 }
-                if (cmd.hasOption("test_mode")) {
+                if (test_mode) {
                     setStopSignal();
                 } else {
                     if(backupInMainLoop) {
@@ -178,6 +227,7 @@ public class DictionaryMaintainerApp {
         options.addOption("f", "spoofing", true, "URL prefix for a test SynBioHub server spoofing as another");
         options.addOption("t", "test_mode", false, "Run only one update for testing purposes, then terminate");
         options.addOption("T", "timeout", true, "Connection timeout in seconds (zero to disable timeout)");
+        options.addOption("n", "no_email", false, "Don't send email");
 
         // Parse arguments
         CommandLine cmd = null;

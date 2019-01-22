@@ -16,8 +16,11 @@ dependencies {
     compile 'com.google.api-client:google-api-client:1.23.0'
     compile 'com.google.oauth-client:google-oauth-client-jetty:1.23.0'
     compile 'com.google.apis:google-api-services-sheets:v4-rev516-1.23.0'
+    compile 'com.google.apis:google-api-services-gmail:v1-rev83-1.23.0'
     compile 'commons-cli:commons-cli:1.4'
     compile 'com.google.apis:google-api-services-drive:v3-rev124-1.24.1'
+    compile 'javax.mail:javax.mail-api:1.6.2'
+    compile 'com.sun.mail:javax.mail:1.6.2'
 	testCompile 'junit:junit:4.12'
 }
 
