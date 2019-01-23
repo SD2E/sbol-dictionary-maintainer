@@ -249,28 +249,8 @@ public class TestMaintainDictionary {
         log.info("Tab copy test succeeded");
     }
 
-    private int colorFloatToInt(Float f) {
-        if(f == null) {
-                return 0;
-        }
-
-        return (int)Math.round(f * 255.0);
-    }
-
-    public boolean compareColors(Color c1, Color c2) {
-        if(colorFloatToInt(c1.getRed()) != colorFloatToInt(c2.getRed())) {
-                return false;
-        }
-
-        if(colorFloatToInt(c1.getBlue()) != colorFloatToInt(c2.getBlue())) {
-                return false;
-        }
-
-        if(colorFloatToInt(c1.getGreen()) != colorFloatToInt(c2.getGreen())) {
-                return false;
-        }
-
-        return true;
+    public boolean colorsEqual(Color c1, Color c2) {
+        return MaintainDictionary.colorsEqual(c1, c2);
     }
 
     @Test
@@ -416,11 +396,11 @@ public class TestMaintainDictionary {
 
         // The text in row 3 of the attribute tab should be red since the common name is empty
         Color textColor = cellFormatList.get(2).getTextFormat().getForegroundColor();
-        assert(compareColors(textColor, red));
+        assert(colorsEqual(textColor, red));
 
         // The text in row 4 of the attribute tab should be green
         textColor = cellFormatList.get(3).getTextFormat().getForegroundColor();
-        assert(compareColors(textColor, green));
+        assert(colorsEqual(textColor, green));
 
         // Retrieve formatting of the Status column in the Genetic Construct tab
         cellFormatList = DictionaryAccessor.getColumnFormatting("Attribute", "Status");
@@ -429,7 +409,7 @@ public class TestMaintainDictionary {
         // The text in row 3 of the attribute tab should be red since the type
         // value is an illegal value
         textColor = cellFormatList.get(2).getTextFormat().getForegroundColor();
-        assert(compareColors(textColor, red));
+        assert(colorsEqual(textColor, red));
 
         // Check the protections
         validateProtections();

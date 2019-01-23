@@ -32,6 +32,7 @@ import org.sbolstandard.core2.TopLevel;
 import org.synbiohub.frontend.SynBioHubException;
 
 import com.bbn.sd2.DictionaryEntry.StubStatus;
+import com.google.api.services.sheets.v4.model.CellFormat;
 import com.google.api.services.sheets.v4.model.Color;
 import com.google.api.services.sheets.v4.model.Request;
 import com.google.api.services.sheets.v4.model.ValueRange;
@@ -1089,6 +1090,30 @@ public final class MaintainDictionary {
         }
     }
 
+    private static int colorFloatToInt(Float f) {
+        if(f == null) {
+                return 0;
+        }
+
+        return (int)Math.round(f * 255.0);
+    }
+
+    public static boolean colorsEqual(Color c1, Color c2) {
+        if(colorFloatToInt(c1.getRed()) != colorFloatToInt(c2.getRed())) {
+                return false;
+        }
+
+        if(colorFloatToInt(c1.getBlue()) != colorFloatToInt(c2.getBlue())) {
+                return false;
+        }
+
+        if(colorFloatToInt(c1.getGreen()) != colorFloatToInt(c2.getGreen())) {
+                return false;
+        }
+
+        return true;
+    }
+
     /**
      * Run one pass through the dictionary, updating all entries as needed
      */
@@ -1118,7 +1143,7 @@ public final class MaintainDictionary {
             DictionaryAccessor.cacheSheetProperties();
 
             for(String tab : MaintainDictionary.tabs()) {
-                // This caches the location of the the colums in the
+                // This caches the location of the the columns in the
                 // tab
                 DictionaryAccessor.cacheTabHeaders(tab);
 
@@ -1284,11 +1309,36 @@ public final class MaintainDictionary {
                     }
                 }
 
+                // Get formatting information for Status column
+                List<CellFormat> cellFormatList =
+                                DictionaryAccessor.getColumnFormatting(tab, "Status");
+
                 // Determine which rows either have changed or are invalid
                 for(DictionaryEntry e : currentEntries) {
                     if(e.changed || (e.statusCode != StatusCode.VALID)) {
                         String rowRange = tab + "!" + e.row_index + ":" + e.row_index;
                         rowRanges.add(rowRange);
+                    } else {
+                        // This checks to see if the color of the text
+                        // in the Status field changed.  If the color
+                        // changed, the row is added to rowRanges,
+                        // causing it to be updated in the spreadsheet
+                        // (in particular the Status field will be
+                        // updated in the spreadsheet).
+                        if(cellFormatList.size() >= e.row_index) {
+                            CellFormat format = cellFormatList.get(e.row_index-1);
+                            if(format != null) {
+                                Color statusColor =
+                                    format.getTextFormat().getForegroundColor();
+                                if((statusColor != null) && (e.statusColor != null)) {
+                                    if(!colorsEqual(statusColor, e.statusColor)) {
+                                        String rowRange = tab + "!" + e.row_index
+                                            + ":" + e.row_index;
+                                        rowRanges.add(rowRange);
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -1363,7 +1413,7 @@ public final class MaintainDictionary {
                                 spreadsheetUpdates.add(DictionaryAccessor.writeEntryDefinition(e, e.attributeDefinition));
                             }
                         }
-                    } else {
+                    } else if(e.statusCode != StatusCode.VALID) {
                         bad_count++;
                     }
 
