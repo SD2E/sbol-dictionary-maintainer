@@ -831,8 +831,13 @@ public class DictionaryAccessor {
                 String quotedSheetTitle = "\"" + sheetTitle + "\"";
                 if(endColumnIndex == null) {
                     if(startColumnIndex == null) {
-                        log.warning("Deleting unexpected protection from on row " +
-                                    (startRowIndex + 1) + " on sheet " + quotedSheetTitle);
+                        if(startRowIndex == null) {
+                            log.warning("Deleting unexpected protection on sheet " +
+                                        sheetTitle);
+                        } else {
+                            log.warning("Deleting unexpected protection from on row " +
+                                        (startRowIndex + 1) + " on sheet " + quotedSheetTitle);
+                        }
                     } else {
                         char startColumn = (char) ('A' + startColumnIndex);
 
