@@ -1319,6 +1319,12 @@ public final class MaintainDictionary {
                         String rowRange = tab + "!" + e.row_index + ":" + e.row_index;
                         rowRanges.add(rowRange);
                     } else {
+                        // This checks to see if the color of the text
+                        // in the Status field changed.  If the color
+                        // changed, the row is added to rowRanges,
+                        // causing it to be updated in the spreadsheet
+                        // (in particular the Status field will be
+                        // updated in the spreadsheet).
                         if(cellFormatList.size() >= e.row_index) {
                             CellFormat format = cellFormatList.get(e.row_index-1);
                             if(format != null) {
