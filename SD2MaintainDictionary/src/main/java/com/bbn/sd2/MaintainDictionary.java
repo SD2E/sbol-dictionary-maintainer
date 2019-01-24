@@ -366,8 +366,14 @@ public final class MaintainDictionary {
             } else { // otherwise get a copy from SynBioHub
                 synBioHubAction = "translate local URI";
                 local_uri = SynBioHubAccessor.translateURI(e.uri);
-                synBioHubAction = "retrieve linked object from SynBioHub";
-                e.document = SynBioHubAccessor.retrieve(e.uri, false);
+
+                try {
+                    e.document = SynBioHubAccessor.retrieve(e.uri, false);
+                } catch(Exception exception) {
+                    e.report.failure("Failed to retrieve linked object from SynBioHub");
+                    e.statusCode = StatusCode.SBH_CONNECTION_FAILED;
+                    return originalEntry;
+                }
                 originalEntry = new DictionaryEntry(e);
             }
 
