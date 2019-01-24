@@ -793,14 +793,14 @@ public class DictionaryAccessor {
         // column index
         Map<String, Integer> headers = getDictionaryHeaders(sheetTitle);
 
-        // Create a map the maps a sheet index to
+        // This maps a column index to a header name
         Map<Integer, String> reverseLookup = new TreeMap<Integer, String>();
         for(String header : headers.keySet()) {
             reverseLookup.put(headers.get(header), header);
         }
 
-        List<String> editorList = new ArrayList<String>(MaintainDictionary.editors);
-        editorList.sort(String::compareTo);
+        Set<String> editorSet = new TreeSet<>();
+        editorSet.addAll(MaintainDictionary.editors);
 
         for(ProtectedRange range : ranges) {
             // Extract the protection range
@@ -900,16 +900,25 @@ public class DictionaryAccessor {
                 log.warning("Failed to get editors for sheet " + sheetTitle);
                 continue;
             }
+
             List<String> columnEditors = editors.getUsers();
-            if(columnEditors.size() > editorList.size()) {
+
+            if(columnEditors.size() > 0) {
                 // We assume the document owner is the last editor in the list.
-                // If the document has more editors than expected, remove the last
-                // element from the list
-                columnEditors.remove(columnEditors.size()-1);
+                // The owner needs to be in the editor list
+                int lastIndex = columnEditors.size() - 1;
+                editorSet.add( columnEditors.get( lastIndex ) );
             }
 
-            columnEditors.sort(String::compareTo);
-            if(!columnEditors.equals(editorList)) {
+            // Create a set of the current editors
+            Set<String> currentEditors = new TreeSet<>();
+            currentEditors.addAll( columnEditors );
+
+            if(!currentEditors.equals(editorSet)) {
+                // Turn editorSet into a list
+                List<String> editorList = new ArrayList<>();
+                editorList.addAll(editorSet);
+
                 // Update the editor list
                 range.getEditors().setUsers(editorList);
                 UpdateProtectedRangeRequest updateProtectedRange = new UpdateProtectedRangeRequest();
@@ -920,6 +929,9 @@ public class DictionaryAccessor {
                 updateRangeRequests.add(request);
             }
         }
+
+        List<String> editorList = new ArrayList<>();
+        editorList.addAll(MaintainDictionary.editors);
 
         // Create a list of all the protected ranges that need to be
         // added to this document
