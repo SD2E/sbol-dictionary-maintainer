@@ -6,12 +6,16 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Map;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 public class MappingFailureEntry {
     private String experiment;
     private String lab;
     private String item;
     private String status;
     private String itemId;
+    private String itemType;
     private Date lastNotificationTime;
     private SimpleDateFormat dateFormatter;
     private int row;
@@ -22,6 +26,7 @@ public class MappingFailureEntry {
     private final String labColumnTag = "Lab";
     private final String itemColumnTag = "Item Name";
     private final String itemIdColumnTag = "Item ID";
+    private final String itemTypeColumnTag = "Item Type (Strain or Reagent Tab)";
     private final String statusColumnTag = "Status";
 
     MappingFailureEntry(Map<String, String> rowEntries, int row) throws IOException {
@@ -31,6 +36,8 @@ public class MappingFailureEntry {
         this.dateFormatter = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss z");
         this.row = row + 1; // Index from 1 instead of 0
         this.notified = false;
+
+        itemType = rowEntries.get(itemTypeColumnTag);
 
         experiment = rowEntries.get(experimentColumnTag);
         if(experiment == null) {
@@ -111,6 +118,10 @@ public class MappingFailureEntry {
         return itemId;
     }
 
+    public String getItemType() {
+        return itemType;
+    }
+
     public String getStatus() {
         if(!valid) {
             return status;
@@ -153,5 +164,19 @@ public class MappingFailureEntry {
 
     public boolean getValid() {
         return valid;
+    }
+
+    JSONObject toJSON() {
+        JSONObject jo = new JSONObject();
+
+        jo.put(experimentColumnTag, experiment);
+        jo.put(itemColumnTag, item);
+        jo.put(labColumnTag, lab);
+        jo.put(itemIdColumnTag, itemId);
+        if(itemType != null) {
+            jo.put(itemTypeColumnTag, itemType);
+        }
+
+        return jo;
     }
 }
