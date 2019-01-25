@@ -479,13 +479,6 @@ public class DictionaryAccessor {
         return execute(request).getValueRanges();
     }
 
-    public static BatchUpdateSpreadsheetResponse submitRequests(List<Request> requests) throws IOException {
-        BatchUpdateSpreadsheetRequest request =
-            new BatchUpdateSpreadsheetRequest().setRequests(requests);
-
-        return execute(sheetsService.spreadsheets().batchUpdate(spreadsheetId, request));
-    }
-
     private static char columnNameToIndex(String tab, String colName) throws IOException {
         Map<String, Integer> header_map = getDictionaryHeaders(tab);
 
@@ -987,7 +980,7 @@ public class DictionaryAccessor {
         requestList.add( request );
 
         BatchUpdateSpreadsheetResponse batchResponse =
-            submitRequests(requestList);
+            batchUpdateRequests(requestList);
 
         Response response = batchResponse.getReplies().get(0);
 
@@ -1009,7 +1002,7 @@ public class DictionaryAccessor {
         List<Request> requestList = new ArrayList<>();
         requestList.add( request );
 
-        submitRequests(requestList);
+        batchUpdateRequests(requestList);
     }
 
     public static void cacheSheetProperties() throws IOException {
@@ -1260,7 +1253,7 @@ public class DictionaryAccessor {
     public static <T> T execute(AbstractGoogleClientRequest<T> request) throws IOException {
         long delayExtraMS = 60000;
         long delayBaseMS = 60000;
-        int retriesLeft = 3;
+        int retriesLeft = 4;
 
         while(true) {
             try {
@@ -1295,6 +1288,10 @@ public class DictionaryAccessor {
                 --retriesLeft;
                 delayExtraMS *= 2;
             } catch(SocketTimeoutException e) {
+                if(retriesLeft == 0) {
+                    throw e;
+                }
+
                 long delayMS = delayExtraMS + delayBaseMS;
 
                 // Wait a bit and try again

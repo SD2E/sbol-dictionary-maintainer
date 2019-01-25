@@ -133,6 +133,11 @@ public final class MaintainDictionary {
     private static final long minumumMappingFailureNotificationTime = 86400;
 
     /**
+     * The maximum number of individual requests in a single Google request
+     */
+    private static int maxGoogleRequestCount = 50;
+
+    /**
      * @param tab String name of a spreadsheet tab
      * @param type String naming a type
      * @return true if we know how to handle entries of this type
@@ -719,6 +724,46 @@ public final class MaintainDictionary {
         return notificationReport;
     }
 
+    private static void batchUpdateValues(List<ValueRange> values) throws IOException {
+        for(int i=0; i<values.size(); i += maxGoogleRequestCount) {
+            int endIndex = i + maxGoogleRequestCount;
+
+            if(endIndex > values.size()) {
+                endIndex = values.size();
+            }
+
+            List<ValueRange> requests = values.subList(i, endIndex);
+            DictionaryAccessor.batchUpdateValues(requests);
+
+            try {
+                long requestCount = (long)requests.size();
+                Thread.sleep(requestCount * msPerGoogleRequest);
+            } catch(InterruptedException e) {
+
+            }
+        }
+    }
+
+    private static void batchUpdateRequests(List<Request> requestList) throws IOException {
+        for(int i=0; i<requestList.size(); i += maxGoogleRequestCount) {
+            int endIndex = i + maxGoogleRequestCount;
+
+            if(endIndex > requestList.size()) {
+                endIndex = requestList.size();
+            }
+
+            List<Request> requests = requestList.subList(i, endIndex);
+            DictionaryAccessor.batchUpdateRequests(requests);
+
+            try {
+                long requestCount = (long)requests.size();
+                Thread.sleep(requestCount * msPerGoogleRequest);
+            } catch(InterruptedException e) {
+
+            }
+        }
+    }
+
     private static void updateMappingFailuresTab(List<MappingFailureEntry> entries,
                                                  char statusColumn) throws IOException {
         List<ValueRange> updates = new ArrayList<>();
@@ -736,14 +781,7 @@ public final class MaintainDictionary {
         }
 
         if(!updates.isEmpty()) {
-            DictionaryAccessor.batchUpdateValues(updates);
-
-            try {
-                long requestCount = (long)updates.size();
-                Thread.sleep(requestCount * msPerGoogleRequest);
-            } catch(InterruptedException e) {
-
-            }
+            batchUpdateValues(updates);
         }
     }
 
@@ -942,7 +980,7 @@ public final class MaintainDictionary {
             ++decrementDelta;
         }
 
-        DictionaryAccessor.batchUpdateRequests(deleteRequests);
+        batchUpdateRequests(deleteRequests);
 
         try {
             long requestCount = (long)deleteRequests.size();
@@ -1431,12 +1469,12 @@ public final class MaintainDictionary {
                 // Commit updates to spreadsheet
                 if(!spreadsheetUpdates.isEmpty()) {
                     log.info("Updating " + tab + " tab in spreadsheet");
-                    DictionaryAccessor.batchUpdateValues(spreadsheetUpdates);
+                    batchUpdateValues(spreadsheetUpdates);
                 }
 
                 // Commit formatting updates to spreadsheet
                 if(!statusFormattingUpdates.isEmpty()) {
-                    DictionaryAccessor.submitRequests(statusFormattingUpdates);
+                    batchUpdateRequests(statusFormattingUpdates);
                 }
 
                 report.success(currentEntries.size()+" entries", true);
@@ -1467,9 +1505,7 @@ public final class MaintainDictionary {
                                                      + report.toString());
 
                 // Delay to throttle Google requests
-                long requestCount = (long)spreadsheetUpdates.size() +
-                    (long)statusFormattingUpdates.size() + 4;
-                Thread.sleep(requestCount * msPerGoogleRequest);
+                Thread.sleep(5 * msPerGoogleRequest);
 
             } catch(Exception e2) {
                 e2.printStackTrace();
