@@ -6,19 +6,15 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.Set;
 import java.util.UUID;
 
 import javax.xml.namespace.QName;
 
-import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.ParseException;
 import org.junit.AfterClass;
 import org.junit.Test;
 import org.mortbay.log.Log;
 import org.sbolstandard.core2.AccessType;
-import org.sbolstandard.core2.Annotation;
-import org.sbolstandard.core2.Collection;
 import org.sbolstandard.core2.ComponentDefinition;
 import org.sbolstandard.core2.DirectionType;
 import org.sbolstandard.core2.ModuleDefinition;
@@ -28,7 +24,6 @@ import org.sbolstandard.core2.SBOLValidationException;
 import org.sbolstandard.core2.Sequence;
 import org.sbolstandard.core2.TopLevel;
 import org.synbiohub.frontend.SynBioHubException;
-import org.synbiohub.frontend.SynBioHubFrontend;
 
 public class TestSynBioHubAccessor {
 
@@ -114,16 +109,15 @@ public class TestSynBioHubAccessor {
     public void testNonrecursiveFetch() throws Exception {
     	initializeTestInstance();
     	SBOLDocument document = SynBioHubAccessor.newBlankDocument();
-        String description = UUID.randomUUID().toString();
         ModuleDefinition m = document.createModuleDefinition("testNonrecursiveFetch", "1");
-        ComponentDefinition root = document.createComponentDefinition("root", "1", ComponentDefinition.DNA);
+        ComponentDefinition root = document.createComponentDefinition("root", "1", ComponentDefinition.DNA_REGION);
         Sequence seq = document.createSequence("root_seq", "nnn", Sequence.IUPAC_DNA);
-        ComponentDefinition sub1 = document.createComponentDefinition("sub1", "1", ComponentDefinition.DNA);
-        ComponentDefinition sub2 = document.createComponentDefinition("sub2", "1", ComponentDefinition.DNA);
-        ComponentDefinition sub3 = document.createComponentDefinition("sub3", "1", ComponentDefinition.DNA);
+        ComponentDefinition sub1 = document.createComponentDefinition("sub1", "1", ComponentDefinition.DNA_REGION);
+        ComponentDefinition sub2 = document.createComponentDefinition("sub2", "1", ComponentDefinition.DNA_REGION);
+        ComponentDefinition sub3 = document.createComponentDefinition("sub3", "1", ComponentDefinition.DNA_REGION);
         root.createComponent("sub1", AccessType.PUBLIC, sub1.getIdentity());
-        root.createComponent("sub2", AccessType.PUBLIC, sub1.getIdentity());
-        root.createComponent("sub3", AccessType.PUBLIC, sub1.getIdentity());
+        root.createComponent("sub2", AccessType.PUBLIC, sub2.getIdentity());
+        root.createComponent("sub3", AccessType.PUBLIC, sub3.getIdentity());
         root.setSequences(new HashSet<URI>(Arrays.asList(seq.getIdentity())));
         m.createFunctionalComponent("root_fc", AccessType.PUBLIC, root.getIdentity(), DirectionType.NONE);
         SynBioHubAccessor.update(document);
