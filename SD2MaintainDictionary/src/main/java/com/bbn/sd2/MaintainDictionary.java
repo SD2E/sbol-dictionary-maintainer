@@ -1270,6 +1270,17 @@ public final class MaintainDictionary {
             return;
         }
 
+        try {
+            log.info("Checking protections ...");
+            long requestCount = DictionaryAccessor.checkProtections();
+            log.info("Finished checking protections ...");
+
+            // Delay to throttle Google requests
+            Thread.sleep(requestCount * msPerGoogleRequest);
+        } catch(Exception e) {
+            e.printStackTrace();
+        }
+
         // Check for duplicate names.  Dictionary entries with
         // duplicate names are marked as invalid
         DictionaryAccessor.validateUniquenessOfEntries("Common Name", allTabEntries);
@@ -1569,17 +1580,6 @@ public final class MaintainDictionary {
             log.info("Processing Mapping Failures ...");
             processMappingFailures(allTabEntries);
             log.info("Finished processing Mapping Failures");
-        } catch(Exception e) {
-            e.printStackTrace();
-        }
-
-        try {
-            // Delay to throttle Google requests
-            log.info("Checking protections ...");
-            long requestCount = DictionaryAccessor.checkProtections();
-            log.info("Finished checking protections ...");
-
-            Thread.sleep(requestCount * msPerGoogleRequest);
         } catch(Exception e) {
             e.printStackTrace();
         }

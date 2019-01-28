@@ -40,7 +40,6 @@ import com.google.api.services.sheets.v4.model.Sheet;
 import com.google.api.services.sheets.v4.model.SheetProperties;
 import com.google.api.services.sheets.v4.model.Spreadsheet;
 import com.google.api.services.sheets.v4.model.TextFormat;
-import com.google.api.services.sheets.v4.model.UpdateProtectedRangeRequest;
 import com.google.api.services.sheets.v4.Sheets.Spreadsheets.Values;
 import com.google.api.services.sheets.v4.model.BatchUpdateValuesRequest;
 import com.google.api.services.sheets.v4.model.BatchUpdateValuesResponse;
@@ -53,6 +52,7 @@ import com.google.api.services.sheets.v4.model.UpdateValuesResponse;
 import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.GmailScopes;
 import com.google.api.services.gmail.model.Message;
+import com.google.api.services.gmail.model.Profile;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -105,6 +105,8 @@ public class DictionaryAccessor {
     private static Map<String, Sheet> cachedSheetProperties = null;
 
     private static Map< String, Map<String, Integer> > tab_headers = new TreeMap<>();
+
+    private static String loggedInUser = null;
 
     /** Configure from command-line arguments */
     public static void configure(CommandLine cmd) {
@@ -230,6 +232,11 @@ public class DictionaryAccessor {
         execute(gmailService.users().messages().send("me", message));
     }
 
+    public static Profile getProfile() throws IOException {
+        Gmail.Users.GetProfile getProfile = gmailService.users().getProfile("me");
+        return getProfile.execute();
+    }
+
     /**
      * Create a message from an email.
      *
@@ -258,6 +265,10 @@ public class DictionaryAccessor {
             gmailService = new Gmail.Builder(HTTP_TRANSPORT, JSON_FACTORY, getCredentials(HTTP_TRANSPORT))
                     .setApplicationName(APPLICATION_NAME)
                     .build();
+
+            Profile profile = getProfile();
+
+            loggedInUser = profile.getEmailAddress();
 
             log.info("Successfully logged into Google Gmail");
         } catch(Exception e) {
@@ -818,6 +829,7 @@ public class DictionaryAccessor {
 
         Set<String> editorSet = new TreeSet<>();
         editorSet.addAll(MaintainDictionary.editors);
+        editorSet.add(loggedInUser);
 
         for(ProtectedRange range : ranges) {
             // Extract the protection range
@@ -918,37 +930,36 @@ public class DictionaryAccessor {
                 continue;
             }
 
+            // List of users that can edit this protected region
             List<String> columnEditors = editors.getUsers();
 
-            if(columnEditors.size() > 0) {
-                // We assume the document owner is the last editor in the list.
-                // The owner needs to be in the editor list
-                int lastIndex = columnEditors.size() - 1;
-                editorSet.add( columnEditors.get( lastIndex ) );
-            }
+            // The document owner seems to be the last one in the list
+            String documentOwner = columnEditors.get( columnEditors.size() - 1);
+            editorSet.add(documentOwner);
 
             // Create a set of the current editors
             Set<String> currentEditors = new TreeSet<>();
             currentEditors.addAll( columnEditors );
 
             if(!currentEditors.equals(editorSet)) {
-                // Turn editorSet into a list
-                List<String> editorList = new ArrayList<>();
-                editorList.addAll(editorSet);
+                // The editor list is not correct.  Ideally we would
+                // just updated it, however we the Google request that
+                // updates the editors does not seem to work properly
+                // if the current user is not the editor. Therefore we
+                // remove the protection and add then add it back
+                // again.  This will cause the current user to
+                // automatically be added to the protection.
+                DeleteProtectedRangeRequest deleteRequest = new DeleteProtectedRangeRequest();
+                deleteRequest.setProtectedRangeId(range.getProtectedRangeId());
+                updateRangeRequests.add(new Request().setDeleteProtectedRange(deleteRequest));
 
-                // Update the editor list
-                range.getEditors().setUsers(editorList);
-                UpdateProtectedRangeRequest updateProtectedRange = new UpdateProtectedRangeRequest();
-                updateProtectedRange.setProtectedRange(range);
-                updateProtectedRange.setFields("editors.users");
-                Request request = new Request();
-                request.setUpdateProtectedRange(updateProtectedRange);
-                updateRangeRequests.add(request);
+                // This causes a new protection to be added
+                columnsToProtect.add(columnName);
             }
         }
 
         List<String> editorList = new ArrayList<>();
-        editorList.addAll(MaintainDictionary.editors);
+        editorList.addAll(editorSet);
 
         // Create a list of all the protected ranges that need to be
         // added to this document
