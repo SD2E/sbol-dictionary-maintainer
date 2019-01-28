@@ -40,7 +40,6 @@ import com.google.api.services.sheets.v4.model.Sheet;
 import com.google.api.services.sheets.v4.model.SheetProperties;
 import com.google.api.services.sheets.v4.model.Spreadsheet;
 import com.google.api.services.sheets.v4.model.TextFormat;
-import com.google.api.services.sheets.v4.model.UpdateProtectedRangeRequest;
 import com.google.api.services.sheets.v4.Sheets.Spreadsheets.Values;
 import com.google.api.services.sheets.v4.model.BatchUpdateValuesRequest;
 import com.google.api.services.sheets.v4.model.BatchUpdateValuesResponse;
@@ -908,18 +907,21 @@ public class DictionaryAccessor {
             currentEditors.addAll( columnEditors );
 
             if(!currentEditors.equals(editorSet)) {
-                // Turn editorSet into a list
-                List<String> editorList = new ArrayList<>();
-                editorList.addAll(editorSet);
+                // The editor list is not correct.  Ideally we would
+                // just updated it, however we need to make sure the
+                // current email address is in the list, and I am not
+                // sure which email address belongs to the currently
+                // logged in user.  Therefore we remove the protection
+                // and add then add it back again.  This will cause
+                // the current user to automatically be added to the
+                // protection.
 
-                // Update the editor list
-                range.getEditors().setUsers(editorList);
-                UpdateProtectedRangeRequest updateProtectedRange = new UpdateProtectedRangeRequest();
-                updateProtectedRange.setProtectedRange(range);
-                updateProtectedRange.setFields("editors.users");
-                Request request = new Request();
-                request.setUpdateProtectedRange(updateProtectedRange);
-                updateRangeRequests.add(request);
+                DeleteProtectedRangeRequest deleteRequest = new DeleteProtectedRangeRequest();
+                deleteRequest.setProtectedRangeId(range.getProtectedRangeId());
+                updateRangeRequests.add(new Request().setDeleteProtectedRange(deleteRequest));
+
+                // This causes a new protection to be added
+                columnsToProtect.add(columnName);
             }
         }
 
