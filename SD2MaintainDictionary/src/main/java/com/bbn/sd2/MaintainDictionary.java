@@ -20,6 +20,9 @@ import java.util.logging.Logger;
 import javax.mail.MessagingException;
 import javax.xml.namespace.QName;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import org.sbolstandard.core2.Annotation;
 import org.sbolstandard.core2.Collection;
 import org.sbolstandard.core2.ComponentDefinition;
@@ -687,7 +690,9 @@ public final class MaintainDictionary {
         return entries;
     }
 
-    private static String generateNotificationReport(Map<String, List<MappingFailureEntry>> itemToExperiments) {
+    private static MappingFailureEmailContent
+        generateNotificationReport(Map<String, List<MappingFailureEntry>> itemToExperiments) {
+
         // Sort item list
         Set<String> keySet = itemToExperiments.keySet();
         String[] keyArray = keySet.toArray(new String[0]);
@@ -699,6 +704,8 @@ public final class MaintainDictionary {
 
         // Build content of notification email
         String notificationReport = "Mapping Failures for " + lab + ":\n";
+
+        JSONArray ja = new JSONArray();
 
         for(String item : keyArray) {
             List<MappingFailureEntry> itemEntries = itemToExperiments.get(item);
@@ -713,15 +720,24 @@ public final class MaintainDictionary {
 
             Collections.sort(itemEntries, new CompareExperiments());
 
-            notificationReport += "\n\t" + item + ":\n";
+            notificationReport += "\n\t" + item + ", " +
+                itemEntries.get(0).getItemId() + "\n";
             for(MappingFailureEntry entry : itemEntries) {
+                ja.put( entry.toJSON() );
                 entry.setLastNotificationTime(notificationDate);
                 notificationReport += "\t\t" + entry.getExperiment() + " - row " +
                     entry.getRow() + "\n";
             }
         }
 
-        return notificationReport;
+        MappingFailureEmailContent email = null;
+        if(notificationReport != null) {
+            email = new MappingFailureEmailContent();
+            email.content = notificationReport;
+            email.attachmentData = ja.toString(2).getBytes();
+        }
+
+        return email;
     }
 
     private static void batchUpdateValues(List<ValueRange> values) throws IOException {
@@ -785,6 +801,16 @@ public final class MaintainDictionary {
         }
     }
 
+    static class MappingFailureEmailContent {
+        public MappingFailureEmailContent() {
+            content = null;
+            attachmentData = null;
+        }
+
+        public String content;
+        public byte[] attachmentData;
+    }
+
     // Find the spreadsheet column of the Status column in the mapping
     // failures tab
     private static char getMappingFailuresStatusColumn() throws IOException {
@@ -813,7 +839,9 @@ public final class MaintainDictionary {
         throw new IOException("Did not find Status column in Mapping Failures tab");
     }
 
-    private static String findMappingFailuresForLab(List<MappingFailureEntry> entries) throws IOException {
+    private static MappingFailureEmailContent
+        findMappingFailuresForLab(List<MappingFailureEntry> entries) throws IOException {
+
         if(entries.isEmpty()) {
             return null;
         }
@@ -859,7 +887,8 @@ public final class MaintainDictionary {
        return generateNotificationReport(itemToExperiments);
     }
 
-    private static Map<String, List<MappingFailureEntry>> generateMappingFailureLabEntries(List<MappingFailureEntry> entries)
+    private static Map<String, List<MappingFailureEntry>>
+        generateMappingFailureLabEntries(List<MappingFailureEntry> entries)
         throws IOException  {
 
         // Sort entries by labs
@@ -880,10 +909,12 @@ public final class MaintainDictionary {
         return labEntries;
     }
 
-    private static String resolveMappingFailuresForLab(List<MappingFailureEntry> labMappingFailures,
-                                                      List<MappingFailureEntry> allMappingFailures,
-                                                      List<DictionaryEntry> dictionaryEntries)
+    private static MappingFailureEmailContent
+        resolveMappingFailuresForLab(List<MappingFailureEntry> labMappingFailures,
+                                     List<MappingFailureEntry> allMappingFailures,
+                                     List<DictionaryEntry> dictionaryEntries)
         throws IOException {
+
         // This is the first row in the mapping failures sheet,
         // indexed starting at 1
         final int firstDataRow = 3;
@@ -950,6 +981,9 @@ public final class MaintainDictionary {
             notification = "The following mapping failures were resolved:\n\n";
         }
 
+        // Data in rows that were deleted
+        JSONArray ja = new JSONArray();
+
         // Remove rows in rowsToDelete set
         List<Request> deleteRequests = new ArrayList<>();
 
@@ -962,6 +996,8 @@ public final class MaintainDictionary {
             if(!rowsToDelete.contains(deleteIndex)) {
                 continue;
             }
+
+            ja.put( mEntry.toJSON() );
 
             // Generate request to delete the row from the spreadsheet
             // Note that Google API indexes rows starting at zero, so
@@ -989,7 +1025,14 @@ public final class MaintainDictionary {
 
         }
 
-        return notification;
+        MappingFailureEmailContent email = null;
+        if(notification != null) {
+            email = new MappingFailureEmailContent();
+            email.content = notification;
+            email.attachmentData = ja.toString(2).getBytes();
+        }
+
+        return email;
     }
 
     /*
@@ -999,14 +1042,16 @@ public final class MaintainDictionary {
      * Returns a map that maps lab names to the contents of a
      * notification email for that lab.
      */
-    private static Map<String, String> generateMappingFailureEmails(List<MappingFailureEntry> entries) throws IOException {
-        Map<String, String> notifications = new TreeMap<>();
+    private static Map<String, MappingFailureEmailContent>
+        generateMappingFailureEmails(List<MappingFailureEntry> entries) throws IOException {
+
+        Map<String, MappingFailureEmailContent> notifications = new TreeMap<>();
 
         Map<String, List<MappingFailureEntry>> labEntries =
             generateMappingFailureLabEntries(entries);
 
         for(String lab : labEntries.keySet()) {
-            String emailContent = findMappingFailuresForLab(labEntries.get(lab));
+            MappingFailureEmailContent emailContent = findMappingFailuresForLab(labEntries.get(lab));
             if(emailContent != null) {
                 notifications.put(lab, emailContent);
             }
@@ -1026,19 +1071,21 @@ public final class MaintainDictionary {
      * Returns a map that maps lab names to the contents of a
      * notification email for that lab.
      */
-    private static Map<String, String> generateMappingFailureResolutionEmails(List<MappingFailureEntry> mappingFailures,
-                                                                             List<DictionaryEntry> dictionaryEntries)
+    private static Map<String, MappingFailureEmailContent>
+        generateMappingFailureResolutionEmails(List<MappingFailureEntry> mappingFailures,
+                                               List<DictionaryEntry> dictionaryEntries)
         throws IOException {
 
-        Map<String, String> notifications = new TreeMap<>();
+        Map<String, MappingFailureEmailContent> notifications = new TreeMap<>();
 
         Map<String, List<MappingFailureEntry>> labEntries =
             generateMappingFailureLabEntries(mappingFailures);
 
         for(String lab : labEntries.keySet()) {
-            String emailContent = resolveMappingFailuresForLab(labEntries.get(lab),
-                                                               mappingFailures,
-                                                               dictionaryEntries);
+            MappingFailureEmailContent emailContent =
+                resolveMappingFailuresForLab(labEntries.get(lab),
+                                             mappingFailures,
+                                             dictionaryEntries);
             if(emailContent != null) {
                 notifications.put(lab, emailContent);
             }
@@ -1053,7 +1100,8 @@ public final class MaintainDictionary {
     private static void processMappingFailures(List<DictionaryEntry> dictionaryEntries) throws IOException {
         List<MappingFailureEntry> entries = getMappingFailures();
 
-        Map<String, String> notifications = generateMappingFailureResolutionEmails(entries, dictionaryEntries);
+        Map<String, MappingFailureEmailContent>
+            notifications = generateMappingFailureResolutionEmails(entries, dictionaryEntries);
         if(notifications != null) {
             for(String lab : notifications.keySet()) {
                 String toList = null;
@@ -1068,9 +1116,11 @@ public final class MaintainDictionary {
 
                 if(toList != null) {
                     try {
+                        MappingFailureEmailContent email = notifications.get(lab);
                         DictionaryAccessor.sendEmail(toList, ccList,
                                                      "Mapping Failure Resolutions",
-                                                     notifications.get(lab));
+                                                     email.content,
+                                                     email.attachmentData);
                         if(ccList != null) {
                             log.info("Sent mapping failure resolution email notification for "
                                      + lab + " to " + toList + " with cc " + ccList);
@@ -1108,9 +1158,11 @@ public final class MaintainDictionary {
 
                 if(toList != null) {
                     try {
+                        MappingFailureEmailContent email = notifications.get(lab);
                         DictionaryAccessor.sendEmail(toList, ccList,
                                                      "Mapping Failures Report",
-                                                     notifications.get(lab));
+                                                     email.content,
+                                                     email.attachmentData);
                         if(ccList != null) {
                             log.info("Sent mapping failure report email notification for "
                                      + lab + " to " + toList + " with cc " + ccList);

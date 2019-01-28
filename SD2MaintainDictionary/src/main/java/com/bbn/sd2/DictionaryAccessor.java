@@ -77,10 +77,17 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.logging.Logger;
 
+import javax.activation.DataHandler;
+import javax.activation.DataSource;
+import javax.mail.BodyPart;
 import javax.mail.MessagingException;
+import javax.mail.Multipart;
 import javax.mail.Session;
 import javax.mail.internet.InternetAddress;
+import javax.mail.internet.MimeBodyPart;
 import javax.mail.internet.MimeMessage;
+import javax.mail.internet.MimeMultipart;
+import javax.mail.util.ByteArrayDataSource;
 
 import org.apache.commons.cli.CommandLine;
 
@@ -179,8 +186,9 @@ public class DictionaryAccessor {
     public static void sendEmail(String to,
                                  String cc,
                                  String subject,
-                                 String bodyText)
-            throws MessagingException, IOException {
+                                 String bodyText,
+                                 byte[] attachmentData)
+        throws MessagingException, IOException {
         Properties props = new Properties();
         Session session = Session.getDefaultInstance(props, null);
 
@@ -199,8 +207,24 @@ public class DictionaryAccessor {
                                    new InternetAddress(recipient));
             }
         }
+
         email.setSubject(subject);
-        email.setText(bodyText);
+
+        BodyPart messageBodyPart = new MimeBodyPart();
+        messageBodyPart.setText(bodyText);
+        Multipart multipart = new MimeMultipart();
+        multipart.addBodyPart(messageBodyPart);
+
+        if(attachmentData != null) {
+            messageBodyPart = new MimeBodyPart();
+
+            DataSource source = new ByteArrayDataSource(attachmentData, "application/json");
+            messageBodyPart.setDataHandler( new DataHandler(source));
+            messageBodyPart.setFileName("dictionaryEntries.json");
+            multipart.addBodyPart(messageBodyPart);
+        }
+
+        email.setContent(multipart);
 
         Message message = createMessageWithEmail(email);
         execute(gmailService.users().messages().send("me", message));
