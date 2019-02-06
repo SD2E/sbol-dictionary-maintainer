@@ -1187,7 +1187,10 @@ public class DictionaryAccessor {
         long requestCount = 1;
 
         // Get the list of tabs to process
-        Set<String> tabList = MaintainDictionary.tabs();
+        Set<String> tabList = new TreeSet<>();
+
+        tabList.addAll(MaintainDictionary.tabs());
+        tabList.add("Mapping Failures");
 
         // Lookup the sheet properties and protected ranges on the source spreadsheet
         Sheets.Spreadsheets.Get get = sheetsService.spreadsheets().get(spreadsheetId);

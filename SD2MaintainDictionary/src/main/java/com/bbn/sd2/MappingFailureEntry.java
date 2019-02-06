@@ -6,7 +6,6 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Map;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class MappingFailureEntry {
