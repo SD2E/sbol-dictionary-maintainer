@@ -54,6 +54,7 @@ class DictionaryAccessor:
     # Select the spreadsheet that is being operated on
     def setSpreadsheetId(self, spreadsheetId):
         self.spreadsheetId = spreadsheetId
+        self.clearTabHeaderCache()
 
     # Retrieve all the data from a spreadsheet tab
     def getTabData(self, tab):
@@ -89,7 +90,11 @@ class DictionaryAccessor:
         self.tabHeaders[tab] = headerMap
         self.inverseTabHeaders[tab] = inverseHeaderMap
 
-    
+
+    def clearTabHeaderCache(self):
+        self.tabHeaders.clear()
+        self.inverseTabHeaders.clear()
+
     # Get the headers (and locations) in a tab
     # returns a map that maps headers to column indicies
     def getTabHeaders(self, tab):

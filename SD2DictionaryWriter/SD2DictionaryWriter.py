@@ -52,8 +52,7 @@ class SD2DictionaryWriter:
     def addMappingFailure(self, experimentRun: str = None, lab: str = None,
                           itemName: str = None, itemId: str = None,
                           itemType: str = None):
-        """Add a row to the Mapping Failures tab in the Dictionary
-        spreadsheet
+        """Add a row to the Mapping Failures tab in the Dictionary spreadsheet
 
           Arguments:
 
@@ -62,15 +61,15 @@ class SD2DictionaryWriter:
             itemName      -- the value for the "Item Name" column
             itemId        -- the value for the "Item ID" column
             itemType      -- the value for the "Item Type" column
-        
+
         """
-        entry = self.genMappingFailureEntry(experimentRun, lab,
-                                            itemName, itemId, itemType);
+        entry = self.__genMappingFailureEntry(experimentRun, lab,
+                                              itemName, itemId, itemType);
 
         sheetEntries = self.dictionaryAccessor.getRowData(MAPPING_FAILURES)
 
         for sheetEntry in sheetEntries:
-            if self.rowsEqual(entry, sheetEntry, self.mappingFailureKeys):
+            if self.__rowsEqual(entry, sheetEntry, self.mappingFailureKeys):
                 return
 
         entry['row'] = len(sheetEntries) + 3
@@ -79,12 +78,30 @@ class SD2DictionaryWriter:
 
     # By default the main dictionary spreadsheet is used.  This allows
     # the user to user specify a different spreadsheet
-    def setSpreadsheetId(self, spreadsheetId):
+    def setSpreadsheetId(self, spreadsheetId: str):
+        """Set the Google spreadsheet id
+
+          Arguments:
+
+            spreadsheetId  -- the Google spreadsheet id
+
+        """
         self.dictionaryAccessor.spreadsheetId = spreadsheetId
 
     # Update the lab id of an entry in the dictionary.  A new row is
     # created if the entry does not already exist
     def addDictionaryEntry(self, commonName, entryType, lab, labId):
+        """Add a lab id for a dictionary entry.  If the entry does not
+        exist it will be created
+
+          Arguments:
+
+            commonName    -- the "Common Name" column of the entry
+            entryType     -- the "Type" column of the entry
+            lab           -- the name of the lab
+            labId         -- the new lab id
+
+        """
         if entryType not in self.type2tab:
             raise Exception('Unrecognized type: ' + entryType);
 
@@ -100,7 +117,7 @@ class SD2DictionaryWriter:
                             tab +'"')
 
         # Generate a map from lab ids to the corresponding entries
-        labNameMap = self.genValueNameMap(sheetEntries, labKey)
+        labNameMap = self.__genValueNameMap(sheetEntries, labKey)
 
         if labId in labNameMap:
             entry = labNameMap[ labId ]
@@ -112,7 +129,7 @@ class SD2DictionaryWriter:
                                 format(labId, entry['row']))
 
         # Check to see if the common name exists
-        commonNameMap = self.genValueNameMap(sheetEntries, self.commonNameKey)
+        commonNameMap = self.__genValueNameMap(sheetEntries, self.commonNameKey)
         if commonName in commonNameMap:
             # Entry already exists
             entry = commonNameMap[commonName]
@@ -150,7 +167,7 @@ class SD2DictionaryWriter:
     ############################
 
     # Compares two rows
-    def rowsEqual(self, row1, row2, keys):
+    def __rowsEqual(self, row1, row2, keys):
         for key in keys:
             if key not in row1:
                 if key in row2:
@@ -165,8 +182,8 @@ class SD2DictionaryWriter:
         return True
 
     # Construct a mapping failure entry
-    def genMappingFailureEntry(self, experimentRun, lab, itemName,
-                               itemId, itemType):
+    def __genMappingFailureEntry(self, experimentRun, lab, itemName,
+                                 itemId, itemType):
         entry = {}
         if experimentRun is not None:
             entry[self.mfExperimentRunKey] = experimentRun
@@ -189,7 +206,7 @@ class SD2DictionaryWriter:
 
     # Generate a map whos keys are the values from a column, and whos
     # values are the corresponding row entries
-    def genValueNameMap(self, sheetEntries, valueKey):
+    def __genValueNameMap(self, sheetEntries, valueKey):
         valueNameMap = {}
         for sheetEntry in sheetEntries:
             if valueKey not in sheetEntry:
