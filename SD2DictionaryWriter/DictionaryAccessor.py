@@ -160,10 +160,14 @@ class DictionaryAccessor:
         rowRange = '{}!{}:{}'.format(tab, row, row)
         self.setTabData(rowRange, [rowData])
 
+    # Write a single cell value, given an entry, and the column name
+    # of the entry to be written
     def setRowValue(self, entry, column):
         return self.setCellValue(entry['tab'], entry['row'],
                                  column, entry[column])
 
+    # Write a single cell value, given an tab, row, column name, and
+    # value
     def setCellValue(self, tab, row, column, value):
         headers = self.getTabHeaders(tab)
         if column not in headers:
@@ -174,6 +178,8 @@ class DictionaryAccessor:
         rowRange = tab + '!' + col + str(row)
         self.setTabData(rowRange, [[value]])
 
+    # Generate a list of spreadsheet row value given a map the maps
+    # column headers to values
     def genRowData(self, entry, tab):
         headers = self.getTabInverseHeaders(tab)
         rowData = [''] * max(headers.keys())
