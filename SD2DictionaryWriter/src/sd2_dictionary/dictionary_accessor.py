@@ -25,7 +25,7 @@ class DictionaryAccessor:
                         'Solution'],
             'Genetic Construct': ['DNA', 'RNA'],
             'Strain': ['Strain'],
-            'Protein': ['Proteins'],
+            'Protein': ['Protein'],
             'Collections': ['Challenge Problem']
         }
 
