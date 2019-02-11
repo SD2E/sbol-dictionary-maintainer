@@ -7,30 +7,42 @@ from google.auth.transport.requests import Request
 
 # If modifying these scopes, delete the file token.pickle.
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-ProgramDictionary = '1oLJTTydL_5YPyk-wY-dspjIw_bPZ3oCiWiK0xtG8t3g'
+program_dictionary_id = '1oLJTTydL_5YPyk-wY-dspjIw_bPZ3oCiWiK0xtG8t3g'
+
 
 class DictionaryAccessor:
 
     # Constructor
-    def __init__(self):
-        self.typeTabs = {'Attribute'         : ['Attribute'],
-                         'Reagent'           : ['Bead', 'CHEBI', 'DNA', 'Protein',
-                                                'RNA', 'Media', 'Stain', 'Buffer',
-                                                'Solution'],
-                         'Genetic Construct' : ['DNA', 'RNA'],
-                         'Strain'            : ['Strain'],
-                         'Protein'           : ['Proteina'],
-                         'Collections'       : ['Challenge Problem']
+    def __init__(self, *, service, spreadsheet_id: str):
+        self._spreadsheet_id = spreadsheet_id
+        self._sheet_service = service
+        self._tab_headers = dict()
+        self._inverse_tab_headers = dict()
 
-                         }
+        self.type_tabs = {
+            'Attribute': ['Attribute'],
+            'Reagent': ['Bead', 'CHEBI', 'DNA', 'Protein',
+                        'RNA', 'Media', 'Stain', 'Buffer',
+                        'Solution'],
+            'Genetic Construct': ['DNA', 'RNA'],
+            'Strain': ['Strain'],
+            'Protein': ['Proteins'],
+            'Collections': ['Challenge Problem']
+        }
 
-        self.login()
+    @staticmethod
+    def create(*, spreadsheet_id=program_dictionary_id):
+        """
+        Ensures that the user is logged in and returns a `DictionaryAccessor`.
 
-    def login(self):
+        Credentials are initially read from the `credentials.json` file, and
+        are subsequently stored in the file `token.pickle` that stores the
+        user's access and refresh tokens.
+        The file `token.pickle` is created automatically when the authorization
+        flow completes for the first time.
+        """
         creds = None
-        # The file token.pickle stores the user's access and refresh tokens, and is
-        # created automatically when the authorization flow completes for the first
-        # time.
+        #
         if os.path.exists('token.pickle'):
             with open('token.pickle', 'rb') as token:
                 creds = pickle.load(token)
@@ -46,148 +58,171 @@ class DictionaryAccessor:
             with open('token.pickle', 'wb') as token:
                 pickle.dump(creds, token)
 
-        self.sheetsService = build('sheets', 'v4', credentials=creds)
-        self.spreadsheetId = ProgramDictionary
-        self.tabHeaders = {}
-        self.inverseTabHeaders = {}
+        return DictionaryAccessor(
+            spreadsheet_id=spreadsheet_id,
+            service=build('sheets', 'v4', credentials=creds)
+        )
 
-    # Select the spreadsheet that is being operated on
-    def setSpreadsheetId(self, spreadsheetId):
-        self.spreadsheetId = spreadsheetId
-        self.clearTabHeaderCache()
+    def set_spreadsheet_id(self, spreadsheet_id: str):
+        """
+        Select the spreadsheet that is being operated on.
+        """
+        self._spreadsheet_id = spreadsheet_id
+        self._clear_tab_header_cache()
 
-    # Retrieve all the data from a spreadsheet tab
-    def getTabData(self, tab):
-        values = self.sheetsService.spreadsheets().values()
-        get = values.get(spreadsheetId=self.spreadsheetId, range=tab)
+    def _get_tab_data(self, tab):
+        """
+        Retrieve all the data from a spreadsheet tab.
+        """
+        values = self._sheet_service.spreadsheets().values()
+        get = values.get(spreadsheetId=self._spreadsheet_id, range=tab)
         return get.execute()
 
-    # Write data to a spreadsheet tab
-    def setTabData(self, tab, values):
+    def _set_tab_data(self, *, tab, values):
+        """
+        Write data to a spreadsheet tab.
+        """
         body = {}
         body['values'] = values
         body['range'] = tab
         body['majorDimension'] = "ROWS"
 
-        values = self.sheetsService.spreadsheets().values()
-        updateRequest = values.update(spreadsheetId=self.spreadsheetId,
-                                      range=tab, body=body,
-                                      valueInputOption='RAW')
-        updateRequest.execute();
+        values = self._sheet_service.spreadsheets().values()
+        update_request = values.update(spreadsheetId=self._spreadsheet_id,
+                                       range=tab, body=body,
+                                       valueInputOption='RAW')
+        update_request.execute()
 
-    # Cache the headers (and locations) in a tab
-    # returns a map that maps headers to column indicies
-    def cacheTabHeaders(self, tab):
-        headerValues = self.getTabData(tab + "!2:2")['values'][0]
+    def _cache_tab_headers(self, tab):
+        """
+        Cache the headers (and locations) in a tab
+        returns a map that maps headers to column indexes
+        """
+        headerValues = self._get_tab_data(tab + "!2:2")['values'][0]
         headerMap = {}
-        for index in range( len(headerValues) ):
-            headerMap[ headerValues[ index ] ] = index
+        for index in range(len(headerValues)):
+            headerMap[headerValues[index]] = index
 
         inverseHeaderMap = {}
         for key in headerMap.keys():
-            inverseHeaderMap[ headerMap[ key ] ] = key
+            inverseHeaderMap[headerMap[key]] = key
 
-        self.tabHeaders[tab] = headerMap
-        self.inverseTabHeaders[tab] = inverseHeaderMap
+        self._tab_headers[tab] = headerMap
+        self._inverse_tab_headers[tab] = inverseHeaderMap
 
+    def _clear_tab_header_cache(self):
+        self._tab_headers.clear()
+        self._inverse_tab_headers.clear()
 
-    def clearTabHeaderCache(self):
-        self.tabHeaders.clear()
-        self.inverseTabHeaders.clear()
+    def get_tab_headers(self, tab):
+        """
+        Get the headers (and locations) in a tab
+        returns a map that maps headers to column indexes
+        """
+        if tab not in self._tab_headers.keys():
+            self._cache_tab_headers(tab)
 
-    # Get the headers (and locations) in a tab
-    # returns a map that maps headers to column indicies
-    def getTabHeaders(self, tab):
-        if tab not in self.tabHeaders.keys():
-            self.cacheTabHeaders(tab)
+        return self._tab_headers[tab]
 
-        return self.tabHeaders[tab]
+    def _get_tab_inverse_headers(self, tab):
+        """
+        Get the headers (and locations) in a tab
+        returns a map that maps column indexes to headers
+        """
+        if tab not in self._inverse_tab_headers.keys():
+            self._cache_tab_headers(tab)
 
-    # Get the headers (and locations) in a tab
-    # returns a map that maps column indicies to headers
-    def getTabInverseHeaders(self, tab):
-        if tab not in self.inverseTabHeaders.keys():
-            self.cacheTabHeaders(tab)
+        return self._inverse_tab_headers[tab]
 
-        return self.inverseTabHeaders[tab]
+    def get_row_data(self, *, tab, row=None):
+        """
+        Retrieve data in a tab.  Returns a list of maps, where each list
+        element maps a header name to the corresponding row value.  If
+        no row is specified all rows are returned
+        """
+        if tab not in self._tab_headers.keys():
+            self._cache_tab_headers(tab)
 
-    # Retreive data in a tab.  Returns a list of maps, where each list
-    # element maps a header name to the corresponding row value.  If
-    # no row is specified all rows are returned
-    def getRowData(self, tab, row=None):
-        if tab not in self.tabHeaders.keys():
-            self.cacheTabHeaders(tab)
-
-        headerValue = self.inverseTabHeaders[tab]
-        headers = self.tabHeaders[tab]
+        header_value = self._inverse_tab_headers[tab]
 
         if row is None:
-            valueRange=tab + '!3:9999'
+            value_range = tab + '!3:9999'
         else:
-            valueRange=tab + '!' + str(row) + ":" + str(row)
+            value_range = tab + '!' + str(row) + ":" + str(row)
 
-        values = self.getTabData(valueRange)['values']
-        rowData = []
-        rowIndex =  3
-        for rowValues in values:
-            thisRowData = {}
-            for i in range( len(headerValue) ):
-                if i >= len(rowValues):
-                    break;
+        values = self._get_tab_data(value_range)['values']
+        row_data = []
+        row_index = 3
+        for row_values in values:
+            this_row_data = {}
+            for i in range(len(header_value)):
+                if i >= len(row_values):
+                    break
 
-                header = headerValue[ i ]
-                value = rowValues[ i ]
+                header = header_value[i]
+                value = row_values[i]
 
                 if value is not None:
-                    thisRowData[ header ] = value
+                    this_row_data[header] = value
 
-            if len(thisRowData) > 0:
-                thisRowData['row'] = rowIndex
-                thisRowData['tab'] = tab
-                rowData.append(thisRowData)
+            if len(this_row_data) > 0:
+                this_row_data['row'] = row_index
+                this_row_data['tab'] = tab
+                row_data.append(this_row_data)
 
-            rowIndex += 1
+            row_index += 1
 
-        return rowData
+        return row_data
 
-    # Write a row to the spreadsheet.  The entry is a map that maps
-    # column headers to the corresponding values, with an additional
-    # set of keys that specify the tab and the spreadsheet row
-    def setRowData(self, entry):
+    def set_row_data(self, entry):
+        """
+        Write a row to the spreadsheet.  The entry is a map that maps
+        column headers to the corresponding values, with an additional
+        set of keys that specify the tab and the spreadsheet row
+        """
         tab = entry['tab']
         row = entry['row']
-        rowData = self.genRowData(entry, tab)
-        rowRange = '{}!{}:{}'.format(tab, row, row)
-        self.setTabData(rowRange, [rowData])
+        row_data = self.gen_row_data(entry=entry, tab=tab)
+        row_range = '{}!{}:{}'.format(tab, row, row)
+        self._set_tab_data(tab=row_range, values=[row_data])
 
-    # Write a single cell value, given an entry, and the column name
-    # of the entry to be written
-    def setRowValue(self, entry, column):
-        return self.setCellValue(entry['tab'], entry['row'],
-                                 column, entry[column])
+    def set_row_value(self, *, entry, column):
+        """
+        Write a single cell value, given an entry, and the column name
+        of the entry to be written
+        """
+        return self.set_cell_value(
+            tab=entry['tab'],
+            row=entry['row'],
+            column=column,
+            value=entry[column]
+        )
 
-    # Write a single cell value, given an tab, row, column name, and
-    # value
-    def setCellValue(self, tab, row, column, value):
-        headers = self.getTabHeaders(tab)
+    def set_cell_value(self, *, tab, row, column, value):
+        """
+        Write a single cell value, given an tab, row, column name, and value.
+        """
+        headers = self.get_tab_headers(tab)
         if column not in headers:
             raise Exception('No column "{}" on tab "{}"'.
                             format(column, tab))
 
-        col = chr ( ord('A') + headers[ column ] )
-        rowRange = tab + '!' + col + str(row)
-        self.setTabData(rowRange, [[value]])
+        col = chr(ord('A') + headers[column])
+        row_range = tab + '!' + col + str(row)
+        self._set_tab_data(tab=row_range, values=[[value]])
 
-    # Generate a list of spreadsheet row value given a map the maps
-    # column headers to values
-    def genRowData(self, entry, tab):
-        headers = self.getTabInverseHeaders(tab)
-        rowData = [''] * max(headers.keys())
+    def gen_row_data(self, *, entry, tab):
+        """
+        Generate a list of spreadsheet row value given a map the maps
+        column headers to values
+        """
+        headers = self._get_tab_inverse_headers(tab)
+        row_data = [''] * max(headers.keys())
 
         for index in headers.keys():
             header = headers[index]
             if header not in entry:
                 continue
-            rowData[index] = entry[header]
+            row_data[index] = entry[header]
 
-        return rowData
+        return row_data
