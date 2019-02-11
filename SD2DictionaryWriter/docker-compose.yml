@@ -5,6 +5,7 @@ services:
       context: .
       target: basebuilder
     entrypoint: ['python3', 'sample.py']
-
+    ports:
+      - "8080:8080"
 
 
