@@ -1,11 +1,12 @@
-from DictionaryAccessor import DictionaryAccessor
+from dictionary_accessor import DictionaryAccessor
 from functools import reduce
 
 MAPPING_FAILURES = 'Mapping Failures'
 
+
 class SD2DictionaryWriter:
     def __init__(self):
-        self.dictionaryAccessor = DictionaryAccessor()
+        self.dictionary = DictionaryAccessor.create()
 
         # Mapping failure tab column headers
         self.mfExperimentRunKey = 'Experiment/Run'
@@ -20,26 +21,15 @@ class SD2DictionaryWriter:
                                    self.mfItemIdKey,
                                    self.mfItemTypeKey]
 
-        # Types for each tab in the Dictionary spreadsheet
-        self.typeTabs = {'Attribute'         : ['Attribute'],
-                         'Reagent'           : ['Bead', 'CHEBI', 'DNA', 'Protein',
-                                                'RNA', 'Media', 'Stain', 'Buffer',
-                                                'Solution'],
-                         'Genetic Construct' : ['DNA', 'RNA'],
-                         'Strain'            : ['Strain'],
-                         'Protein'           : ['Proteina'],
-                         'Collections'       : ['Challenge Problem']
-
-                         }
-
         # Inverse map of typeTabs
-        self.type2tab = {};
-        for tabName in self.typeTabs.keys():
-            for typeName in self.typeTabs[ tabName ]:
-                self.type2tab[ typeName ] = tabName;
+        self.type2tab = {}
+        for tab_name in self.dictionary.type_tabs.keys():
+            for type_name in self.dictionary.type_tabs[tab_name]:
+                self.type2tab[type_name] = tab_name
 
         # Lab Names
-        self.labs = ['BioFAB', 'Ginkgo', 'Transcriptic', 'LBNL', 'EmeraldCloud']
+        self.labs = ['BioFAB', 'Ginkgo',
+                     'Transcriptic', 'LBNL', 'EmeraldCloud']
 
         # Dictionary spreadsheet column header names
         self.commonNameKey = 'Common Name'
@@ -49,9 +39,11 @@ class SD2DictionaryWriter:
         self.statusKey = 'Status'
 
     # Add an row to the Mapping Failures tab in the Dictionary spreadsheet
-    def addMappingFailure(self, experimentRun: str = None, lab: str = None,
-                          itemName: str = None, itemId: str = None,
-                          itemType: str = None):
+    def add_mapping_failure(self, *,
+                            experimentRun: str = None,
+                            lab: str = None,
+                            itemName: str = None, itemId: str = None,
+                            itemType: str = None):
         """Add a row to the Mapping Failures tab in the Dictionary spreadsheet
 
           Arguments:
@@ -64,9 +56,9 @@ class SD2DictionaryWriter:
 
         """
         entry = self.__genMappingFailureEntry(experimentRun, lab,
-                                              itemName, itemId, itemType);
+                                              itemName, itemId, itemType)
 
-        sheetEntries = self.dictionaryAccessor.getRowData(MAPPING_FAILURES)
+        sheetEntries = self.dictionary.get_row_data(tab=MAPPING_FAILURES)
 
         for sheetEntry in sheetEntries:
             if self.__rowsEqual(entry, sheetEntry, self.mappingFailureKeys):
@@ -74,11 +66,11 @@ class SD2DictionaryWriter:
 
         entry['row'] = len(sheetEntries) + 3
 
-        self.dictionaryAccessor.setRowData(entry)
+        self.dictionary.set_row_data(entry)
 
     # By default the main dictionary spreadsheet is used.  This allows
     # the user to user specify a different spreadsheet
-    def setSpreadsheetId(self, spreadsheetId: str):
+    def set_spreadsheet_id(self, spreadsheetId: str):
         """Set the Google spreadsheet id
 
           Arguments:
@@ -86,11 +78,11 @@ class SD2DictionaryWriter:
             spreadsheetId  -- the Google spreadsheet id
 
         """
-        self.dictionaryAccessor.spreadsheetId = spreadsheetId
+        self.dictionary.set_spreadsheet_id(spreadsheetId)
 
     # Update the lab id of an entry in the dictionary.  A new row is
     # created if the entry does not already exist
-    def addDictionaryEntry(self, commonName, entryType, lab, labId):
+    def add_dictionary_entry(self, commonName, entryType, lab, labId):
         """Add a lab id for a dictionary entry.  If the entry does not
         exist it will be created
 
@@ -103,24 +95,24 @@ class SD2DictionaryWriter:
 
         """
         if entryType not in self.type2tab:
-            raise Exception('Unrecognized type: ' + entryType);
+            raise Exception('Unrecognized type: ' + entryType)
 
-        tab = self.type2tab[ entryType ];
+        tab = self.type2tab[entryType]
 
-        sheetEntries = self.dictionaryAccessor.getRowData(tab)
+        sheetEntries = self.dictionary.get_row_data(tab=tab)
 
         # Make sure the lab has a column in the spreadsheet
-        labKey = lab + ' UID';
-        tabHeaders = self.dictionaryAccessor.getTabHeaders(tab)
+        labKey = lab + ' UID'
+        tabHeaders = self.dictionary.get_tab_headers(tab)
         if labKey not in tabHeaders.keys():
             raise Exception('No "' + labKey + '" column in tab "' +
-                            tab +'"')
+                            tab + '"')
 
         # Generate a map from lab ids to the corresponding entries
         labNameMap = self.__genValueNameMap(sheetEntries, labKey)
 
         if labId in labNameMap:
-            entry = labNameMap[ labId ]
+            entry = labNameMap[labId]
             if self.commonNameKey in entry:
                 raise Exception('Id "{}" is already assigned to "{}" (row {})'.
                                 format(labId, entry[self.commonNameKey], entry['row']))
@@ -129,7 +121,8 @@ class SD2DictionaryWriter:
                                 format(labId, entry['row']))
 
         # Check to see if the common name exists
-        commonNameMap = self.__genValueNameMap(sheetEntries, self.commonNameKey)
+        commonNameMap = self.__genValueNameMap(
+            sheetEntries, self.commonNameKey)
         if commonName in commonNameMap:
             # Entry already exists
             entry = commonNameMap[commonName]
@@ -137,7 +130,8 @@ class SD2DictionaryWriter:
             if entry[self.typeKey] != entryType:
                 if entry[self.typeKey] is None or len(entry[self.typeKey]) == 0:
                     entry[self.typeKey] = entryType
-                    self.dictionaryAccessor.setRowValue(entry, self.typeKey);
+                    self.dictionary.set_row_value(
+                        entry=entry, column=self.typeKey)
                 else:
                     raise Exception('Type of "{}" on row {} of tab "{}" is {}'.
                                     format(commonName, entry['row'], tab,
@@ -149,8 +143,10 @@ class SD2DictionaryWriter:
             entry[self.typeKey] = entryType
             entry['row'] = len(sheetEntries) + 3
             entry['tab'] = tab
-            self.dictionaryAccessor.setRowValue(entry, self.commonNameKey);
-            self.dictionaryAccessor.setRowValue(entry, self.typeKey);
+            self.dictionary.set_row_value(
+                entry=entry, column=self.commonNameKey)
+            self.dictionary.set_row_value(
+                entry=entry, column=self.typeKey)
 
         # Add Lab ID
         if labKey not in entry or len(entry[labKey]) == 0:
@@ -158,7 +154,7 @@ class SD2DictionaryWriter:
         else:
             entry[labKey] = entry[labKey] + "," + labId
 
-        self.dictionaryAccessor.setRowValue(entry, labKey);
+        self.dictionary.set_row_value(entry=entry, column=labKey)
 
     ############################
     #
@@ -214,8 +210,9 @@ class SD2DictionaryWriter:
             valueNames = sheetEntry[valueKey]
             if len(valueNames) == 0:
                 continue
-            valueNameList = list( map(lambda x: x.strip(), valueNames.split(',')) )
+            valueNameList = list(
+                map(lambda x: x.strip(), valueNames.split(',')))
             for valueName in valueNameList:
-                valueNameMap[ valueName ] = sheetEntry
+                valueNameMap[valueName] = sheetEntry
 
         return valueNameMap
