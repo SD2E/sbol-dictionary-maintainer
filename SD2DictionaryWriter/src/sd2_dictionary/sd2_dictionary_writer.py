@@ -1,12 +1,13 @@
-from dictionary_accessor import DictionaryAccessor
-from functools import reduce
+from sd2_dictionary.dictionary_accessor import DictionaryAccessor
 
 MAPPING_FAILURES = 'Mapping Failures'
+program_dictionary_id = '1oLJTTydL_5YPyk-wY-dspjIw_bPZ3oCiWiK0xtG8t3g'
 
 
 class SD2DictionaryWriter:
-    def __init__(self):
-        self.dictionary = DictionaryAccessor.create()
+    def __init__(self, *, spreadsheet_id=program_dictionary_id):
+        self.dictionary = DictionaryAccessor.create(
+            spreadsheet_id=spreadsheet_id)
 
         # Mapping failure tab column headers
         self.mfExperimentRunKey = 'Experiment/Run'
@@ -114,8 +115,9 @@ class SD2DictionaryWriter:
         if labId in labNameMap:
             entry = labNameMap[labId]
             if self.commonNameKey in entry:
-                raise Exception('Id "{}" is already assigned to "{}" (row {})'.
-                                format(labId, entry[self.commonNameKey], entry['row']))
+                raise Exception(
+                    'Id "{}" is already assigned to "{}" (row {})'.
+                    format(labId, entry[self.commonNameKey], entry['row']))
             else:
                 raise Exception('Id "{}" is already assigned on row {}'.
                                 format(labId, entry['row']))
@@ -128,7 +130,8 @@ class SD2DictionaryWriter:
             entry = commonNameMap[commonName]
 
             if entry[self.typeKey] != entryType:
-                if entry[self.typeKey] is None or len(entry[self.typeKey]) == 0:
+                if (entry[self.typeKey] is None
+                        or len(entry[self.typeKey]) == 0):
                     entry[self.typeKey] = entryType
                     self.dictionary.set_row_value(
                         entry=entry, column=self.typeKey)
@@ -200,7 +203,7 @@ class SD2DictionaryWriter:
 
         return entry
 
-    # Generate a map whos keys are the values from a column, and whos
+    # Generate a map with keys are the values from a column, and
     # values are the corresponding row entries
     def __genValueNameMap(self, sheetEntries, valueKey):
         valueNameMap = {}

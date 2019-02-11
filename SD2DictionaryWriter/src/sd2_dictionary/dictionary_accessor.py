@@ -7,7 +7,6 @@ from google.auth.transport.requests import Request
 
 # If modifying these scopes, delete the file token.pickle.
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-program_dictionary_id = '1oLJTTydL_5YPyk-wY-dspjIw_bPZ3oCiWiK0xtG8t3g'
 
 
 class DictionaryAccessor:
@@ -31,7 +30,7 @@ class DictionaryAccessor:
         }
 
     @staticmethod
-    def create(*, spreadsheet_id=program_dictionary_id):
+    def create(*, spreadsheet_id):
         """
         Ensures that the user is logged in and returns a `DictionaryAccessor`.
 
