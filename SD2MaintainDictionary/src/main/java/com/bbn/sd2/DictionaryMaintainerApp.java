@@ -31,6 +31,7 @@ public class DictionaryMaintainerApp {
     private static Map<String,String> mappingFailureToList = new HashMap<String,String>(){{
             put("BioFAB", "bjkeller@uw.edu");
             put("Transcriptic", "peter@transcriptic.com");
+            put("Transcriptic", "aespah@mit.edu");
             put("Ginkgo", "narendra@ginkgobioworks.com");
         }
             static final long serialVersionUID = 0;

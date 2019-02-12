@@ -7,7 +7,6 @@ import java.util.List;
 
 import org.apache.commons.cli.CommandLine;
 import org.junit.AfterClass;
-import org.junit.Test;
 import org.mortbay.log.Log;
 
 public class DictionaryTestShared {
