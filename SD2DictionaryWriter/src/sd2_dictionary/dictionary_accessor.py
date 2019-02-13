@@ -6,15 +6,19 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 
 # If modifying these scopes, delete the file token.pickle.
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets',
+          'https://www.googleapis.com/auth/drive.file']
 
 
 class DictionaryAccessor:
 
     # Constructor
-    def __init__(self, *, service, spreadsheet_id: str):
+    def __init__(self, *, spreadsheet_id: str, credentials):
+        self._sheet_service = build('sheets', 'v4',
+                                    credentials=credentials)
+        self._drive_service = build('drive', 'v3',
+                                    credentials=credentials)
         self._spreadsheet_id = spreadsheet_id
-        self._sheet_service = service
         self._tab_headers = dict()
         self._inverse_tab_headers = dict()
 
@@ -28,6 +32,17 @@ class DictionaryAccessor:
             'Protein': ['Protein'],
             'Collections': ['Challenge Problem']
         }
+
+        self._dictionary_headers = ['Common Name',
+                                    'Type',
+                                    'SynBioHub URI',
+                                    'Stub Object?',
+                                    'Definition URI',
+                                    'Status']
+
+        # Lab Names
+        self.labs = ['BioFAB', 'Ginkgo',
+                     'Transcriptic', 'LBNL', 'EmeraldCloud']
 
     @staticmethod
     def create(*, spreadsheet_id):
@@ -58,9 +73,76 @@ class DictionaryAccessor:
                 pickle.dump(creds, token)
 
         return DictionaryAccessor(
-            spreadsheet_id=spreadsheet_id,
-            service=build('sheets', 'v4', credentials=creds)
+            spreadsheet_id=spreadsheet_id, credentials=creds
         )
+
+    def create_new_spreadsheet(self, name: str):
+        """Creates a new spreadsheet and return the spreadsheet id
+          Arguements:
+
+            name - Name of the new spreadsheet
+
+        """
+        spreadsheet = {
+            'properties': {
+                'title': name
+                }
+            }
+        spreadsheets = self._sheet_service.spreadsheets()
+        create_sheets_request = spreadsheets.create(body=spreadsheet,
+                                                    fields='spreadsheetId')
+        return create_sheets_request.execute()
+
+    def delete_spreadsheet(self, spreadsheet_id: str):
+        """Delete an existing spreadsheet
+          Arguements:
+
+            spreadsheet_id - the spreadsheet to delete
+
+        """
+        files = self._drive_service.files()
+        request = files.delete(fileId=spreadsheet_id)
+        request.execute()
+
+    def create_dictionary_sheets(self):
+        """ Creates the standard tabs on the current spreadsheet.
+            The tabs are not popluated with any data
+        """
+        add_sheet_requests = list(map(lambda x: self.add_sheet_request(x),
+                                    list(self.type_tabs.keys())))
+        self._execute_requests(add_sheet_requests)
+
+        headers = self._dictionary_headers
+        headers += list(map(lambda x: x + ' UID', self.labs))
+
+        for tab in self.type_tabs.keys():
+            self._set_tab_data(tab=tab + '!2:2', values=[headers])
+
+    def add_sheet_request(self, sheet_title: str):
+        """ Creates a Google request to add a tab to the current spreadsheet
+
+          Arguments:
+
+            sheet_title: name of the new tab
+        """
+
+        request = {
+            'addSheet': {
+                'properties': {
+                    'title': sheet_title
+                    }
+                }
+            }
+        return request
+
+    def _execute_requests(self, requests: []):
+        body = {
+            'requests': requests
+            }
+        batch_request = self._sheet_service.spreadsheets().batchUpdate(
+            spreadsheetId=self._spreadsheet_id,
+            body=body)
+        batch_request.execute()
 
     def set_spreadsheet_id(self, spreadsheet_id: str):
         """
@@ -97,17 +179,23 @@ class DictionaryAccessor:
         Cache the headers (and locations) in a tab
         returns a map that maps headers to column indexes
         """
-        headerValues = self._get_tab_data(tab + "!2:2")['values'][0]
-        headerMap = {}
-        for index in range(len(headerValues)):
-            headerMap[headerValues[index]] = index
+        tab_data = self._get_tab_data(tab + "!2:2")
 
-        inverseHeaderMap = {}
-        for key in headerMap.keys():
-            inverseHeaderMap[headerMap[key]] = key
+        if 'values' not in tab_data:
+            raise Exception('No header values found in tab "' +
+                            tab + '"')
 
-        self._tab_headers[tab] = headerMap
-        self._inverse_tab_headers[tab] = inverseHeaderMap
+        header_values = tab_data['values'][0]
+        header_map = {}
+        for index in range(len(header_values)):
+            header_map[header_values[index]] = index
+
+        inverse_header_map = {}
+        for key in header_map.keys():
+            inverse_header_map[header_map[key]] = key
+
+        self._tab_headers[tab] = header_map
+        self._inverse_tab_headers[tab] = inverse_header_map
 
     def _clear_tab_header_cache(self):
         self._tab_headers.clear()
@@ -149,8 +237,12 @@ class DictionaryAccessor:
         else:
             value_range = tab + '!' + str(row) + ":" + str(row)
 
-        values = self._get_tab_data(value_range)['values']
+        tab_data = self._get_tab_data(value_range)
         row_data = []
+        if 'values' not in tab_data:
+            return row_data
+
+        values = tab_data['values']
         row_index = 3
         for row_values in values:
             this_row_data = {}

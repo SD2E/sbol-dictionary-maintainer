@@ -28,10 +28,6 @@ class SD2DictionaryWriter:
             for type_name in self.dictionary.type_tabs[tab_name]:
                 self.type2tab[type_name] = tab_name
 
-        # Lab Names
-        self.labs = ['BioFAB', 'Ginkgo',
-                     'Transcriptic', 'LBNL', 'EmeraldCloud']
-
         # Dictionary spreadsheet column header names
         self.commonNameKey = 'Common Name'
         self.typeKey = 'Type'
