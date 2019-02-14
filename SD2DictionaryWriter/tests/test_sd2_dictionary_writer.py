@@ -40,11 +40,59 @@ class TestSD2DictionaryWriter(unittest.TestCase):
             spreadsheet_id=self.spreadsheet_id
         )
 
-        dictionaryWriter.add_dictionary_entry(
-            'myChemical1', 'Solution', 'Ginkgo', 'label1')
+        # Add some entries
+        for x in range(5):
+            dictionaryWriter.add_dictionary_entry(
+                'myChemical' + str(x), 'Solution',
+                'Ginkgo', 'label' + str(x))
 
-        dictionaryWriter.add_dictionary_entry(
-            'myChemical2', 'Solution', 'Ginkgo', 'label2')
+        # Add some more entries
+        for x in range(5, 10):
+            dictionaryWriter.add_dictionary_entry(
+                'myChemical' + str(x), 'Solution',
+                'BioFAB', 'label' + str(x))
+
+        # Read back the spreadsheet data
+        sheet_entries = self.dictionary_accessor.get_row_data(
+            tab='Reagent'
+        )
+
+        # Crate a map from common names to entries
+        entry_map = {}
+        for entry in sheet_entries:
+            entry_map[ entry['Common Name'] ] = entry
+
+        # Check the entries
+        for x in range(10):
+            name = 'myChemical' + str(x)
+            assert name in entry_map
+            entry = entry_map[name]
+            assert entry['Type'] == 'Solution'
+            label = 'label' + str(x)
+            if x < 5:
+                assert entry['Ginkgo UID'] == label
+            else:
+                assert entry['BioFAB UID'] == label
+
+        # Try to add an element with the same name.  This should
+        # fail
+        try:
+            dictionaryWriter.add_dictionary_entry(
+                    'myChemical2', 'Solution',
+                    'BioFAB', 'label11')
+            assert False
+        except:
+            pass
+
+        # Try to add an element with the same label.  This should
+        # fail
+        try:
+            dictionaryWriter.add_dictionary_entry(
+                    'myChemical11', 'Solution',
+                    'BioFAB', 'label3')
+            assert False
+        except:
+            pass
 
     @classmethod
     def tearDownClass(self):
