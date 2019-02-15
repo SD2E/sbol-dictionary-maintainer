@@ -37,6 +37,7 @@ class TestSD2DictionaryWriter(unittest.TestCase):
         self.dictionary_accessor.set_spreadsheet_id(self.spreadsheet_id)
         self.dictionary_accessor.create_dictionary_sheets()
 
+
     def test_add_dictionary_entry(self):
         dictionaryWriter = SD2DictionaryWriter(
             spreadsheet_id=self.spreadsheet_id
@@ -137,22 +138,19 @@ class TestSD2DictionaryWriter(unittest.TestCase):
         for entry in sheet_entries:
             idx = entry['row'] - 3
 
-            print('Compare {} to {}'.format(entry['Experiment/Run'],
-                                            'experiment' + str(idx))
-
-            assert entry['Experiment/Run'] == ...
-            'experiment' + str(idx)
+            val = 'experiment' + str(idx)
+            assert entry['Experiment/Run'] == val
 
             assert entry['Lab'] == 'Transcriptic'
 
-            assert entry['Item Name'] == ...
-            'itemName' + str(idx)
+            val = 'itemName' + str(idx)
+            assert entry['Item Name'] == val
 
-            assert entry['Item ID'] == ...
-            'itemId' + str(idx)
+            val = 'itemId' + str(idx)
+            assert entry['Item ID'] == val
 
-            assert entry['Item Type (Strain or Reagent Tab)'] == ...
-            'Strain'
+            header = 'Item Type (Strain or Reagent Tab)'
+            assert entry[header] == 'Strain'
 
     @classmethod
     def tearDownClass(self):
