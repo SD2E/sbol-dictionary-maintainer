@@ -29,11 +29,13 @@ class TestSD2DictionaryWriter(unittest.TestCase):
                                 category=ResourceWarning)
 
         self.dictionary_accessor = DictionaryAccessor.create(spreadsheet_id="")
+
         self.spreadsheet_id = self.dictionary_accessor.create_new_spreadsheet(
-                    name='Dictionary Writer Test')['spreadsheetId']
+                    name='Dictionary Writer Test'
+        )['spreadsheetId']
+
         self.dictionary_accessor.set_spreadsheet_id(self.spreadsheet_id)
         self.dictionary_accessor.create_dictionary_sheets()
-
 
     def test_add_dictionary_entry(self):
         dictionaryWriter = SD2DictionaryWriter(
@@ -74,25 +76,83 @@ class TestSD2DictionaryWriter(unittest.TestCase):
             else:
                 assert entry['BioFAB UID'] == label
 
-        # Try to add an element with the same name.  This should
-        # fail
+        # Add a label to a different lab
+        dictionaryWriter.add_dictionary_entry(
+            'myChemical2', 'Solution',
+            'BioFAB', 'label11')
+
+        # Add an additional label
+        dictionaryWriter.add_dictionary_entry(
+            'myChemical2', 'Solution',
+            'BioFAB', 'label12')
+
+        # Try to add an element with the same name and different type.
+        # This should fail
+        generated_exception = False
         try:
             dictionaryWriter.add_dictionary_entry(
-                    'myChemical2', 'Solution',
+                    'myChemical2', 'Media',
                     'BioFAB', 'label11')
-            assert False
         except:
-            pass
+            generated_exception = True
+
+        assert generated_exception
 
         # Try to add an element with the same label.  This should
         # fail
+        generated_exception = False
         try:
             dictionaryWriter.add_dictionary_entry(
                     'myChemical11', 'Solution',
-                    'BioFAB', 'label3')
-            assert False
+                    'BioFAB', 'label7')
         except:
-            pass
+            generated_exception = True
+
+        assert generated_exception
+
+
+    def test_add_mapping_failures_entry(self):
+        dictionaryWriter = SD2DictionaryWriter(
+            spreadsheet_id=self.spreadsheet_id
+        )
+
+        # Add 5 entries, 2 times
+        for i in range(2):
+            for x in range(5):
+                dictionaryWriter.add_mapping_failure(
+                    experimentRun='experiment' + str(x),
+                    lab='Transcriptic',
+                    itemName='itemName' + str(x),
+                    itemId='itemId' + str(x),
+                    itemType='Strain'
+                )
+
+        # read back tab entries
+        sheet_entries = self.dictionary_accessor.get_row_data(
+            tab='Mapping Failures'
+        )
+
+        assert len(sheet_entries) == 5
+
+        for entry in sheet_entries:
+            idx = entry['row'] - 3
+
+            print('Compare {} to {}'.format(entry['Experiment/Run'],
+                                            'experiment' + str(idx))
+
+            assert entry['Experiment/Run'] == ...
+            'experiment' + str(idx)
+
+            assert entry['Lab'] == 'Transcriptic'
+
+            assert entry['Item Name'] == ...
+            'itemName' + str(idx)
+
+            assert entry['Item ID'] == ...
+            'itemId' + str(idx)
+
+            assert entry['Item Type (Strain or Reagent Tab)'] == ...
+            'Strain'
 
     @classmethod
     def tearDownClass(self):

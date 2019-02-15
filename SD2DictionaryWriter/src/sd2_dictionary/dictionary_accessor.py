@@ -4,11 +4,14 @@ import os.path
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+import time
 
 # If modifying these scopes, delete the file token.pickle.
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets',
           'https://www.googleapis.com/auth/drive.file']
 
+
+REQUESTS_PER_SEC = 0.5
 
 class DictionaryAccessor:
 
@@ -21,6 +24,7 @@ class DictionaryAccessor:
         self._spreadsheet_id = spreadsheet_id
         self._tab_headers = dict()
         self._inverse_tab_headers = dict()
+        self.MAPPING_FAILURES = 'Mapping Failures'
 
         self.type_tabs = {
             'Attribute': ['Attribute'],
@@ -39,6 +43,15 @@ class DictionaryAccessor:
                                     'Stub Object?',
                                     'Definition URI',
                                     'Status']
+
+        self.mapping_failures_headers = [
+            'Experiment/Run',
+	    'Lab',
+            'Item Name',
+            'Item ID',
+            'Item Type (Strain or Reagent Tab)',
+            'Status'
+            ]
 
         # Lab Names
         self.labs = ['BioFAB', 'Ginkgo',
@@ -91,7 +104,7 @@ class DictionaryAccessor:
         spreadsheets = self._sheet_service.spreadsheets()
         create_sheets_request = spreadsheets.create(body=spreadsheet,
                                                     fields='spreadsheetId')
-        return create_sheets_request.execute()
+        return self._execute_request(create_sheets_request)
 
     def delete_spreadsheet(self, spreadsheet_id: str):
         """Delete an existing spreadsheet
@@ -102,7 +115,7 @@ class DictionaryAccessor:
         """
         files = self._drive_service.files()
         request = files.delete(fileId=spreadsheet_id)
-        request.execute()
+        return self._execute_request(request)
 
     def create_dictionary_sheets(self):
         """ Creates the standard tabs on the current spreadsheet.
@@ -110,13 +123,21 @@ class DictionaryAccessor:
         """
         add_sheet_requests = list(map(lambda x: self.add_sheet_request(x),
                                     list(self.type_tabs.keys())))
+        # Mapping Failures tab
+        add_sheet_requests.append(
+            self.add_sheet_request( self.MAPPING_FAILURES )
+        )
         self._execute_requests(add_sheet_requests)
 
+        # Add sheet column headers
         headers = self._dictionary_headers
         headers += list(map(lambda x: x + ' UID', self.labs))
 
         for tab in self.type_tabs.keys():
             self._set_tab_data(tab=tab + '!2:2', values=[headers])
+
+        self._set_tab_data(tab=self.MAPPING_FAILURES + '!2:2',
+                           values=[self.mapping_failures_headers])
 
     def add_sheet_request(self, sheet_title: str):
         """ Creates a Google request to add a tab to the current spreadsheet
@@ -142,7 +163,12 @@ class DictionaryAccessor:
         batch_request = self._sheet_service.spreadsheets().batchUpdate(
             spreadsheetId=self._spreadsheet_id,
             body=body)
-        batch_request.execute()
+        time.sleep(len(requests) / REQUESTS_PER_SEC)
+        return batch_request.execute()
+
+    def _execute_request(self, request):
+        time.sleep(1.0 / REQUESTS_PER_SEC)
+        return request.execute()
 
     def set_spreadsheet_id(self, spreadsheet_id: str):
         """
@@ -157,7 +183,7 @@ class DictionaryAccessor:
         """
         values = self._sheet_service.spreadsheets().values()
         get = values.get(spreadsheetId=self._spreadsheet_id, range=tab)
-        return get.execute()
+        return self._execute_request(get)
 
     def _set_tab_data(self, *, tab, values):
         """
@@ -172,7 +198,7 @@ class DictionaryAccessor:
         update_request = values.update(spreadsheetId=self._spreadsheet_id,
                                        range=tab, body=body,
                                        valueInputOption='RAW')
-        update_request.execute()
+        self._execute_request(update_request)
 
     def _cache_tab_headers(self, tab):
         """
