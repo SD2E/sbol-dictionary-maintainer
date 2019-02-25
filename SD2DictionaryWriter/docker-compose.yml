@@ -1,0 +1,11 @@
+version: "3.6"
+services:
+  sample:
+    build:
+      context: .
+      target: basebuilder
+    entrypoint: ['python3', 'sample.py']
+    ports:
+      - "8080:8080"
+
+

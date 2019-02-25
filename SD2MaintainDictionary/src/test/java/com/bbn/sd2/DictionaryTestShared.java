@@ -7,7 +7,6 @@ import java.util.List;
 
 import org.apache.commons.cli.CommandLine;
 import org.junit.AfterClass;
-import org.junit.Test;
 import org.mortbay.log.Log;
 
 public class DictionaryTestShared {
@@ -78,13 +77,6 @@ public class DictionaryTestShared {
         }
         DictionaryMaintainerApp.restart();
         DictionaryMaintainerApp.main(options);
-    }
-
-
-    // TODO: Fix this test
-    @Test
-    public void verifyDictionaryTestEnvironment() throws Exception {
-        //DictionaryTestShared.initializeTestEnvironment(MaintainDictionary.defaultSpreadsheet());
     }
 
     @AfterClass

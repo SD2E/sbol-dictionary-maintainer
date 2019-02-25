@@ -21,7 +21,6 @@ import javax.mail.MessagingException;
 import javax.xml.namespace.QName;
 
 import org.json.JSONArray;
-import org.json.JSONObject;
 
 import org.sbolstandard.core2.Annotation;
 import org.sbolstandard.core2.Collection;
@@ -1292,6 +1291,8 @@ public final class MaintainDictionary {
                 tabEntries.put(tab, entries);
                 allTabEntries.addAll(entries);
             }
+
+            DictionaryAccessor.cacheTabHeaders("Mapping Failures");
 
             // Throttle Google requests
             long requestCount = (long)MaintainDictionary.tabs().size() * 2
