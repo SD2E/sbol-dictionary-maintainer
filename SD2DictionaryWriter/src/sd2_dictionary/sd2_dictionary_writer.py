@@ -96,7 +96,13 @@ class SD2DictionaryWriter:
 
         tab = self.type2tab[entryType]
 
-        sheetEntries = self.dictionary.get_row_data(tab=tab)
+        tabList = self.dictionary.type_tabs.keys()
+
+        sheetEntries = {}
+        allEntries = []
+        for tabName in tabList:
+            sheetEntries[tabName] = self.dictionary.get_row_data(tab=tabName)
+            allEntries += sheetEntries[tabName]
 
         # Make sure the lab has a column in the spreadsheet
         labKey = lab + ' UID'
@@ -106,21 +112,22 @@ class SD2DictionaryWriter:
                             tab + '"')
 
         # Generate a map from lab ids to the corresponding entries
-        labNameMap = self.__genValueNameMap(sheetEntries, labKey)
+        labNameMap = self.__genValueNameMap(allEntries, labKey)
 
         if labId in labNameMap:
             entry = labNameMap[labId]
             if self.commonNameKey in entry:
                 raise Exception(
-                    'Id "{}" is already assigned to "{}" (row {})'.
-                    format(labId, entry[self.commonNameKey], entry['row']))
+                    'Id "{}" is already assigned to "{}" (row {} of tab "{}")'.
+                    format(labId, entry[self.commonNameKey], entry['row'],
+                           entry['tab']))
             else:
-                raise Exception('Id "{}" is already assigned on row {}'.
-                                format(labId, entry['row']))
+                raise Exception('Id "{}" is already assigned on row {} of tab "{}"'.
+                                format(labId, entry['row'], entry['tab']))
 
         # Check to see if the common name exists
         commonNameMap = self.__genValueNameMap(
-            sheetEntries, self.commonNameKey)
+            allEntries, self.commonNameKey)
         if commonName in commonNameMap:
             # Entry already exists
             entry = commonNameMap[commonName]
@@ -133,14 +140,14 @@ class SD2DictionaryWriter:
                         entry=entry, column=self.typeKey)
                 else:
                     raise Exception('Type of "{}" on row {} of tab "{}" is {}'.
-                                    format(commonName, entry['row'], tab,
+                                    format(commonName, entry['row'], entry['tab'],
                                            entry[self.typeKey]))
         else:
             # New Entry
             entry = {}
             entry[self.commonNameKey] = commonName
             entry[self.typeKey] = entryType
-            entry['row'] = len(sheetEntries) + 3
+            entry['row'] = len(sheetEntries[tab]) + 3
             entry['tab'] = tab
             self.dictionary.set_row_value(
                 entry=entry, column=self.commonNameKey)
