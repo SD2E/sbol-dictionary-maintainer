@@ -1225,35 +1225,30 @@ public final class MaintainDictionary {
         Date now = new Date();
 
         List<DictionaryEntry> emailEntries = new ArrayList<>();
+        boolean sendEmail = false;
 
         if((now.getTime() - lastEmailTime) > invalidEntryNotifyPeriodMS) {
-            // Generate email messages for invalid entries
-            for(DictionaryEntry e : updates) {
-                if(colorsEqual(e.statusColor, redColor())) {
+            sendEmail = true;
+        }
+
+        // Generate email messages for invalid entries
+        for(DictionaryEntry e : updates) {
+            if(colorsEqual(e.statusColor, redColor())) {
+
+                if(sendEmail) {
                     // Generate an email message for this entry
-                    emailEntries.add(e);
                     e.lastNotifyTime = now;
+                    emailEntries.add(e);
+                }
+
+                if(e.lastNotifyTime.getTime() > 0) {
+                    // Make sure the status field records the last email notification time
+                    e.addNotificationDateToStatus();
                 }
             }
         }
 
         return emailEntries;
-    }
-
-    private static void updateEmailNotificationStatus(List<DictionaryEntry> updates) {
-        Date now = new Date();
-
-        // Update status fields with email notification times
-        for(DictionaryEntry e : updates) {
-            if((e.lastNotifyTime.getTime() > 0) &&
-               ((now.getTime() - e.lastNotifyTime.getTime()) < invalidEntryNotifyPeriodMS) ) {
-                // A notification email message has been sent with in the
-                // email notification period.  Keep the email notification time in
-                // status field to prevent sending email notification messages
-                // too often
-                e.addNotificationDateToStatus();
-            }
-        }
     }
 
     private static void sendEntryFailureEmails(List<DictionaryEntry> failuresToEmail)
@@ -1488,7 +1483,6 @@ public final class MaintainDictionary {
                 }
 
                 failuresToEmail.addAll(findFailuresToEmail(spreadsheetEntries, soonestNotifyTime));
-                updateEmailNotificationStatus(spreadsheetEntries);
 
                 // Check for deleted cells that caused column values to shift up
                 // If a deleted cell is found, an exception will be thrown
