@@ -1,6 +1,5 @@
 from sd2_dictionary.dictionary_accessor import DictionaryAccessor
 
-MAPPING_FAILURES = 'Mapping Failures'
 program_dictionary_id = '1oLJTTydL_5YPyk-wY-dspjIw_bPZ3oCiWiK0xtG8t3g'
 
 
@@ -15,6 +14,7 @@ class SD2DictionaryWriter:
         self.mfItemNameKey = 'Item Name'
         self.mfItemIdKey = 'Item ID'
         self.mfItemTypeKey = 'Item Type (Strain or Reagent Tab)'
+        self.MAPPING_FAILURES = self.dictionary.MAPPING_FAILURES
 
         self.mappingFailureKeys = [self.mfExperimentRunKey,
                                    self.mfLabKey,
@@ -27,10 +27,6 @@ class SD2DictionaryWriter:
         for tab_name in self.dictionary.type_tabs.keys():
             for type_name in self.dictionary.type_tabs[tab_name]:
                 self.type2tab[type_name] = tab_name
-
-        # Lab Names
-        self.labs = ['BioFAB', 'Ginkgo',
-                     'Transcriptic', 'LBNL', 'EmeraldCloud']
 
         # Dictionary spreadsheet column header names
         self.commonNameKey = 'Common Name'
@@ -59,7 +55,7 @@ class SD2DictionaryWriter:
         entry = self.__genMappingFailureEntry(experimentRun, lab,
                                               itemName, itemId, itemType)
 
-        sheetEntries = self.dictionary.get_row_data(tab=MAPPING_FAILURES)
+        sheetEntries = self.dictionary.get_row_data(tab=self.MAPPING_FAILURES)
 
         for sheetEntry in sheetEntries:
             if self.__rowsEqual(entry, sheetEntry, self.mappingFailureKeys):
@@ -199,7 +195,7 @@ class SD2DictionaryWriter:
         if itemType is not None:
             entry[self.mfItemTypeKey] = itemType
 
-        entry['tab'] = MAPPING_FAILURES
+        entry['tab'] = self.MAPPING_FAILURES
 
         return entry
 
