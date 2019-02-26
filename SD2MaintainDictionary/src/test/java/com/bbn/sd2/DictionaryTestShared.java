@@ -79,6 +79,36 @@ public class DictionaryTestShared {
         DictionaryMaintainerApp.main(options);
     }
 
+    public static void synBioHubLogin() throws Exception {
+        // Configure options for DictionaryMaintainer to use the staging instance of SBH and temporary Google Sheets
+        // Do not initiate tests if password for SBH instance is not provided
+        String password = System.getProperty("p");
+        if (password == null) {
+            fail("Unable to initialize test environment. Password for SynBioHub staging instance was not provided.");
+        }
+
+        List<String> optionList = new ArrayList<>();
+
+        // URL for SynBioHub server
+        optionList.add("-S");
+        optionList.add("https://hub-staging.sd2e.org");
+
+        // Spoofing URL prefix
+        optionList.add("-f");
+        optionList.add("https://hub.sd2e.org");
+
+        // Set password for SynBioHub
+        optionList.add("-p");
+        optionList.add(password);
+
+        String[] options = optionList.toArray(new String[0]);
+        CommandLine cmd;
+        cmd = DictionaryMaintainerApp.parseArguments(options);
+
+        SynBioHubAccessor.configure(cmd);
+        SynBioHubAccessor.restart();
+    }
+
     @AfterClass
     public static void tearDownAfterClass() throws Exception {
         SynBioHubAccessor.logout();

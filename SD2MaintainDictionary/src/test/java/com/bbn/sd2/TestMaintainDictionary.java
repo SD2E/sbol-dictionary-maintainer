@@ -414,6 +414,9 @@ public class TestMaintainDictionary {
         // Check the protections
         validateProtections();
 
+        // Log into SynBioHub
+        DictionaryTestShared.synBioHubLogin();
+
         // Translate the URI
         URI local_uri = SynBioHubAccessor.translateURI(new URI(updateUri));
 
