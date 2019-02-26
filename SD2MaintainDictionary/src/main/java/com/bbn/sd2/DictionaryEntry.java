@@ -42,7 +42,7 @@ public class DictionaryEntry {
     public SBOLDocument document = null;
     public Color statusColor;
     public UpdateReport report = new UpdateReport();
-    private String lastNotifyTag = "Last Notify ";
+    private final String lastNotifyTag = "Last Notify ";
     private SimpleDateFormat dateFormatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z");
     public static Map<String, String> labUIDMap =
         new TreeMap<String, String>() {

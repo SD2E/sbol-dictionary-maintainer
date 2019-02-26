@@ -60,6 +60,18 @@ public class DictionaryMaintainerApp {
             static final long serialVersionUID = 0;
         };
 
+    private static Map<String,String> entryFailureList = new HashMap<String,String>(){{
+            put("To", "jakebeal@gmail.com;dan.sumorok@raytheon.com");
+        }
+            static final long serialVersionUID = 0;
+        };
+
+    private static Map<String,String> entryFailureListTest = new HashMap<String,String>(){{
+            put("To", "dan.sumorok@raytheon.com");
+        }
+            static final long serialVersionUID = 0;
+        };
+
     public static void main(String... args) throws Exception {
         // Parse arguments and configure
         CommandLine cmd = parseArguments(args);
@@ -76,11 +88,13 @@ public class DictionaryMaintainerApp {
 
         if(!no_email) {
             if(!test_mode) {
-                emailLists.put("To", mappingFailureToList);
-                emailLists.put("CC", mappingFailureCCList);
+                emailLists.put("MappingFailuresTo", mappingFailureToList);
+                emailLists.put("MappingFailuresCC", mappingFailureCCList);
+                emailLists.put("EntryFailures", entryFailureList);
             } else {
-                emailLists.put("To", mappingFailureToListTest);
-                emailLists.put("CC", mappingFailureCCListTest);
+                emailLists.put("MappingFailuresTo", mappingFailureToListTest);
+                emailLists.put("MappingFailuresCC", mappingFailureCCListTest);
+                emailLists.put("EntryFailures", entryFailureListTest);
             }
         }
 

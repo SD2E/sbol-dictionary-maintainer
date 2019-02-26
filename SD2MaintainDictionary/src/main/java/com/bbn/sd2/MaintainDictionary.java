@@ -138,6 +138,9 @@ public final class MaintainDictionary {
     private static Map<String,String> mappingFailureToList = null;
     private static Map<String,String> mappingFailureCCList = null;
 
+    /** Email addresses entry failures are sent to */
+    private static Map<String, String> entryFailuresList = null;
+
     /** The amount of time, in seconds, before notification email messages
      * for the mapping failures tab
      */
@@ -1218,7 +1221,7 @@ public final class MaintainDictionary {
         return true;
     }
 
-    private static void generateNotificationEmails(List<DictionaryEntry> updates, long lastEmailTime) {
+    private static List<DictionaryEntry> findFailuresToEmail(List<DictionaryEntry> updates, long lastEmailTime) {
         Date now = new Date();
 
         List<DictionaryEntry> emailEntries = new ArrayList<>();
@@ -1233,6 +1236,8 @@ public final class MaintainDictionary {
                 }
             }
         }
+
+        return emailEntries;
     }
 
     private static void updateEmailNotificationStatus(List<DictionaryEntry> updates) {
@@ -1251,6 +1256,44 @@ public final class MaintainDictionary {
         }
     }
 
+    private static void sendEntryFailureEmails(List<DictionaryEntry> failuresToEmail)
+        throws IOException,MessagingException {
+
+        if(failuresToEmail.isEmpty()) {
+            return;
+        }
+
+        if(entryFailuresList == null) {
+            return;
+        }
+
+        String toList = entryFailuresList.get("To");
+        String ccList = entryFailuresList.get("CC");
+
+        if(toList == null) {
+            return;
+        }
+
+        String emailContent = "";
+        for(DictionaryEntry entry : failuresToEmail) {
+            emailContent += entry.tab + " tab, row "
+                + entry.row_index + ", "
+                + entry.report.toString() + "\r\n\r\n";
+        }
+
+        DictionaryAccessor.sendEmail(toList, ccList,
+                                     "SD2 Dictionary Entry Errors",
+                                     emailContent, null);
+
+        if(ccList == null) {
+            log.info("Sent entry failure email to " + toList);
+        } else {
+            log.info("Sent entry failure email to " + toList +
+                     ", with cc " + ccList);
+        }
+
+    }
+
     /**
      * Run one pass through the dictionary, updating all entries as needed
      */
@@ -1260,8 +1303,9 @@ public final class MaintainDictionary {
         Color gray = grayColor();
 
         // Extract email address lists for mapping failure tab notifications
-        mappingFailureToList = emailLists.get("To");
-        mappingFailureCCList = emailLists.get("CC");
+        mappingFailureToList = emailLists.get("MappingFailuresTo");
+        mappingFailureCCList = emailLists.get("MappingFailuresCC");
+        entryFailuresList = emailLists.get("EntryFailures");
 
         // A list of all the dictionary entries in all the tabs
         List<DictionaryEntry> allTabEntries = new ArrayList<>();
@@ -1330,6 +1374,10 @@ public final class MaintainDictionary {
         for(String uidTag : DictionaryEntry.labUIDMap.keySet()) {
             DictionaryAccessor.validateUniquenessOfEntries(uidTag, allTabEntries);
         }
+
+        // List of entries that failed that need to be included in
+        // notification email messages
+        List<DictionaryEntry> failuresToEmail = new ArrayList<>();
 
         for(String tab : MaintainDictionary.tabs()) {
             int rangeId = -1;
@@ -1439,7 +1487,7 @@ public final class MaintainDictionary {
                     updatedEntryMap.put(e.row_index, e);
                 }
 
-                generateNotificationEmails(spreadsheetEntries, soonestNotifyTime);
+                failuresToEmail.addAll(findFailuresToEmail(spreadsheetEntries, soonestNotifyTime));
                 updateEmailNotificationStatus(spreadsheetEntries);
 
                 // Check for deleted cells that caused column values to shift up
@@ -1635,6 +1683,13 @@ public final class MaintainDictionary {
             log.info("Processing Mapping Failures ...");
             processMappingFailures(allTabEntries);
             log.info("Finished processing Mapping Failures");
+        } catch(Exception e) {
+            e.printStackTrace();
+        }
+
+        try {
+            // Periodically send email message about entry failures
+            sendEntryFailureEmails(failuresToEmail);
         } catch(Exception e) {
             e.printStackTrace();
         }
