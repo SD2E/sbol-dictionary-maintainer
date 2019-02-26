@@ -46,7 +46,7 @@ class TestSD2DictionaryWriter(unittest.TestCase):
         # Add some entries
         for x in range(5):
             dictionaryWriter.add_dictionary_entry(
-                'myChemical' + str(x), 'Solution',
+                'myChemical' + str(x), 'Strain',
                 'Ginkgo', 'label' + str(x))
 
         # Add some more entries
@@ -60,6 +60,10 @@ class TestSD2DictionaryWriter(unittest.TestCase):
             tab='Reagent'
         )
 
+        sheet_entries += self.dictionary_accessor.get_row_data(
+            tab='Strain'
+        )
+
         # Crate a map from common names to entries
         entry_map = {}
         for entry in sheet_entries:
@@ -70,21 +74,22 @@ class TestSD2DictionaryWriter(unittest.TestCase):
             name = 'myChemical' + str(x)
             assert name in entry_map
             entry = entry_map[name]
-            assert entry['Type'] == 'Solution'
             label = 'label' + str(x)
             if x < 5:
+                assert entry['Type'] == 'Strain'
                 assert entry['Ginkgo UID'] == label
             else:
+                assert entry['Type'] == 'Solution'
                 assert entry['BioFAB UID'] == label
 
         # Add a label to a different lab
         dictionaryWriter.add_dictionary_entry(
-            'myChemical2', 'Solution',
+            'myChemical2', 'Strain',
             'BioFAB', 'label11')
 
         # Add an additional label
         dictionaryWriter.add_dictionary_entry(
-            'myChemical2', 'Solution',
+            'myChemical2', 'Strain',
             'BioFAB', 'label12')
 
         # Try to add an element with the same name and different type.
@@ -92,7 +97,7 @@ class TestSD2DictionaryWriter(unittest.TestCase):
         generated_exception = False
         try:
             dictionaryWriter.add_dictionary_entry(
-                    'myChemical2', 'Media',
+                    'myChemical2', 'Solution',
                     'BioFAB', 'label11')
         except:
             generated_exception = True
