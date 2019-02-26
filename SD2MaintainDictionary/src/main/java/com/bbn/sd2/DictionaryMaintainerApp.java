@@ -65,8 +65,6 @@ public class DictionaryMaintainerApp {
         CommandLine cmd = parseArguments(args);
         sleepMillis = 1000*Integer.valueOf(cmd.getOptionValue("sleep","60"));
         log.info("Dictionary Maintainer initializing "+(cmd.hasOption("test_mode")?"in single update mode":"for continuous operation"));
-        DictionaryAccessor.configure(cmd);
-        SynBioHubAccessor.configure(cmd);
         stopWorkerThreads = false;
         kludge_heartbeat_reporter();
         final boolean backupInMainLoop = true;
@@ -83,6 +81,9 @@ public class DictionaryMaintainerApp {
                 emailLists.put("CC", mappingFailureCCListTest);
             }
         }
+
+        DictionaryAccessor.configure(cmd);
+        DictionaryAccessor.restart();
 
         if(!backupInMainLoop) {
             if(!test_mode) {
@@ -108,67 +109,72 @@ public class DictionaryMaintainerApp {
         // This keeps track of the next time to run a backup
         long nextBackupTime = nextMidnightUTC + (backTimeHoursAM_UTC * hourMillis);
 
-        // Run as an eternal loop, reporting errors but not crashing out
-        while(!stopSignal) {
-            DictionaryAccessor.restart();
-            SynBioHubAccessor.restart();
+        // Make sure collection exists
 
-            try {
-                if(!SynBioHubAccessor.collectionExists()) {
-                    URI collectionID = SynBioHubAccessor.getCollectionID();
-                    if(collectionID != null) {
-                        log.severe("Collection " + collectionID + " does not exist");
-                    } else {
-                        log.severe("Collection does not exist");
-                    }
-                    return;
+        SynBioHubAccessor.configure(cmd);
+        SynBioHubAccessor.restart();
+        try {
+            if(!SynBioHubAccessor.collectionExists()) {
+                URI collectionID = SynBioHubAccessor.getCollectionID();
+                if(collectionID != null) {
+                    log.severe("Collection " + collectionID + " does not exist");
+                } else {
+                    log.severe("Collection does not exist");
                 }
-            } catch(SynBioHubException e) {
-                e.printStackTrace();
                 return;
             }
+        } catch(SynBioHubException e) {
+            e.printStackTrace();
+            return;
+        }
+        SynBioHubAccessor.logout();
 
-            while(!stopSignal) {
-                try {
-                    long start = System.currentTimeMillis();
-                    MaintainDictionary.maintain_dictionary(emailLists);
-                    long end = System.currentTimeMillis();
-                    NumberFormat formatter = new DecimalFormat("#0.00000");
-                    log.info("Dictionary update executed in " + formatter.format((end - start) / 1000d) + " seconds");
-                } catch(Exception e) {
-                    log.severe("Exception while maintaining dictionary:");
-                    e.printStackTrace();
-                }
-                if (test_mode) {
-                    setStopSignal();
-                } else {
-                    if(backupInMainLoop) {
-                        try {
-                            Thread.sleep(sleepMillis);
+        // Run as an eternal loop, reporting errors but not crashing out
+        while(!stopSignal) {
+            try {
+                long start = System.currentTimeMillis();
+                SynBioHubAccessor.configure(cmd);
+                SynBioHubAccessor.restart();
+                MaintainDictionary.maintain_dictionary(emailLists);
+                SynBioHubAccessor.logout();
+                long end = System.currentTimeMillis();
+                NumberFormat formatter = new DecimalFormat("#0.00000");
+                log.info("Dictionary update executed in " + formatter.format((end - start) / 1000d) + " seconds");
+            } catch(Exception e) {
+                log.severe("Exception while maintaining dictionary:");
+                e.printStackTrace();
+            }
 
-                            if(System.currentTimeMillis() > nextBackupTime) {
-                                // Back up spreadsheet
-                                DictionaryAccessor.backup();
-
-                                while(System.currentTimeMillis() > nextBackupTime) {
-                                    nextBackupTime += dayMillis;
-                                }
-                            }
-
-                            copyTabsToStagingSpreadsheet();
-                        } catch(Exception e) {
-                            e.printStackTrace();
-                        }
-                    }
-
+            if (test_mode) {
+                setStopSignal();
+            } else {
+                if(backupInMainLoop) {
                     try {
                         Thread.sleep(sleepMillis);
-                    } catch(InterruptedException e) {
-                        // ignore sleep interruptions
+
+                        if(System.currentTimeMillis() > nextBackupTime) {
+                            // Back up spreadsheet
+                            DictionaryAccessor.backup();
+
+                            while(System.currentTimeMillis() > nextBackupTime) {
+                                nextBackupTime += dayMillis;
+                            }
+                        }
+
+                        copyTabsToStagingSpreadsheet();
+                    } catch(Exception e) {
+                        e.printStackTrace();
                     }
+                }
+
+                try {
+                    Thread.sleep(sleepMillis);
+                } catch(InterruptedException e) {
+                    // ignore sleep interruptions
                 }
             }
         }
+
         stopWorkerThreads = true;
         heartbeatSem.release(1);
         backupSem.release(1);
