@@ -590,7 +590,7 @@ public final class MaintainDictionary {
                 }
             }
 
-            if(e.attribute && e.attributeDefinition!=null) {
+            if(e.attribute) {
                 Set<URI> derivations = entity.getWasDerivedFroms();
                 if(originalEntry != null) {
                     if(derivations.size() == 0) {
@@ -601,11 +601,20 @@ public final class MaintainDictionary {
                     }
                 }
 
-                if(derivations.size()==0 || !e.attributeDefinition.equals(derivations.iterator().next())) {
-                    derivations.clear(); derivations.add(e.attributeDefinition);
-                    entity.setWasDerivedFroms(derivations);
-                    e.changed = true;
-                    e.report.success("Definition for "+e.name+" is '"+e.attributeDefinition+"'",true);
+                if(e.attributeDefinition == null) {
+                    if(derivations.size() > 0) {
+                        derivations.clear();
+                        entity.setWasDerivedFroms(derivations);
+                        e.changed = true;
+                        e.report.success("Definition for " + e.name + " was removed." ,true);
+                    }
+                } else {
+                    if(derivations.size()==0 || !e.attributeDefinition.equals(derivations.iterator().next())) {
+                        derivations.clear(); derivations.add(e.attributeDefinition);
+                        entity.setWasDerivedFroms(derivations);
+                        e.changed = true;
+                        e.report.success("Definition for "+e.name+" is '"+e.attributeDefinition+"'",true);
+                    }
                 }
             }
 

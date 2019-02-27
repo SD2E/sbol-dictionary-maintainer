@@ -379,9 +379,6 @@ public class TestMaintainDictionary {
         chebiURI = MaintainDictionary.getCHEBIURI(entity);
         assert(chebiURI.equals(expectedCHEBIURI));
 
-        assert(false);
-
-
         // Check mapping failures
         ValueRange mappingFailureData1 = DictionaryAccessor.getTabData("Mapping Failures!D:E");
         mappingFailureIdValues = mappingFailureData1.getValues();
