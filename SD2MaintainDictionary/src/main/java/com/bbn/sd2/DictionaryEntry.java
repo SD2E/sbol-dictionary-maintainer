@@ -229,6 +229,21 @@ public class DictionaryEntry {
         if("Attribute".equals(type)) attribute = true; // check if it's an attribute
         if(fullbox(row, header_map.get("SynBioHub URI"))) uri = URI.create(row.get(header_map.get("SynBioHub URI")).toString());
 
+        String attributeStr = null;
+        Integer col = header_map.get("Definition URI / CHEBI ID");
+        if(col == null) {
+            header_map.get("Definition URI");
+        }
+
+        if((col != null) && (fullbox(row, col))) {
+            attributeStr = (String)row.get(col);
+
+            try {
+                attributeDefinition = new URI(attributeStr);
+            } catch(Exception e) {
+            }
+        }
+
         for(String uidLabel : labUIDMap.keySet()) {
             String uidTag = labUIDMap.get(uidLabel);
 

@@ -286,29 +286,43 @@ public class TestMaintainDictionary {
             // Populate a dummy object for each allowed type
             int itemIdIndex = 10;
             for (String type : MaintainDictionary.getAllowedTypesForTab(tab)) {
-                String[] row_entries = new String[header_map.keySet().size()];
-                for (String header : header_map.keySet()) {
-                    String entry = null;
-                    if (header.equals("Type")) {
-                        entry = type;
-                    } else if (header.equals("Common Name")) {
-                        entry = UUID.randomUUID().toString().substring(0,6);
-                    } else if (header.equals("BioFAB UID") && tab.equals("Reagent")) {
-                        entry = UUID.randomUUID().toString().substring(0,6);
-                        String resolvedUID = (String)mappingFailureIdValues.get(itemIdIndex).get(0);
-                        if(!resolvedUIDs.contains(resolvedUID)) {
-                            entry += ", " + resolvedUID;
-                            resolvedUIDs.add(resolvedUID);
+                for(int i=0; i<2; ++i) {
+                    boolean doBreak = true;
 
-                            itemIdIndex += 2;
+                    String[] row_entries = new String[header_map.keySet().size()];
+                    for (String header : header_map.keySet()) {
+                        String entry = null;
+                        if (header.equals("Type")) {
+                            entry = type;
+                            if(type.equals("CHEBI")) {
+                                doBreak = false;
+                                if(i == 1) {
+                                    row_entries[header_map.get("Definition URI / CHEBI ID")] = "1234";
+                                }
+                            }
+                        } else if (header.equals("Common Name")) {
+                            entry = UUID.randomUUID().toString().substring(0,6);
+                        } else if (header.equals("BioFAB UID") && tab.equals("Reagent")) {
+                            entry = UUID.randomUUID().toString().substring(0,6);
+                            String resolvedUID = (String)mappingFailureIdValues.get(itemIdIndex).get(0);
+                            if(!resolvedUIDs.contains(resolvedUID)) {
+                                entry += ", " + resolvedUID;
+                                resolvedUIDs.add(resolvedUID);
+
+                                itemIdIndex += 2;
+                            }
+                        } else {
+                            entry = "";  // Fill empty cells, null value won't work
                         }
-                    } else {
-                        entry = "";  // Fill empty cells, null value won't work
+                        row_entries[header_map.get(header)] = entry;
                     }
-                    row_entries[header_map.get(header)] = entry;
+                    List<Object> row = new ArrayList<Object>(Arrays.asList(row_entries));
+                    values.add(row);
+
+                    if(doBreak) {
+                        break;
+                    }
                 }
-                List<Object> row = new ArrayList<Object>(Arrays.asList(row_entries));
-                values.add(row);
             }
 
             // Write entries to spreadsheet range
@@ -321,16 +335,52 @@ public class TestMaintainDictionary {
         // Update the spreadsheet
         DictionaryAccessor.batchUpdateValues(valueUpdates);
 
-        // Give Google a break
-        Thread.sleep(20000);
-
         testCopyTab();
-
-        // Give Google a break
-        Thread.sleep(20000);
 
         // Run the dictionary application
         DictionaryTestShared.initializeTestEnvironment(sheetId);
+
+        // Read entries from the Reagent tab
+        List<DictionaryEntry> reagentEntries =
+            DictionaryAccessor.snapshotCurrentDictionary("Reagent");
+
+        // Find the CHEBI entries
+        List<DictionaryEntry> CHEBIEntries = new ArrayList<>();
+        for(DictionaryEntry rEntry : reagentEntries) {
+            if(rEntry.type.equals("CHEBI")) {
+                CHEBIEntries.add(rEntry);
+            }
+        }
+
+        assert(CHEBIEntries.size() == 2);
+
+        // Log into SynBioHub
+        DictionaryTestShared.synBioHubLogin();
+
+        // Check type of first CHEBI entry in SynBioHub
+        URI expectedCHEBIURI = new URI(MaintainDictionary.CHEBIPrefix +
+                                       "24431");
+        assert(CHEBIEntries.get(0).attributeDefinition.equals(expectedCHEBIURI));
+        URI uri = CHEBIEntries.get(0).uri;
+        SBOLDocument document = SynBioHubAccessor.retrieve(uri, false);
+        URI local_uri = SynBioHubAccessor.translateURI(uri);
+        TopLevel entity = document.getTopLevel(local_uri);
+        URI chebiURI = MaintainDictionary.getCHEBIURI(entity);
+        assert(chebiURI.equals(expectedCHEBIURI));
+
+        // Check type of second CHEBI entry in SynBioHub
+        expectedCHEBIURI = new URI(MaintainDictionary.CHEBIPrefix +
+                                   "1234");
+        assert(CHEBIEntries.get(1).attributeDefinition.equals(expectedCHEBIURI));
+        uri = CHEBIEntries.get(1).uri;
+        document = SynBioHubAccessor.retrieve(uri, false);
+        local_uri = SynBioHubAccessor.translateURI(uri);
+        entity = document.getTopLevel(local_uri);
+        chebiURI = MaintainDictionary.getCHEBIURI(entity);
+        assert(chebiURI.equals(expectedCHEBIURI));
+
+        assert(false);
+
 
         // Check mapping failures
         ValueRange mappingFailureData1 = DictionaryAccessor.getTabData("Mapping Failures!D:E");
@@ -437,11 +487,11 @@ public class TestMaintainDictionary {
         DictionaryTestShared.synBioHubLogin();
 
         // Translate the URI
-        URI local_uri = SynBioHubAccessor.translateURI(new URI(updateUri));
+        local_uri = SynBioHubAccessor.translateURI(new URI(updateUri));
 
         // Fetch the SBOL Document from SynBioHub
-        SBOLDocument document = SynBioHubAccessor.retrieve(new URI(updateUri), false);
-        TopLevel entity = document.getTopLevel(local_uri);
+        document = SynBioHubAccessor.retrieve(new URI(updateUri), false);
+        entity = document.getTopLevel(local_uri);
 
         // Make sure name was updated in SynBioHub
         if(!entity.getName().equals(updatedName)) {
@@ -471,6 +521,10 @@ public class TestMaintainDictionary {
         // Make sure the entry error notification time was not
         // updated.  This shows that another email message was not
         // generated.
+        // Fetch the entries from the Attribute tab
+        attributeEntries =
+            DictionaryAccessor.snapshotCurrentDictionary("Attribute");
+
         DictionaryEntry entry1_run2 = attributeEntries.get(0);
         long notifyTime1_run2 = entry1_run2.lastNotifyTime.getTime();
 

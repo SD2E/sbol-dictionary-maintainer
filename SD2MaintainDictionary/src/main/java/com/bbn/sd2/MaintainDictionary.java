@@ -57,10 +57,14 @@ public final class MaintainDictionary {
     private static final double googleRequestsPerSecond = 0.5;
     private static final long msPerGoogleRequest = (long)(1000.0 / googleRequestsPerSecond);
 
+    public static final String CHEBIPrefix = "http://identifiers.org/chebi/CHEBI:";
+
+
     /** Each spreadsheet tab is only allowed to contain objects of certain types, as determined by this mapping */
     private static Map<String, Set<String>> typeTabs = new HashMap<String,Set<String>>() {{
             put("Attribute", new HashSet<>(Arrays.asList("Attribute")));
-            put("Reagent", new HashSet<>(Arrays.asList("Bead", "CHEBI", "DNA", "Protein", "RNA", "Media", "Stain", "Buffer", "Solution")));
+            put("Reagent", new HashSet<>(Arrays.asList("Bead", "CHEBI", "DNA", "Protein", "RNA",
+                                                       "Media", "Stain", "Buffer", "Solution")));
             put("Genetic Construct", new HashSet<>(Arrays.asList("DNA", "RNA")));
             put("Strain", new HashSet<>(Arrays.asList("Strain")));
             put("Protein", new HashSet<>(Arrays.asList("Protein")));
@@ -80,7 +84,8 @@ public final class MaintainDictionary {
 
     /** Expected headers */
     private static final Set<String> validHeaders = new HashSet<>(Arrays.asList("Common Name", "Type", "SynBioHub URI",
-                                                                                "Stub Object?", "Definition URI", "Status"));
+                                                                                "Stub Object?", "Definition URI", "Status",
+                                                                                "Definition URI / CHEBI ID"));
 
     private static final Set<String> protectedColumns = new HashSet<>(Arrays.asList("SynBioHub URI",
                                                                                     "Stub Object?", "Status"));
@@ -217,18 +222,57 @@ public final class MaintainDictionary {
 
         ComponentDefinition cd = (ComponentDefinition)entity;
 
-        String prefix = "http://identifiers.org/chebi/CHEBI:";
         for(URI cRoleURI : cd.getRoles()) {
             String cRole = cRoleURI.toString();
-            if(cRole.length() < prefix.length()) {
-                continue;
-            }
-            if(cRole.substring(0, prefix.length()).equals(prefix)) {
+            if(cRole.startsWith(CHEBIPrefix)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    public static URI getCHEBIURI(TopLevel entity) {
+        if(!(entity instanceof ComponentDefinition)) {
+            return null;
+        }
+
+        ComponentDefinition cd = (ComponentDefinition)entity;
+
+        for(URI cTypeURI : cd.getTypes()) {
+            String cType = cTypeURI.toString();
+            if(cType.startsWith(CHEBIPrefix)) {
+                return cTypeURI;
+            }
+        }
+
+        return null;
+    }
+
+    private static boolean setCHEBIURI(TopLevel entity, URI newURI) {
+        if(!(entity instanceof ComponentDefinition)) {
+            return false;
+        }
+
+        ComponentDefinition cd = (ComponentDefinition)entity;
+
+        Set<URI> typeList = new TreeSet<>();
+
+        typeList.add(newURI);
+
+        for(URI cTypeURI : cd.getTypes()) {
+            String cType = cTypeURI.toString();
+            if(!cType.startsWith(CHEBIPrefix)) {
+                typeList.add(cTypeURI);
+            }
+        }
+
+        try {
+            cd.setTypes(typeList);
+            return true;
+        } catch(Exception e) {
+            return false;
+        }
     }
 
     private static boolean validateEntityType(TopLevel entity, String type) {
@@ -237,13 +281,9 @@ public final class MaintainDictionary {
                 ComponentDefinition cd = (ComponentDefinition)entity;
 
                 if(type.equals("CHEBI")) {
-                    String prefix = "http://identifiers.org/chebi/CHEBI:";
                     for(URI cTypeURI : cd.getTypes()) {
                         String cType = cTypeURI.toString();
-                        if(cType.length() < prefix.length()) {
-                            continue;
-                        }
-                        if(cType.substring(0, prefix.length()).equals(prefix)) {
+                        if(cType.startsWith(CHEBIPrefix)) {
                             return true;
                         }
                     }
@@ -411,8 +451,70 @@ public final class MaintainDictionary {
                 return originalEntry;
             }
 
+            if(e.type.equalsIgnoreCase("CHEBI")) {
+                URI chebiURI = e.attributeDefinition;
+                boolean updateSpreadsheetAttributeURI = false;
+
+                if(chebiURI == null) {
+                    // Spreadsheet does not have a value in the
+                    // attribute URI column
+                    updateSpreadsheetAttributeURI = true;
+                    chebiURI = getCHEBIURI(entity);
+                    if(chebiURI == null) {
+                        if(originalEntry != null) {
+                            originalEntry.attributeDefinition = null;
+                        }
+
+                        // Entity does not have a CHEBI URI
+                        // Add the default CHEBI URI
+                        try {
+                            chebiURI = new URI(CHEBIPrefix + "24431");
+                            setCHEBIURI(entity, chebiURI);
+                            e.changed = true;
+
+                        } catch(Exception exception) {
+                        }
+                    }
+
+                    e.attributeDefinition = chebiURI;
+                }
+
+                if(!chebiURI.toString().startsWith(CHEBIPrefix)) {
+                    // If the CHEBI URI in the spreadsheet does not
+                    // start with the prefix, prepend the prefix
+                    try {
+                        chebiURI = new URI(CHEBIPrefix + chebiURI.toString());
+                        updateSpreadsheetAttributeURI = true;
+                    } catch(Exception e2) {
+                        e2.printStackTrace();
+                    }
+                }
+
+                // Compare the spreadsheet CHEBI URI to the SynBioHub
+                // entity URI
+                URI entityChebiURI = getCHEBIURI(entity);
+                if(!entityChebiURI.equals(chebiURI)) {
+                    if(originalEntry != null) {
+                        originalEntry.attributeDefinition = entityChebiURI;
+                    }
+                    setCHEBIURI(entity, chebiURI);
+                    e.changed = true;
+                    updateSpreadsheetAttributeURI = true;
+                    e.report.note("Updated CHEBI URI", true);
+                }
+
+                if(updateSpreadsheetAttributeURI) {
+                    try {
+                        e.spreadsheetUpdates.add(DictionaryAccessor.
+                                                 writeDefinitionOrCHEBIURI(e, chebiURI));
+                    } catch(Exception e2) {
+                        e2.printStackTrace();
+                    }
+                }
+            }
+
             // Check if typing is valid
-            if(!validateEntityType(entity,e.type)) {
+            if(!validateEntityType(entity, e.type)) {
                 if(chebiTypeIsInRole(entity, e.type)) {
                     e.statusCode = StatusCode.TYPE_IN_ROLE;
                 } else {
