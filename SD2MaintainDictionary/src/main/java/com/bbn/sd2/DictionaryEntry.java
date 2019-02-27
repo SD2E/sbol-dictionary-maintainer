@@ -232,7 +232,7 @@ public class DictionaryEntry {
         String attributeStr = null;
         Integer col = header_map.get("Definition URI / CHEBI ID");
         if(col == null) {
-            header_map.get("Definition URI");
+            col = header_map.get("Definition URI");
         }
 
         if((col != null) && (fullbox(row, col))) {
