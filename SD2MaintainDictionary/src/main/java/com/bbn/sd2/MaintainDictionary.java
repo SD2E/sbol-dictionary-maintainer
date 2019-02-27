@@ -69,6 +69,15 @@ public final class MaintainDictionary {
             static final long serialVersionUID = 0;
         };
 
+    /**
+     * Frequency, in milliseconds, that email messages about invalid entries are generated
+     */
+    private static long invalidEntryNotifyPeriodMS = 7L * /* 7 Days */
+                24L * /* 24 Hours */
+                60L * /* 60 Minutes */
+                60L * /* 60 Second */
+                1000L; /* 1000 Milliseconds */
+
     /** Expected headers */
     private static final Set<String> validHeaders = new HashSet<>(Arrays.asList("Common Name", "Type", "SynBioHub URI",
                                                                                 "Stub Object?", "Definition URI", "Status"));
@@ -128,6 +137,9 @@ public final class MaintainDictionary {
     /** Email addresses mapping failures are sent to */
     private static Map<String,String> mappingFailureToList = null;
     private static Map<String,String> mappingFailureCCList = null;
+
+    /** Email addresses entry failures are sent to */
+    private static Map<String, String> entryFailuresList = null;
 
     /** The amount of time, in seconds, before notification email messages
      * for the mapping failures tab
@@ -1209,6 +1221,74 @@ public final class MaintainDictionary {
         return true;
     }
 
+    private static List<DictionaryEntry> findFailuresToEmail(List<DictionaryEntry> updates, long lastEmailTime) {
+        Date now = new Date();
+
+        List<DictionaryEntry> emailEntries = new ArrayList<>();
+        boolean sendEmail = false;
+
+        if((now.getTime() - lastEmailTime) > invalidEntryNotifyPeriodMS) {
+            sendEmail = true;
+        }
+
+        // Generate email messages for invalid entries
+        for(DictionaryEntry e : updates) {
+            if(colorsEqual(e.statusColor, redColor())) {
+
+                if(sendEmail) {
+                    // Generate an email message for this entry
+                    e.lastNotifyTime = now;
+                    emailEntries.add(e);
+                }
+
+                if(e.lastNotifyTime.getTime() > 0) {
+                    // Make sure the status field records the last email notification time
+                    e.addNotificationDateToStatus();
+                }
+            }
+        }
+
+        return emailEntries;
+    }
+
+    private static void sendEntryFailureEmails(List<DictionaryEntry> failuresToEmail)
+        throws IOException,MessagingException {
+
+        if(failuresToEmail.isEmpty()) {
+            return;
+        }
+
+        if(entryFailuresList == null) {
+            return;
+        }
+
+        String toList = entryFailuresList.get("To");
+        String ccList = entryFailuresList.get("CC");
+
+        if(toList == null) {
+            return;
+        }
+
+        String emailContent = "";
+        for(DictionaryEntry entry : failuresToEmail) {
+            emailContent += entry.tab + " tab, row "
+                + entry.row_index + ", "
+                + entry.report.toString() + "\r\n\r\n";
+        }
+
+        DictionaryAccessor.sendEmail(toList, ccList,
+                                     "SD2 Dictionary Entry Errors",
+                                     emailContent, null);
+
+        if(ccList == null) {
+            log.info("Sent entry failure email to " + toList);
+        } else {
+            log.info("Sent entry failure email to " + toList +
+                     ", with cc " + ccList);
+        }
+
+    }
+
     /**
      * Run one pass through the dictionary, updating all entries as needed
      */
@@ -1218,8 +1298,9 @@ public final class MaintainDictionary {
         Color gray = grayColor();
 
         // Extract email address lists for mapping failure tab notifications
-        mappingFailureToList = emailLists.get("To");
-        mappingFailureCCList = emailLists.get("CC");
+        mappingFailureToList = emailLists.get("MappingFailuresTo");
+        mappingFailureCCList = emailLists.get("MappingFailuresCC");
+        entryFailuresList = emailLists.get("EntryFailures");
 
         // A list of all the dictionary entries in all the tabs
         List<DictionaryEntry> allTabEntries = new ArrayList<>();
@@ -1289,6 +1370,10 @@ public final class MaintainDictionary {
             DictionaryAccessor.validateUniquenessOfEntries(uidTag, allTabEntries);
         }
 
+        // List of entries that failed that need to be included in
+        // notification email messages
+        List<DictionaryEntry> failuresToEmail = new ArrayList<>();
+
         for(String tab : MaintainDictionary.tabs()) {
             int rangeId = -1;
             UpdateReport report = new UpdateReport();
@@ -1303,11 +1388,12 @@ public final class MaintainDictionary {
             log.info("Processing \"" + tab + "\" tab");
 
             try {
-                List<DictionaryEntry> currentEntries = tabEntries.get(tab);
+                // These are the entries according to the spreadsheet
+                List<DictionaryEntry> spreadsheetEntries = tabEntries.get(tab);
 
                 // This will contain the SynBioHub view of the
                 // dictionary entries
-                List<DictionaryEntry> originalEntries = new ArrayList<DictionaryEntry>();
+                List<DictionaryEntry> synBioHubEntries = new ArrayList<DictionaryEntry>();
 
                 // This contains the entries as they were before being
                 // updated by the dictionary application.  The map is
@@ -1318,9 +1404,12 @@ public final class MaintainDictionary {
                 // by the entry row.
                 Map<Integer, DictionaryEntry> updatedEntryMap = new TreeMap<>();
 
+                long soonestNotifyTime = 0;
+
+
                 // Loop through the spreadsheet rows
-                for(DictionaryEntry e : currentEntries) {
-                    DictionaryEntry originalEntry = null;
+                for(DictionaryEntry e : spreadsheetEntries) {
+                    DictionaryEntry synBioHubEntry = null;
 
                     // Save a copy of the entry before it is updated
                     initialEntryMap.put(e.row_index, new DictionaryEntry(e));
@@ -1331,15 +1420,19 @@ public final class MaintainDictionary {
                         // corresponding SBOL Document and updates the document according
                         // to the spreadsheet row.  The method returns the "original"
                         // spreadsheet row, based on data in SynBioHub
-                        originalEntry = update_entry(e);
+                        synBioHubEntry = update_entry(e);
+                    }
+
+                    if(e.lastNotifyTime.getTime() > soonestNotifyTime) {
+                        soonestNotifyTime = e.lastNotifyTime.getTime();
                     }
 
                     Color statusColor;
                     if(e.statusCode == StatusCode.VALID) {
                         // This row looks good
-                        if(originalEntry != null) {
+                        if(synBioHubEntry != null) {
                             // Save original (SynBioHub) entry
-                            originalEntries.add(originalEntry);
+                            synBioHubEntries.add(synBioHubEntry);
                         }
 
                         statusColor = green;
@@ -1385,12 +1478,15 @@ public final class MaintainDictionary {
                     }
 
                     e.statusColor = statusColor;
-                    updatedEntryMap.put(e.row_index, new DictionaryEntry(e));
+
+                    updatedEntryMap.put(e.row_index, e);
                 }
+
+                failuresToEmail.addAll(findFailuresToEmail(spreadsheetEntries, soonestNotifyTime));
 
                 // Check for deleted cells that caused column values to shift up
                 // If a deleted cell is found, an exception will be thrown
-                checkShifts(currentEntries, originalEntries);
+                checkShifts(spreadsheetEntries, synBioHubEntries);
 
                 // List of requests to re-read spreadsheet rows
                 List<String> rowRanges = new ArrayList<>();
@@ -1422,7 +1518,7 @@ public final class MaintainDictionary {
                                 DictionaryAccessor.getColumnFormatting(tab, "Status");
 
                 // Determine which rows either have changed or are invalid
-                for(DictionaryEntry e : currentEntries) {
+                for(DictionaryEntry e : spreadsheetEntries) {
                     if(e.changed || (e.statusCode != StatusCode.VALID)) {
                         String rowRange = tab + "!" + e.row_index + ":" + e.row_index;
                         rowRanges.add(rowRange);
@@ -1541,7 +1637,7 @@ public final class MaintainDictionary {
                     batchUpdateRequests(statusFormattingUpdates);
                 }
 
-                report.success(currentEntries.size()+" entries", true);
+                report.success(spreadsheetEntries.size()+" entries", true);
                 report.success(mod_count+" modified",true);
                 if(bad_count>0) {
                     report.failure(bad_count+" invalid", true);
@@ -1581,6 +1677,13 @@ public final class MaintainDictionary {
             log.info("Processing Mapping Failures ...");
             processMappingFailures(allTabEntries);
             log.info("Finished processing Mapping Failures");
+        } catch(Exception e) {
+            e.printStackTrace();
+        }
+
+        try {
+            // Periodically send email message about entry failures
+            sendEntryFailureEmails(failuresToEmail);
         } catch(Exception e) {
             e.printStackTrace();
         }

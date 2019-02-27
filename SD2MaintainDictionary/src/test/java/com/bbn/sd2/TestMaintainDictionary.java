@@ -368,11 +368,30 @@ public class TestMaintainDictionary {
         // Create an invalid type
         DictionaryAccessor.setCellData("Genetic Construct", "Type", 3, "Bad Type");
 
-        // Give Google a break
-        Thread.sleep(20000);
-
         // Run the Dictionary
         DictionaryTestShared.initializeTestEnvironment(sheetId);
+
+        // Fetch the entries from the Attribute tab
+        List<DictionaryEntry> attributeEntries =
+            DictionaryAccessor.snapshotCurrentDictionary("Attribute");
+
+        // Fetch then entries from the Gentic Construct tab
+        List<DictionaryEntry> geneticConstructEntries =
+            DictionaryAccessor.snapshotCurrentDictionary("Genetic Construct");
+
+        // Make sure the log message records that email notifications
+        // were sent for the invalid entries.  The notification times
+        // are saved so to make sure no more notifications are sent
+        // out the next time the dictionary is processed
+        DictionaryEntry entry1 = attributeEntries.get(0);
+        long notifyTime1 = entry1.lastNotifyTime.getTime();
+
+        assert(notifyTime1 > 0);
+
+        DictionaryEntry entry2 = geneticConstructEntries.get(0);
+        long notifyTime2 = entry2.lastNotifyTime.getTime();
+
+        assert(notifyTime2 > 0);
 
         // Check mapping failures.  Make sure status column did not change
         ValueRange mappingFailureData2 = DictionaryAccessor.getTabData("Mapping Failures!E:E");
@@ -434,9 +453,6 @@ public class TestMaintainDictionary {
 
         DictionaryAccessor.deleteCellShiftUp("Reagent", deleteColumn, 5);
 
-        // Give Google a break
-        Thread.sleep(20000);
-
         // Run Dictionary update
         DictionaryTestShared.initializeTestEnvironment(sheetId);
 
@@ -451,6 +467,20 @@ public class TestMaintainDictionary {
             System.err.println("Cell Delete Test Failed");
             throw new Exception("Cell Delete Test Failed");
         }
+
+        // Make sure the entry error notification time was not
+        // updated.  This shows that another email message was not
+        // generated.
+        DictionaryEntry entry1_run2 = attributeEntries.get(0);
+        long notifyTime1_run2 = entry1_run2.lastNotifyTime.getTime();
+
+        assert(notifyTime1 == notifyTime1_run2);
+
+        DictionaryEntry entry2_run2 = geneticConstructEntries.get(0);
+        long notifyTime2_run2 = entry2_run2.lastNotifyTime.getTime();
+
+        assert(notifyTime2 == notifyTime2_run2);
+
     }
 
     @AfterClass

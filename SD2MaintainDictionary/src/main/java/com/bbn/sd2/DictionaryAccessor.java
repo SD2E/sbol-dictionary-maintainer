@@ -130,8 +130,8 @@ public class DictionaryAccessor {
      * If modifying these scopes, delete your previously saved credentials/ folder.
      */
     private static final List<String> SCOPES =
-                Arrays.asList(SheetsScopes.SPREADSHEETS, GmailScopes.GMAIL_COMPOSE,
-                                GmailScopes.GMAIL_SEND);
+        Arrays.asList(SheetsScopes.SPREADSHEETS, GmailScopes.GMAIL_COMPOSE,
+                      GmailScopes.GMAIL_SEND);
 
     private static final String CREDENTIALS_FILE_PATH = "/credentials.json";
 
@@ -147,8 +147,8 @@ public class DictionaryAccessor {
         GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
 
         // Build flow and trigger user authorization request.
-        GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
-            HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, SCOPES)
+        GoogleAuthorizationCodeFlow flow =
+            new GoogleAuthorizationCodeFlow.Builder(HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, SCOPES)
             .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
             .setAccessType("offline")
             .build();
@@ -246,7 +246,7 @@ public class DictionaryAccessor {
      * @throws MessagingException
      */
     private static Message createMessageWithEmail(MimeMessage emailContent)
-            throws MessagingException, IOException {
+        throws MessagingException, IOException {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         emailContent.writeTo(buffer);
         byte[] bytes = buffer.toByteArray();
@@ -263,8 +263,8 @@ public class DictionaryAccessor {
             // Build a new authorized API client service.
             final NetHttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
             gmailService = new Gmail.Builder(HTTP_TRANSPORT, JSON_FACTORY, getCredentials(HTTP_TRANSPORT))
-                    .setApplicationName(APPLICATION_NAME)
-                    .build();
+                .setApplicationName(APPLICATION_NAME)
+                .build();
 
             Profile profile = getProfile();
 
@@ -321,8 +321,9 @@ public class DictionaryAccessor {
         InputStream in = DictionaryAccessor.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
         GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
         HttpTransport HTTP_TRANSPORT = GoogleNetHttpTransport.newTrustedTransport();
-        GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
-            HTTP_TRANSPORT, JSON_FACTORY, clientSecrets, Arrays.asList(DriveScopes.DRIVE_FILE))
+        GoogleAuthorizationCodeFlow flow =
+            new GoogleAuthorizationCodeFlow.Builder(HTTP_TRANSPORT, JSON_FACTORY, clientSecrets,
+                                                    Arrays.asList(DriveScopes.DRIVE_FILE))
             .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(TOKENS_DIRECTORY_PATH)))
             .setAccessType("offline")
             .build();
@@ -1249,16 +1250,16 @@ public class DictionaryAccessor {
 
         String csvLine = reader.readLine();
         while(csvLine != null) {
-                String[] rowStringValues = csvLine.split(",");
+            String[] rowStringValues = csvLine.split(",");
 
-                List<Object> rowValues = new ArrayList<>(Arrays.asList(rowStringValues));
-                values.add(rowValues);
+            List<Object> rowValues = new ArrayList<>(Arrays.asList(rowStringValues));
+            values.add(rowValues);
 
-                csvLine = reader.readLine();
+            csvLine = reader.readLine();
         }
 
         ValueRange sheetData = new ValueRange()
-                .setValues(values).setRange(tab);
+            .setValues(values).setRange(tab);
 
         List<ValueRange> valueRangeUpdates = new ArrayList<>();
 
@@ -1317,7 +1318,7 @@ public class DictionaryAccessor {
                 // Wait a bit and try again
                 try {
                     log.warning("Too many Google requests.  Re-trying in "
-                            + (delayMS / 1000L) + " seconds ...");
+                                + (delayMS / 1000L) + " seconds ...");
                     Thread.sleep(delayMS);
                 } catch(InterruptedException e2) {
                     // Might as well retry request
@@ -1335,7 +1336,7 @@ public class DictionaryAccessor {
                 // Wait a bit and try again
                 try {
                     log.warning("Google request timed out.  Re-trying in "
-                            + (delayMS / 1000L) + " seconds ...");
+                                + (delayMS / 1000L) + " seconds ...");
                     Thread.sleep(delayMS);
                 } catch(InterruptedException e2) {
                     // Might as well retry request
