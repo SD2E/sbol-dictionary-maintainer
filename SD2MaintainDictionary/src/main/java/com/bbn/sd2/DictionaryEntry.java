@@ -3,9 +3,11 @@ package com.bbn.sd2;
 import java.io.IOException;
 import java.net.URI;
 import java.security.GeneralSecurityException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +31,7 @@ public class DictionaryEntry {
     public String name = null;
     public String type = null;
     public URI uri = null;
+    public Date lastNotifyTime = new Date(0);
     public Map<String,Set<String>> labUIDs = new HashMap<>();
     public enum StubStatus { YES, NO, UNDEFINED };
     public StubStatus stub = StubStatus.UNDEFINED;
@@ -39,6 +42,8 @@ public class DictionaryEntry {
     public SBOLDocument document = null;
     public Color statusColor;
     public UpdateReport report = new UpdateReport();
+    private final String lastNotifyTag = "Last Notify ";
+    private SimpleDateFormat dateFormatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z");
     public static Map<String, String> labUIDMap =
         new TreeMap<String, String>() {
             private static final long serialVersionUID = 1L;
@@ -150,6 +155,7 @@ public class DictionaryEntry {
         type = src.type;
         uri = src.uri;
         report = new UpdateReport( src.report );
+        lastNotifyTime = new Date( lastNotifyTime.getTime() );
 
         for(ValueRange v : src.spreadsheetUpdates) {
             spreadsheetUpdates.add( v.clone() );
@@ -180,6 +186,10 @@ public class DictionaryEntry {
         document = src.document;
     }
 
+    public void addNotificationDateToStatus() {
+        report.success(lastNotifyTag + dateFormatter.format(lastNotifyTime));
+    }
+
     private boolean fullbox(List<Object> row,int i) {
         return row.size()>i && row.get(i).toString().length()>0;
     }
@@ -203,6 +213,18 @@ public class DictionaryEntry {
         else
             statusCode = StatusCode.MISSING_TYPE;
 
+        if(fullbox(row, header_map.get("Status"))) {
+            statusLog = row.get(header_map.get("Status")).toString();
+            int idx = statusLog.indexOf(lastNotifyTag);
+            if(idx >= 0) {
+                idx += lastNotifyTag.length();
+                try {
+                    String dateStr = statusLog.substring(idx);
+                    lastNotifyTime = dateFormatter.parse(dateStr);
+                } catch(Exception e) {
+                }
+            }
+        }
 
         if("Attribute".equals(type)) attribute = true; // check if it's an attribute
         if(fullbox(row, header_map.get("SynBioHub URI"))) uri = URI.create(row.get(header_map.get("SynBioHub URI")).toString());
@@ -306,24 +328,24 @@ public class DictionaryEntry {
         return DictionaryAccessor.setStatusColor(this.row_index - 1, col, sheetId, color);
     }
 
-//    public boolean validType() {
-//        if(allowedTypes==null) return true; // if we don't have restrictions, don't worry about it
-//        for(String type : allowedTypes) {
-//            if(type.equals(this.type))
-//                return true;
-//        }
-//        return false;
-//    }
-//
-//    public String allowedTypes() {
-//        String s = "";
-//        if(allowedTypes.length==0) s+="(INTERNAL ERROR: no valid types available)";
-//        if(allowedTypes.length>1) s+="one of ";
-//        for(int i=0;i<allowedTypes.length;i++) {
-//            if(i>0 && allowedTypes.length>2) s+= ", ";
-//            if(i>0 && i==allowedTypes.length-1) s+="or ";
-//            s+="'"+allowedTypes[i]+"'";
-//        }
-//        return s;
-//    }
+    //    public boolean validType() {
+    //        if(allowedTypes==null) return true; // if we don't have restrictions, don't worry about it
+    //        for(String type : allowedTypes) {
+    //            if(type.equals(this.type))
+    //                return true;
+    //        }
+    //        return false;
+    //    }
+    //
+    //    public String allowedTypes() {
+    //        String s = "";
+    //        if(allowedTypes.length==0) s+="(INTERNAL ERROR: no valid types available)";
+    //        if(allowedTypes.length>1) s+="one of ";
+    //        for(int i=0;i<allowedTypes.length;i++) {
+    //            if(i>0 && allowedTypes.length>2) s+= ", ";
+    //            if(i>0 && i==allowedTypes.length-1) s+="or ";
+    //            s+="'"+allowedTypes[i]+"'";
+    //        }
+    //        return s;
+    //    }
 }
