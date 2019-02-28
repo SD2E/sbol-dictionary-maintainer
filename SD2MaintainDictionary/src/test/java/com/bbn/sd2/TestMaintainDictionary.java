@@ -275,6 +275,7 @@ public class TestMaintainDictionary {
 
         // Populate each tab with objects
         List<ValueRange> valueUpdates = new ArrayList<ValueRange>();
+        URI definitionURI = new URI("https://www.media.com/");
 
         for (String tab : MaintainDictionary.tabs()) {
 
@@ -299,6 +300,9 @@ public class TestMaintainDictionary {
                                 if(i == 1) {
                                     row_entries[header_map.get("Definition URI / CHEBI ID")] = "1234";
                                 }
+                            } else if(type.equals("Media")) {
+                                row_entries[header_map.get("Definition URI / CHEBI ID")] =
+                                    definitionURI.toString();
                             }
                         } else if (header.equals("Common Name")) {
                             entry = UUID.randomUUID().toString().substring(0,6);
@@ -346,12 +350,18 @@ public class TestMaintainDictionary {
 
         // Find the CHEBI entries
         List<DictionaryEntry> CHEBIEntries = new ArrayList<>();
+        DictionaryEntry mediaEntry = null;
         for(DictionaryEntry rEntry : reagentEntries) {
             if(rEntry.type.equals("CHEBI")) {
                 CHEBIEntries.add(rEntry);
             }
+
+            if(rEntry.type.equals("Media")) {
+                mediaEntry = rEntry;
+            }
         }
 
+        assert(mediaEntry != null);
         assert(CHEBIEntries.size() == 2);
 
         // Log into SynBioHub
@@ -378,6 +388,16 @@ public class TestMaintainDictionary {
         entity = document.getTopLevel(local_uri);
         chebiURI = MaintainDictionary.getCHEBIURI(entity);
         assert(chebiURI.equals(expectedCHEBIURI));
+
+        // Check Definition URI
+        uri = mediaEntry.uri;
+        document = SynBioHubAccessor.retrieve(uri, false);
+        local_uri = SynBioHubAccessor.translateURI(uri);
+        entity = document.getTopLevel(local_uri);
+        Set<URI> derivations = entity.getWasDerivedFroms();
+        assert(derivations.size() > 0);
+        URI derivationURI = derivations.iterator().next();
+        assert(derivationURI.equals(definitionURI));
 
         // Check mapping failures
         ValueRange mappingFailureData1 = DictionaryAccessor.getTabData("Mapping Failures!D:E");
@@ -531,7 +551,6 @@ public class TestMaintainDictionary {
         long notifyTime2_run2 = entry2_run2.lastNotifyTime.getTime();
 
         assert(notifyTime2 == notifyTime2_run2);
-
     }
 
     @AfterClass
