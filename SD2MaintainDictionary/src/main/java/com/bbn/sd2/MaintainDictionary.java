@@ -618,9 +618,9 @@ public final class MaintainDictionary {
                 } else {
                     // Spreadsheet has a Definition URI
                     if((entityDerivation == null) || !e.attributeDefinition.equals(entityDerivation)) {
-                        // Populate the Definition URI from the
-                        // spreadsheet with the value in the
-                        // spreadsheet.
+                        // Populate the derived from property in the
+                        // SynBioHub entry with the value of the
+                        // Definition URI entry in thr spreadsheet.
                         derivations.clear();
                         derivations.add(e.attributeDefinition);
                         entity.setWasDerivedFroms(derivations);
