@@ -508,7 +508,7 @@ public final class MaintainDictionary {
                         e.spreadsheetUpdates.add(DictionaryAccessor.
                                                  writeDefinitionOrCHEBIURI(e, chebiURI));
                     } catch(Exception e2) {
-                        e2.printStackTrace();
+                        e.report.failure("Failed to update Definition URI Column");
                     }
                 }
             }
@@ -590,27 +590,38 @@ public final class MaintainDictionary {
                 }
             }
 
-            if(e.attribute) {
+            if(!e.type.equalsIgnoreCase("CHEBI") && (e.definitionURIColumn != null)) {
+                // Non-CHEBI Entry, Definition URI column is present
                 Set<URI> derivations = entity.getWasDerivedFroms();
+                URI entityDerivation = null;
+
+                if(derivations.size() > 0) {
+                    // This is the Definition URI in SynBioHub
+                    entityDerivation = derivations.iterator().next();
+                }
+
                 if(originalEntry != null) {
-                    if(derivations.size() == 0) {
-                        originalEntry.attributeDefinition = null;
-                    } else {
-                        originalEntry.attributeDefinition =
-                            derivations.iterator().next();
-                    }
+                    originalEntry.attributeDefinition = entityDerivation;
                 }
 
                 if(e.attributeDefinition == null) {
-                    if(derivations.size() > 0) {
+                    if(entityDerivation != null) {
+                        // SynBioHub has a Definition URI, but the
+                        // spreadsheet does not have one
+                        // Remove Definition URI from SynBioHub entity
                         derivations.clear();
                         entity.setWasDerivedFroms(derivations);
                         e.changed = true;
-                        e.report.success("Definition for " + e.name + " was removed." ,true);
+                        e.report.success("Definition for " + e.name + " was removed.", true);
                     }
                 } else {
-                    if(derivations.size()==0 || !e.attributeDefinition.equals(derivations.iterator().next())) {
-                        derivations.clear(); derivations.add(e.attributeDefinition);
+                    // Spreadsheet has a Definition URI
+                    if((entityDerivation == null) || !e.attributeDefinition.equals(entityDerivation)) {
+                        // Populate the Definition URI from the
+                        // spreadsheet with the value in the
+                        // spreadsheet.
+                        derivations.clear();
+                        derivations.add(e.attributeDefinition);
                         entity.setWasDerivedFroms(derivations);
                         e.changed = true;
                         e.report.success("Definition for "+e.name+" is '"+e.attributeDefinition+"'",true);
@@ -618,7 +629,6 @@ public final class MaintainDictionary {
                 }
             }
 
-            // Update the spreadsheet with the entry notes
         } catch (SynBioHubException exception) {
             log.severe(exception.getMessage());
             throw new IOException("SynBioHub transaction failed when trying to "

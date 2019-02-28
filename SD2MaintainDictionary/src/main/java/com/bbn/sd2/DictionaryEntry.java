@@ -41,6 +41,7 @@ public class DictionaryEntry {
     public boolean changed = false;
     public SBOLDocument document = null;
     public Color statusColor;
+    public Integer definitionURIColumn = null;
     public UpdateReport report = new UpdateReport();
     private final String lastNotifyTag = "Last Notify ";
     private SimpleDateFormat dateFormatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z");
@@ -234,6 +235,7 @@ public class DictionaryEntry {
         if(col == null) {
             col = header_map.get("Definition URI");
         }
+        definitionURIColumn = col;
 
         if((col != null) && (fullbox(row, col))) {
             attributeStr = (String)row.get(col);
