@@ -94,7 +94,8 @@ public final class MaintainDictionary {
                                                              "nicholasroehner@gmail.com",
                                                              "jakebeal@gmail.com",
                                                              "weston@netrias.com",
-                                                             "vaughn@tacc.utexas.edu");
+                                                             "vaughn@tacc.utexas.edu",
+                                                             "dsumorokraytheon@gmail.com");
 
     /** These columns, along with the lab UID columns, will be checked for deleted cells that
      *  cause other cells to shift up */
