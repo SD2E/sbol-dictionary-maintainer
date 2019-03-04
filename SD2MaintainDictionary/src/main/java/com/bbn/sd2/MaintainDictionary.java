@@ -1731,14 +1731,6 @@ public final class MaintainDictionary {
                             e.report.failure("Failed to synchronize with SynBioBub");
                             e.statusColor = red;
                         }
-
-                        if(!e.attribute) {
-                            spreadsheetUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
-                        } else {
-                            if(e.attributeDefinition!=null) {
-                                spreadsheetUpdates.add(DictionaryAccessor.writeEntryDefinition(e, e.attributeDefinition));
-                            }
-                        }
                     } else if(e.statusCode != StatusCode.VALID) {
                         bad_count++;
                     }
