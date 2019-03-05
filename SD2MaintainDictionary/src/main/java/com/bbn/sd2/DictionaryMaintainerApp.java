@@ -18,7 +18,7 @@ import org.apache.commons.cli.*;
 import org.synbiohub.frontend.SynBioHubException;
 
 public class DictionaryMaintainerApp {
-    public static final String VERSION = "1.4.0.1";
+    public static final String VERSION = "1.4.0.2";
 
     private static Logger log = Logger.getGlobal();
     private static int sleepMillis;

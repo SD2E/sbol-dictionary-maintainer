@@ -39,6 +39,7 @@ public class DictionaryEntry {
     public URI attributeDefinition = null;
     public Map<String, Integer> header_map;
     public boolean changed = false;
+    public boolean dictionaryEntryChanged = false;
     public SBOLDocument document = null;
     public Color statusColor;
     public Integer definitionURIColumn = null;
@@ -93,6 +94,16 @@ public class DictionaryEntry {
         }
 
         if((uri != null) && !e.uri.equals(uri)) {
+            return false;
+        }
+
+        if(!compareNull(e.attributeDefinition,
+                        attributeDefinition)) {
+            return false;
+        }
+
+        if((attributeDefinition != null) &&
+           !e.attributeDefinition.equals(attributeDefinition)) {
             return false;
         }
 

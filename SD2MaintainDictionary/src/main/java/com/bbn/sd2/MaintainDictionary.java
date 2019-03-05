@@ -494,10 +494,10 @@ public final class MaintainDictionary {
                 // Compare the spreadsheet CHEBI URI to the SynBioHub
                 // entity URI
                 URI entityChebiURI = getCHEBIURI(entity);
+                if(originalEntry != null) {
+                    originalEntry.attributeDefinition = entityChebiURI;
+                }
                 if(!entityChebiURI.equals(chebiURI)) {
-                    if(originalEntry != null) {
-                        originalEntry.attributeDefinition = entityChebiURI;
-                    }
                     setCHEBIURI(entity, chebiURI);
                     e.changed = true;
                     updateSpreadsheetAttributeURI = true;
@@ -508,6 +508,7 @@ public final class MaintainDictionary {
                     try {
                         e.spreadsheetUpdates.add(DictionaryAccessor.
                                                  writeDefinitionOrCHEBIURI(e, chebiURI));
+                        e.dictionaryEntryChanged = true;
                     } catch(Exception e2) {
                         e.report.failure("Failed to update Definition URI Column");
                     }
@@ -1641,7 +1642,8 @@ public final class MaintainDictionary {
 
                 // Determine which rows either have changed or are invalid
                 for(DictionaryEntry e : spreadsheetEntries) {
-                    if(e.changed || (e.statusCode != StatusCode.VALID)) {
+                    if(e.changed || (e.statusCode != StatusCode.VALID) ||
+                       e.dictionaryEntryChanged) {
                         String rowRange = tab + "!" + e.row_index + ":" + e.row_index;
                         rowRanges.add(rowRange);
                     } else {
