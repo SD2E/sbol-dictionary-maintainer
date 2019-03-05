@@ -41,6 +41,7 @@ public class DictionaryEntry {
     public boolean changed = false;
     public SBOLDocument document = null;
     public Color statusColor;
+    public Integer definitionURIColumn = null;
     public UpdateReport report = new UpdateReport();
     private final String lastNotifyTag = "Last Notify ";
     private SimpleDateFormat dateFormatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z");
@@ -228,6 +229,22 @@ public class DictionaryEntry {
 
         if("Attribute".equals(type)) attribute = true; // check if it's an attribute
         if(fullbox(row, header_map.get("SynBioHub URI"))) uri = URI.create(row.get(header_map.get("SynBioHub URI")).toString());
+
+        String attributeStr = null;
+        Integer col = header_map.get("Definition URI / CHEBI ID");
+        if(col == null) {
+            col = header_map.get("Definition URI");
+        }
+        definitionURIColumn = col;
+
+        if((col != null) && (fullbox(row, col))) {
+            attributeStr = (String)row.get(col);
+
+            try {
+                attributeDefinition = new URI(attributeStr);
+            } catch(Exception e) {
+            }
+        }
 
         for(String uidLabel : labUIDMap.keySet()) {
             String uidTag = labUIDMap.get(uidLabel);

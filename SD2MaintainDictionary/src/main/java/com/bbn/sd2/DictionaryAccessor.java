@@ -645,10 +645,24 @@ public class DictionaryAccessor {
      * @param uri definitive location for ontology source definition
      * @throws IOException
      */
-    public static ValueRange writeEntryDefinition(DictionaryEntry e, URI attributeDefinition) throws IOException {
+    public static ValueRange writeEntryDefinition(DictionaryEntry e,
+                                                  URI attributeDefinition) throws IOException {
         String location = getCellLocation(e, "Definition URI");
 
         return writeLocationText(location, attributeDefinition.toString());
+    }
+
+    /**
+     * Write the URI of the entry
+     * @param e  entry to be written
+     * @param uri definitive location for ontology source definition
+     * @throws IOException
+     */
+    public static ValueRange writeDefinitionOrCHEBIURI(DictionaryEntry e,
+                                                       URI definitionURI) throws IOException {
+        String location = getCellLocation(e, "Definition URI / CHEBI ID");
+
+        return writeLocationText(location, definitionURI.toString());
     }
 
     /**
