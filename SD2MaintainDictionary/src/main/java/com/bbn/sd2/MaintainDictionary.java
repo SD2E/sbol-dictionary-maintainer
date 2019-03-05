@@ -1761,7 +1761,7 @@ public final class MaintainDictionary {
                     report.failure(bad_count+" invalid", true);
                 }
                 if(io_failure_count > 0) {
-                    report.failure(bad_count+" I/O failures", true);
+                    report.failure(io_failure_count+" I/O failures", true);
                 }
             } catch(Exception e) {
                 e.printStackTrace();
