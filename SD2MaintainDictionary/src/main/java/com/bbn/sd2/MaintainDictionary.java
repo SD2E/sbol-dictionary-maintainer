@@ -1499,7 +1499,7 @@ public final class MaintainDictionary {
         for(String tab : MaintainDictionary.tabs()) {
             int rangeId = -1;
             UpdateReport report = new UpdateReport();
-            int mod_count = 0, bad_count = 0;
+            int mod_count = 0, bad_count = 0, io_failure_count = 0;
 
             // This will contain updates to be made to the spreadsheet
             List<ValueRange> spreadsheetUpdates = new ArrayList<ValueRange>();
@@ -1729,8 +1729,12 @@ public final class MaintainDictionary {
                             ++mod_count;
                         } catch(Exception exception) {
                             e.report.failure("Failed to synchronize with SynBioBub");
-                            e.statusColor = red;
+                            e.statusColor = gray;
+                            io_failure_count++;
                         }
+                    } else if((e.statusCode == StatusCode.SBH_CONNECTION_FAILED) ||
+                              (e.statusCode == StatusCode.GOOGLE_SHEETS_CONNECTION_FAILED)) {
+                        io_failure_count++;
                     } else if(e.statusCode != StatusCode.VALID) {
                         bad_count++;
                     }
@@ -1755,6 +1759,9 @@ public final class MaintainDictionary {
                 report.success(mod_count+" modified",true);
                 if(bad_count>0) {
                     report.failure(bad_count+" invalid", true);
+                }
+                if(io_failure_count > 0) {
+                    report.failure(bad_count+" I/O failures", true);
                 }
             } catch(Exception e) {
                 e.printStackTrace();
