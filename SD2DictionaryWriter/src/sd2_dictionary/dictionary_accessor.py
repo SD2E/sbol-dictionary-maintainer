@@ -34,7 +34,7 @@ class DictionaryAccessor:
             'Genetic Construct': ['DNA', 'RNA'],
             'Strain': ['Strain'],
             'Protein': ['Protein'],
-            'Collections': ['Challenge Problem']
+            'Collections': ['Challenge Problem', 'Collection']
         }
 
         self._dictionary_headers = ['Common Name',
