@@ -68,7 +68,7 @@ public final class MaintainDictionary {
             put("Genetic Construct", new HashSet<>(Arrays.asList("DNA", "RNA")));
             put("Strain", new HashSet<>(Arrays.asList("Strain")));
             put("Protein", new HashSet<>(Arrays.asList("Protein")));
-            put("Collections", new HashSet<>(Arrays.asList("Challenge Problem")));
+            put("Collections", new HashSet<>(Arrays.asList("Challenge Problem", "Collection")));
         }
             static final long serialVersionUID = 0;
         };
@@ -125,10 +125,10 @@ public final class MaintainDictionary {
         };
 
     /** Classes of object that are implemented as a Collection.
-     *  Currently no subtypes of Collections other than Challenge Problem are
-     *  specified, though that may change in the future */
+     */
     private static Map<String,URI> collectionTypes = new HashMap<String,URI>(){{
             put("Challenge Problem",URI.create(""));
+            put("Collection",URI.create(""));
         }
             static final long serialVersionUID = 0;
         };
