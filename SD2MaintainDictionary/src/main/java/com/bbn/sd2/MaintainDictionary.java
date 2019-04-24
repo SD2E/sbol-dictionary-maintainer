@@ -85,7 +85,8 @@ public final class MaintainDictionary {
     /** Expected headers */
     private static final Set<String> validHeaders = new HashSet<>(Arrays.asList("Common Name", "Type", "SynBioHub URI",
                                                                                 "Stub Object?", "Definition URI", "Status",
-                                                                                "Definition URI / CHEBI ID"));
+                                                                                "Definition URI / CHEBI ID",
+                                                                                "Definition Import"));
 
     private static final Set<String> protectedColumns = new HashSet<>(Arrays.asList("SynBioHub URI",
                                                                                     "Stub Object?", "Status"));
@@ -423,6 +424,7 @@ public final class MaintainDictionary {
                 e.report.success("Created stub in SynBioHub",true);
                 e.spreadsheetUpdates.add(DictionaryAccessor.writeEntryURI(e, e.uri));
                 e.changed = true;
+
             } else { // otherwise get a copy from SynBioHub
                 synBioHubAction = "translate local URI";
                 local_uri = SynBioHubAccessor.translateURI(e.uri);
@@ -592,7 +594,7 @@ public final class MaintainDictionary {
                 }
             }
 
-            if(!e.type.equalsIgnoreCase("CHEBI") && (e.definitionURIColumn != null)) {
+            if(!e.type.equalsIgnoreCase("CHEBI")) {
                 // Non-CHEBI Entry, Definition URI column is present
                 Set<URI> derivations = entity.getWasDerivedFroms();
                 URI entityDerivation = null;
@@ -602,31 +604,43 @@ public final class MaintainDictionary {
                     entityDerivation = derivations.iterator().next();
                 }
 
-                if(originalEntry != null) {
-                    originalEntry.attributeDefinition = entityDerivation;
-                }
+                if(e.definitionURIColumn != null) {
+                    if(originalEntry != null) {
+                        originalEntry.attributeDefinition = entityDerivation;
+                    }
 
-                if(e.attributeDefinition == null) {
-                    if(entityDerivation != null) {
-                        // SynBioHub has a Definition URI, but the
-                        // spreadsheet does not have one
-                        // Remove Definition URI from SynBioHub entity
-                        derivations.clear();
-                        entity.setWasDerivedFroms(derivations);
-                        e.changed = true;
-                        e.report.success("Definition for " + e.name + " was removed.", true);
+                    if(e.attributeDefinition == null) {
+                        if(entityDerivation != null) {
+                            // SynBioHub has a Definition URI, but the
+                            // spreadsheet does not have one
+                            // Remove Definition URI from SynBioHub entity
+                            derivations.clear();
+                            entity.setWasDerivedFroms(derivations);
+                            e.changed = true;
+                            e.report.success("Definition for " + e.name + " was removed.", true);
+                        }
+
+                    } else {
+                        // Spreadsheet has a Definition URI
+                        if((entityDerivation == null) || !e.attributeDefinition.equals(entityDerivation)) {
+                            // Populate the derived from property in the
+                            // SynBioHub entry with the value of the
+                            // Definition URI entry in the spreadsheet.
+                            derivations.clear();
+                            derivations.add(e.attributeDefinition);
+                            entity.setWasDerivedFroms(derivations);
+                            e.changed = true;
+                            e.report.success("Definition for "+e.name+" is '"+e.attributeDefinition+"'",true);
+                        }
                     }
                 } else {
-                    // Spreadsheet has a Definition URI
-                    if((entityDerivation == null) || !e.attributeDefinition.equals(entityDerivation)) {
-                        // Populate the derived from property in the
-                        // SynBioHub entry with the value of the
-                        // Definition URI entry in thr spreadsheet.
-                        derivations.clear();
-                        derivations.add(e.attributeDefinition);
-                        entity.setWasDerivedFroms(derivations);
-                        e.changed = true;
-                        e.report.success("Definition for "+e.name+" is '"+e.attributeDefinition+"'",true);
+                    // Update the spreadsheet Import Definition column with the
+                    // SynBioHub value
+                    ValueRange update =
+                        DictionaryAccessor.writeDefinitionImport(e, entityDerivation);
+
+                    if(update != null) {
+                        e.spreadsheetUpdates.add(update);
                     }
                 }
             }

@@ -37,6 +37,7 @@ public class DictionaryEntry {
     public StubStatus stub = StubStatus.UNDEFINED;
     public boolean attribute = false;
     public URI attributeDefinition = null;
+    public String definitionImport = "";
     public Map<String, Integer> header_map;
     public boolean changed = false;
     public boolean dictionaryEntryChanged = false;
@@ -192,6 +193,7 @@ public class DictionaryEntry {
         stub = src.stub;
         attribute = src.attribute;
         attributeDefinition = src.attributeDefinition;
+        definitionImport = src.definitionImport;
         header_map = src.header_map;
         changed = src.changed;
         // Should this be a deep copy?
@@ -253,6 +255,15 @@ public class DictionaryEntry {
 
             try {
                 attributeDefinition = new URI(attributeStr);
+            } catch(Exception e) {
+            }
+        }
+
+        col = header_map.get("Definition Import");
+        if(col != null) {
+            try {
+                URI definitionImportURI = new URI((String)row.get(col));
+                definitionImport = definitionImportURI.toString();
             } catch(Exception e) {
             }
         }
