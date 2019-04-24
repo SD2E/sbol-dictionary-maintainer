@@ -653,6 +653,37 @@ public class DictionaryAccessor {
     }
 
     /**
+     * Write the Defintion URI of the entry
+     * @param e  entry to be written
+     * @param uri definitive location for ontology source definition
+     * @throws IOException
+     */
+    public static ValueRange writeDefinitionImport(DictionaryEntry e,
+                                                   URI attributeDefinition) throws IOException {
+        final String columnHeader = "Definition Import";
+
+        if(!e.header_map.containsKey(columnHeader)) {
+            return null;
+        }
+
+        String attributeString = "";
+
+        if(attributeDefinition != null) {
+            attributeString = attributeDefinition.toString();
+        }
+
+        if(attributeString.equals(e.definitionImport)) {
+            return null;
+        }
+
+        e.dictionaryEntryChanged = true;
+
+        String location = getCellLocation(e, columnHeader);
+
+        return writeLocationText(location, attributeString);
+    }
+
+    /**
      * Write the URI of the entry
      * @param e  entry to be written
      * @param uri definitive location for ontology source definition
