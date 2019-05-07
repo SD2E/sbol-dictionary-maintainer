@@ -8,12 +8,13 @@ import time
 
 # If modifying these scopes, delete the file token.pickle.
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets',
-          'https://www.googleapis.com/auth/drive.file']
+          'https://www.googleapis.com/auth/drive.file',
+          'https://www.googleapis.com/auth/documents',]
 
 
 REQUESTS_PER_SEC = 0.5
 
-class DictionaryAccessor:
+class GoogleAccessor:
 
     # Constructor
     def __init__(self, *, spreadsheet_id: str, credentials):
@@ -21,6 +22,8 @@ class DictionaryAccessor:
                                     credentials=credentials)
         self._drive_service = build('drive', 'v3',
                                     credentials=credentials)
+        self._docs_service = build('docs', 'v1',
+                                   credentials=credentials)
         self._spreadsheet_id = spreadsheet_id
         self._tab_headers = dict()
         self._inverse_tab_headers = dict()
@@ -34,7 +37,7 @@ class DictionaryAccessor:
             'Genetic Construct': ['DNA', 'RNA'],
             'Strain': ['Strain'],
             'Protein': ['Protein'],
-            'Collections': ['Challenge Problem', 'Collection']
+            'Collections': ['Challenge Problem']
         }
 
         self._dictionary_headers = ['Common Name',
@@ -42,6 +45,7 @@ class DictionaryAccessor:
                                     'SynBioHub URI',
                                     'Stub Object?',
                                     'Definition URI',
+                                    'Definition URI / CHEBI ID',
                                     'Status']
 
         self.mapping_failures_headers = [
@@ -58,9 +62,9 @@ class DictionaryAccessor:
                      'Transcriptic', 'LBNL', 'EmeraldCloud']
 
     @staticmethod
-    def create(*, spreadsheet_id):
+    def create(*, spreadsheet_id=None):
         """
-        Ensures that the user is logged in and returns a `DictionaryAccessor`.
+        Ensures that the user is logged in and returns a `GoogleAccessor`.
 
         Credentials are initially read from the `credentials.json` file, and
         are subsequently stored in the file `token.pickle` that stores the
@@ -85,7 +89,7 @@ class DictionaryAccessor:
             with open('token.pickle', 'wb') as token:
                 pickle.dump(creds, token)
 
-        return DictionaryAccessor(
+        return GoogleAccessor(
             spreadsheet_id=spreadsheet_id, credentials=creds
         )
 
@@ -334,7 +338,7 @@ class DictionaryAccessor:
         column headers to values
         """
         headers = self._get_tab_inverse_headers(tab)
-        row_data = [''] * max(headers.keys())
+        row_data = [''] * (max(headers.keys()) + 1)
 
         for index in headers.keys():
             header = headers[index]
@@ -343,3 +347,6 @@ class DictionaryAccessor:
             row_data[index] = entry[header]
 
         return row_data
+
+    def get_document(self, *, document_id):
+        return self._docs_service.documents().get(documentId=document_id).execute()
