@@ -2,7 +2,7 @@ import unittest
 import warnings
 
 from sd2_dictionary.sd2_dictionary_writer import SD2DictionaryWriter
-from sd2_dictionary.dictionary_accessor import DictionaryAccessor
+from sd2_dictionary.google_accessor import GoogleAccessor
 
 class TestSD2DictionaryWriter(unittest.TestCase):
 
@@ -28,14 +28,14 @@ class TestSD2DictionaryWriter(unittest.TestCase):
         warnings.filterwarnings('ignore', message='unclosed <ssl.SSLSocket',
                                 category=ResourceWarning)
 
-        self.dictionary_accessor = DictionaryAccessor.create(spreadsheet_id="")
+        self.google_accessor = GoogleAccessor.create(spreadsheet_id="")
 
-        self.spreadsheet_id = self.dictionary_accessor.create_new_spreadsheet(
+        self.spreadsheet_id = self.google_accessor.create_new_spreadsheet(
                     name='Dictionary Writer Test'
         )['spreadsheetId']
 
-        self.dictionary_accessor.set_spreadsheet_id(self.spreadsheet_id)
-        self.dictionary_accessor.create_dictionary_sheets()
+        self.google_accessor.set_spreadsheet_id(self.spreadsheet_id)
+        self.google_accessor.create_dictionary_sheets()
 
 
     def test_add_dictionary_entry(self):
@@ -46,21 +46,25 @@ class TestSD2DictionaryWriter(unittest.TestCase):
         # Add some entries
         for x in range(5):
             dictionaryWriter.add_dictionary_entry(
-                'myChemical' + str(x), 'Strain',
-                'Ginkgo', 'label' + str(x))
+                common_name='myChemical' + str(x),
+                entry_type='Strain',
+                lab='Ginkgo',
+                lab_id='label' + str(x))
 
         # Add some more entries
         for x in range(5, 10):
             dictionaryWriter.add_dictionary_entry(
-                'myChemical' + str(x), 'Solution',
-                'BioFAB', 'label' + str(x))
+                common_name='myChemical' + str(x),
+                entry_type='Solution',
+                lab='BioFAB',
+                lab_id='label' + str(x))
 
         # Read back the spreadsheet data
-        sheet_entries = self.dictionary_accessor.get_row_data(
+        sheet_entries = self.google_accessor.get_row_data(
             tab='Reagent'
         )
 
-        sheet_entries += self.dictionary_accessor.get_row_data(
+        sheet_entries += self.google_accessor.get_row_data(
             tab='Strain'
         )
 
@@ -84,21 +88,28 @@ class TestSD2DictionaryWriter(unittest.TestCase):
 
         # Add a label to a different lab
         dictionaryWriter.add_dictionary_entry(
-            'myChemical2', 'Strain',
-            'BioFAB', 'label11')
+            common_name='myChemical2',
+            entry_type='Strain',
+            lab='BioFAB',
+            lab_id='label11',
+            definition_uri='http://www.test.com/')
 
         # Add an additional label
         dictionaryWriter.add_dictionary_entry(
-            'myChemical2', 'Strain',
-            'BioFAB', 'label12')
+            common_name='myChemical2',
+            entry_type='Strain',
+            lab='BioFAB',
+            lab_id='label12')
 
         # Try to add an element with the same name and different type.
         # This should fail
         generated_exception = False
         try:
             dictionaryWriter.add_dictionary_entry(
-                    'myChemical2', 'Solution',
-                    'BioFAB', 'label11')
+                common_name='myChemical2',
+                entry_type='Solution',
+                lab='BioFAB',
+                lab_id='label11')
         except:
             generated_exception = True
 
@@ -109,8 +120,10 @@ class TestSD2DictionaryWriter(unittest.TestCase):
         generated_exception = False
         try:
             dictionaryWriter.add_dictionary_entry(
-                    'myChemical11', 'Solution',
-                    'BioFAB', 'label7')
+                common_name='myChemical11',
+                entry_type='Solution',
+                lab='BioFAB',
+                lab_id='label7')
         except:
             generated_exception = True
 
@@ -126,15 +139,15 @@ class TestSD2DictionaryWriter(unittest.TestCase):
         for i in range(2):
             for x in range(5):
                 dictionaryWriter.add_mapping_failure(
-                    experimentRun='experiment' + str(x),
+                    experiment_run='experiment' + str(x),
                     lab='Transcriptic',
-                    itemName='itemName' + str(x),
-                    itemId='itemId' + str(x),
-                    itemType='Strain'
+                    item_name='itemName' + str(x),
+                    item_id='itemId' + str(x),
+                    item_type='Strain'
                 )
 
         # read back tab entries
-        sheet_entries = self.dictionary_accessor.get_row_data(
+        sheet_entries = self.google_accessor.get_row_data(
             tab='Mapping Failures'
         )
 
@@ -160,7 +173,7 @@ class TestSD2DictionaryWriter(unittest.TestCase):
     @classmethod
     def tearDownClass(self):
         if self.spreadsheet_id is not None:
-            self.dictionary_accessor.delete_spreadsheet(
+            self.google_accessor.delete_spreadsheet(
                 self.spreadsheet_id
             )
 
