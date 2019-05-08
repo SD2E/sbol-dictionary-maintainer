@@ -4,9 +4,10 @@ program_dictionary_id = '1oLJTTydL_5YPyk-wY-dspjIw_bPZ3oCiWiK0xtG8t3g'
 
 
 class SD2DictionaryWriter:
-    def __init__(self, *, spreadsheet_id=program_dictionary_id):
+    def __init__(self, *, spreadsheet_id=program_dictionary_id,
+                 console=False):
         self.dictionary = GoogleAccessor.create(
-            spreadsheet_id=spreadsheet_id)
+            spreadsheet_id=spreadsheet_id, console=console)
 
         # Mapping failure tab column headers
         self.mf_experiment_run_key = 'Experiment/Run'

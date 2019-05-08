@@ -62,7 +62,7 @@ class GoogleAccessor:
                      'Transcriptic', 'LBNL', 'EmeraldCloud']
 
     @staticmethod
-    def create(*, spreadsheet_id=None):
+    def create(*, spreadsheet_id=None, console=False):
         """
         Ensures that the user is logged in and returns a `GoogleAccessor`.
 
@@ -84,7 +84,10 @@ class GoogleAccessor:
             else:
                 flow = InstalledAppFlow.from_client_secrets_file(
                     'credentials.json', SCOPES)
-                creds = flow.run_local_server()
+                if console:
+                    creds = flow.run_console()
+                else:
+                    creds = flow.run_local_server()
             # Save the credentials for the next run
             with open('token.pickle', 'wb') as token:
                 pickle.dump(creds, token)
