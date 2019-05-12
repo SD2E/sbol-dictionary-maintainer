@@ -1,3 +1,9 @@
+bin/
+tokens
+build
+.gradle
+.classpath
+.project
 password.txt
 org.eclipse.buildship.core.prefs
 
