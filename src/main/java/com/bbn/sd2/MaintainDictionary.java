@@ -91,13 +91,6 @@ public final class MaintainDictionary {
     private static final Set<String> protectedColumns = new HashSet<>(Arrays.asList("SynBioHub URI",
                                                                                     "Stub Object?", "Status"));
 
-    public static final List<String> editors = Arrays.asList("bartleyba@sbolstandard.org",
-                                                             "nicholasroehner@gmail.com",
-                                                             "jakebeal@gmail.com",
-                                                             "weston@netrias.com",
-                                                             "vaughn@tacc.utexas.edu",
-                                                             "dsumorokraytheon@gmail.com");
-
     /** These columns, along with the lab UID columns, will be checked for deleted cells that
      *  cause other cells to shift up */
     private static final Set<String> shiftCheckColumns = new HashSet<>(Arrays.asList("Common Name",
@@ -179,7 +172,7 @@ public final class MaintainDictionary {
         Set<String> allValidHeaders = new HashSet<String>();
 
         allValidHeaders.addAll(validHeaders);
-        allValidHeaders.addAll(DictionaryEntry.labUIDMap.keySet());
+        allValidHeaders.addAll(DictionaryMaintainerApp.labUIDMap.keySet());
 
         return allValidHeaders;
     }
@@ -678,7 +671,7 @@ public final class MaintainDictionary {
         // allShiftCheckColumns contains the headers of the columns that are
         // checked for value shifts (i.e. deleted cells)
         Set<String> allShiftCheckColumns = new HashSet<>(shiftCheckColumns);
-        for(String labUIDTag : DictionaryEntry.labUIDMap.keySet()) {
+        for(String labUIDTag : DictionaryMaintainerApp.labUIDMap.keySet()) {
             allShiftCheckColumns.add(labUIDTag);
         }
 
@@ -1503,7 +1496,7 @@ public final class MaintainDictionary {
         // Check for duplicate names.  Dictionary entries with
         // duplicate names are marked as invalid
         DictionaryAccessor.validateUniquenessOfEntries("Common Name", allTabEntries);
-        for(String uidTag : DictionaryEntry.labUIDMap.keySet()) {
+        for(String uidTag : DictionaryMaintainerApp.labUIDMap.keySet()) {
             DictionaryAccessor.validateUniquenessOfEntries(uidTag, allTabEntries);
         }
 

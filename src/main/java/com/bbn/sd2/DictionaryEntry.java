@@ -47,18 +47,8 @@ public class DictionaryEntry {
     public UpdateReport report = new UpdateReport();
     private final String lastNotifyTag = "Last Notify ";
     private SimpleDateFormat dateFormatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z");
-    public static Map<String, String> labUIDMap =
-        new TreeMap<String, String>() {
-            private static final long serialVersionUID = 1L;
-            {
-                put("BioFAB UID", "BioFAB_UID");
-                put("Ginkgo UID", "Ginkgo_UID");
-                put("Transcriptic UID", "Transcriptic_UID");
-                put("EmeraldCloud UID", "EmeraldCloud_UID");
-                put("LBNL UID", "LBNL_UID");
-            }
-        };
-    public static Map<String, String> reverseLabUIDMap = generateReverseLabUIDMap();
+    private Map<String, String> labUIDMap = DictionaryMaintainerApp.labUIDMap;
+    private Map<String, String> reverseLabUIDMap = DictionaryMaintainerApp.reverseLabUIDMap;
     public List<ValueRange> spreadsheetUpdates = new ArrayList<ValueRange>();
 
     private boolean compareNull(Object o1, Object o2) {
@@ -130,16 +120,6 @@ public class DictionaryEntry {
         }
 
         return true;
-    }
-
-    private static Map<String, String> generateReverseLabUIDMap() {
-        Map<String, String> reverseMap = new TreeMap<String, String>();
-
-        for(String key : labUIDMap.keySet()) {
-            reverseMap.put(labUIDMap.get(key), key);
-        }
-
-        return reverseMap;
     }
 
     public String stubString() {

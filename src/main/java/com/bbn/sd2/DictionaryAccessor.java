@@ -406,7 +406,7 @@ public class DictionaryAccessor {
      * @throw GeneralSecurityException
      */
     public static void validateUniquenessOfEntries(String header_name, List<DictionaryEntry> entries) {
-        final Map<String, String> uidMap = DictionaryEntry.labUIDMap;
+        final Map<String, String> uidMap = DictionaryMaintainerApp.labUIDMap;
         Map<String, DictionaryEntry> nameToEntry = new TreeMap<String, DictionaryEntry>();
         boolean commonName = false;
         String uidTag = null;
@@ -874,7 +874,7 @@ public class DictionaryAccessor {
         }
 
         Set<String> editorSet = new TreeSet<>();
-        editorSet.addAll(MaintainDictionary.editors);
+        editorSet.addAll(DictionaryMaintainerApp.editors);
         editorSet.add(loggedInUser);
 
         for(ProtectedRange range : ranges) {

@@ -1,5 +1,6 @@
 package com.bbn.sd2;
 
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.security.GeneralSecurityException;
@@ -8,17 +9,19 @@ import java.text.NumberFormat;
 import java.util.logging.Logger;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.List;
+import java.util.ArrayList;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.HashMap;
 
 import org.apache.commons.cli.*;
+import org.json.*;
 import org.synbiohub.frontend.SynBioHubException;
 
 public class DictionaryMaintainerApp {
-    public static final String VERSION = "1.4.1";
+    public static final String VERSION = "1.4.2";
 
     private static Logger log = Logger.getGlobal();
     private static int sleepMillis;
@@ -26,74 +29,35 @@ public class DictionaryMaintainerApp {
     private static Semaphore heartbeatSem = new Semaphore(0);
     private static Semaphore backupSem = new Semaphore(0);
     private static boolean stopWorkerThreads = false;
+    private static Map<String, Map<String, String>> emailLists = new TreeMap<>();
+
+    public static Map<String, String> labUIDMap = new TreeMap<>();
+    public static Map<String, String> reverseLabUIDMap = new TreeMap<>();
+    public static List<String> editors = new ArrayList<>();
 
     /** Email addresses mapping failures are sent to */
-    private static Map<String,String> mappingFailureToList = new HashMap<String,String>(){{
-            put("BioFAB", "bjkeller@uw.edu");
-            put("Transcriptic", "peter@transcriptic.com; aespah@mit.edu");
-            put("Ginkgo", "narendra@ginkgobioworks.com");
-        }
-            static final long serialVersionUID = 0;
-        };
-
-    private static Map<String,String> mappingFailureCCList = new HashMap<String,String>(){{
-            put("BioFAB", "jakebeal@gmail.com;weston@netrias.com");
-            put("Transcriptic", "jakebeal@gmail.com;weston@netrias.com");
-            put("Ginkgo", "jakebeal@gmail.com;weston@netrias.com");
-        }
-            static final long serialVersionUID = 0;
-        };
-
-    private static Map<String,String> mappingFailureToListTest = new HashMap<String,String>(){{
-            put("BioFAB", "dan.sumorok@raytheon.com");
-            put("Transcriptic", "dan.sumorok@raytheon.com");
-            put("Ginkgo", "dan.sumorok@raytheon.com");
-        }
-            static final long serialVersionUID = 0;
-        };
-
-    private static Map<String,String> mappingFailureCCListTest = new HashMap<String,String>(){{
-            put("BioFAB", "jakebeal@gmail.com");
-            put("Transcriptic", "jakebeal@gmail.com");
-            put("Ginkgo", "jakebeal@gmail.com");
-        }
-            static final long serialVersionUID = 0;
-        };
-
-    private static Map<String,String> entryFailureList = new HashMap<String,String>(){{
-            put("To", "jakebeal@gmail.com;dan.sumorok@raytheon.com");
-        }
-            static final long serialVersionUID = 0;
-        };
-
-    private static Map<String,String> entryFailureListTest = new HashMap<String,String>(){{
-            put("To", "dan.sumorok@raytheon.com");
-        }
-            static final long serialVersionUID = 0;
-        };
-
     public static void main(String... args) throws Exception {
         // Parse arguments and configure
         CommandLine cmd = parseArguments(args);
         sleepMillis = 1000*Integer.valueOf(cmd.getOptionValue("sleep","60"));
-        log.info("Dictionary Maintainer initializing "+(cmd.hasOption("test_mode")?"in single update mode":"for continuous operation"));
+        log.info("Dictionary Maintainer initializing "+(cmd.hasOption("test_mode") ?
+                                                        "in single update mode":
+                                                        "for continuous operation"));
         stopWorkerThreads = false;
         kludge_heartbeat_reporter();
         final boolean backupInMainLoop = true;
         boolean test_mode = cmd.hasOption("test_mode");
         boolean no_email = cmd.hasOption("no_email");
-        Map<String, Map<String, String>> emailLists = new TreeMap<>();
 
-        if(!no_email) {
-            if(!test_mode) {
-                emailLists.put("MappingFailuresTo", mappingFailureToList);
-                emailLists.put("MappingFailuresCC", mappingFailureCCList);
-                emailLists.put("EntryFailures", entryFailureList);
-            } else {
-                emailLists.put("MappingFailuresTo", mappingFailureToListTest);
-                emailLists.put("MappingFailuresCC", mappingFailureCCListTest);
-                emailLists.put("EntryFailures", entryFailureListTest);
-            }
+        if(!cmd.hasOption("config_file")) {
+            log.severe("No configuration file was specified");
+            return;
+        }
+
+        loadConfigFile(cmd.getOptionValue("config_file"));
+
+        if(no_email) {
+            emailLists.clear();
         }
 
         DictionaryAccessor.configure(cmd);
@@ -218,6 +182,122 @@ public class DictionaryMaintainerApp {
         }.start();
     }
 
+    public static void loadConfigFile(String fName) throws IOException {
+        FileInputStream fs = null;
+
+        try {
+            fs = new FileInputStream(fName);
+
+            int fileLength = fs.available();
+            byte[] fileContents = new byte[fileLength];
+            int bytesRead = 0;
+
+            while(bytesRead < fileLength) {
+                bytesRead += fs.read(fileContents, bytesRead,
+                                     fileLength - bytesRead);
+            }
+
+            JSONObject configFile = new JSONObject(new String(fileContents));
+
+            labUIDMap.clear();
+            reverseLabUIDMap.clear();
+            editors.clear();
+
+            processConfigFile(configFile);
+            reverseLabUIDMap = generateReverseLabUIDMap();
+
+        } catch(IOException e) {
+            throw e;
+        } finally {
+            if(fs != null) {
+                try {
+                    fs.close();
+                } catch(Exception e) {
+                }
+            }
+        }
+    }
+
+    private static Map<String, String> generateReverseLabUIDMap() {
+        Map<String, String> reverseMap = new TreeMap<String, String>();
+
+        for(String key : labUIDMap.keySet()) {
+            reverseMap.put(labUIDMap.get(key), key);
+        }
+
+        return reverseMap;
+    }
+
+    private static void processConfigFile(JSONObject configFile) {
+        // Lab configuration
+        JSONArray labs = configFile.getJSONArray("labs");
+        for(int i=0; i<labs.length(); ++i) {
+            JSONObject lab = labs.getJSONObject(i);
+            String labName = lab.getString("labName");
+            String propertyName = lab.getString("propertyName");
+            labUIDMap.put(labName + " UID", propertyName);
+
+            if(lab.has("mappingFailureEmail")) {
+                JSONObject mappingFailureEmail =
+                    lab.getJSONObject("mappingFailureEmail");
+
+                String toList = emailListToString(mappingFailureEmail, "To");
+                addListEmailAddress(labName, toList, "MappingFailuresTo");
+
+                String ccList = emailListToString(mappingFailureEmail, "CC");
+                addListEmailAddress(labName, ccList, "MappingFailuresCC");
+
+            }
+        }
+
+        // Entry Failure Email list
+        JSONObject entryFailureEmail = configFile.getJSONObject("entryFailureEmail");
+        for(String key : entryFailureEmail.keySet()) {
+            String emailAddresses = emailListToString(entryFailureEmail, key);
+            addListEmailAddress(key, emailAddresses, "EntryFailures");
+        }
+
+        JSONArray configEditors = configFile.getJSONArray("editors");
+        for(int i=0; i<configEditors.length(); ++i) {
+            editors.add(configEditors.getString(i));
+        }
+    }
+
+    private static void addListEmailAddress(String key, String emailList, String tag) {
+        if(emailList == null) {
+            return;
+        }
+
+        Map<String,String> labMap = null;
+        if(!emailLists.containsKey(tag)) {
+            labMap = new TreeMap<>();
+            emailLists.put(tag, labMap);
+        } else {
+            labMap = emailLists.get(tag);
+        }
+
+        labMap.put(key, emailList);
+    }
+
+    private static String emailListToString(JSONObject parent, String key) {
+        if(!parent.has(key)) {
+            return null;
+        }
+
+        JSONArray list = parent.getJSONArray(key);
+        String result = null;
+        for(int i=0 ;i<list.length(); ++i) {
+            String emailAddress = list.getString(i);
+            if(result == null) {
+                result = emailAddress;
+            } else {
+                result += ";" + emailAddress;
+            }
+        }
+
+        return result;
+    }
+
     private static void kludge_heartbeat_reporter() {
         new Thread() { public void run() {
             int count=0;
@@ -248,6 +328,7 @@ public class DictionaryMaintainerApp {
         options.addOption("t", "test_mode", false, "Run only one update for testing purposes, then terminate");
         options.addOption("T", "timeout", true, "Connection timeout in seconds (zero to disable timeout)");
         options.addOption("n", "no_email", false, "Don't send email");
+        options.addOption("i", "config_file", true, "Configuration File");
 
         // Parse arguments
         CommandLine cmd = null;
