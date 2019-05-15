@@ -114,6 +114,9 @@ public class TestMaintainDictionary {
         // Write headers to tabs
         List<ValueRange> vrList = new ArrayList<>();
 
+        // Load Configuration file to get the LAB names for the headers
+        DictionaryMaintainerApp.loadConfigFile(System.getProperty("config"));
+
         // Create headers list
         List<String> headers = new ArrayList<>();
         for (String header : MaintainDictionary.headers()) {

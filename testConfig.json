@@ -1,0 +1,65 @@
+{
+    "labs": [
+        {
+            "labName": "BioFAB",
+            "propertyName": "BioFAB_UID",
+            "mappingFailureEmail" : {
+                "To": [
+                    "dan.sumorok@raytheon.com"
+                ],
+                "CC": [
+                    "dsumorok@gmail.com"
+                ]
+            }
+        },
+        {
+            "labName": "Ginkgo",
+            "propertyName": "Ginkgo_UID",
+            "mappingFailureEmail" : {
+                "To": [
+                    "dan.sumorok@raytheon.com"
+                ]
+            }
+        },
+        {
+            "labName": "Transcriptic",
+            "propertyName": "Transcriptic_UID",
+            "mappingFailureEmail" : {
+                "To": [
+                    "dan.sumorok@raytheon.com"
+                ]
+            }
+        },
+        {
+            "labName": "EmeraldCloud",
+            "propertyName": "EmeraldCloud_UID",
+            "mappingFailureEmail" : {
+                "To": [
+                    "dan.sumorok@raytheon.com"
+                ]
+            }
+        },
+        {
+            "labName": "LBNL",
+            "propertyName": "LBNL_UID",
+            "mappingFailureEmail" : {
+                "To": [
+                    "dan.sumorok@raytheon.com"
+                ]
+            }
+        }
+    ],
+    "entryFailureEmail": {
+        "To" : [
+            "dan.sumorok@raytheon.com"
+        ]
+    },
+    "editors": [
+        "bartleyba@sbolstandard.org",
+        "nicholasroehner@gmail.com",
+        "jakebeal@gmail.com",
+        "weston@netrias.com",
+        "vaughn@tacc.utexas.edu",
+        "dsumorokraytheon@gmail.com"
+    ]
+}

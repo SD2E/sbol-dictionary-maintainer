@@ -32,7 +32,16 @@ public class DictionaryTestShared {
         }
         String noEmailOption = System.getProperty("no_email");
 
+        String configFile = System.getProperty("config");
+
         List<String> optionList = new ArrayList<>();
+
+        // Configuration file
+        if(configFile != null) {
+            optionList.add("-i");
+            optionList.add(configFile);
+        }
+
         // Sleep zero seconds between updates
         optionList.add("-s");
         optionList.add("0");
