@@ -45,10 +45,13 @@ public class DictionaryEntry {
     public Color statusColor;
     public Integer definitionURIColumn = null;
     public UpdateReport report = new UpdateReport();
+    public Date modifiedDate = null;
     private final String lastNotifyTag = "Last Notify ";
     private SimpleDateFormat dateFormatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z");
     private Map<String, String> labUIDMap = DictionaryMaintainerApp.labUIDMap;
     private Map<String, String> reverseLabUIDMap = DictionaryMaintainerApp.reverseLabUIDMap;
+    private SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX");
+
     public List<ValueRange> spreadsheetUpdates = new ArrayList<ValueRange>();
 
     private boolean compareNull(Object o1, Object o2) {
@@ -176,6 +179,8 @@ public class DictionaryEntry {
         definitionImport = src.definitionImport;
         header_map = src.header_map;
         changed = src.changed;
+        modifiedDate = src.modifiedDate;
+
         // Should this be a deep copy?
         document = src.document;
     }
@@ -217,6 +222,14 @@ public class DictionaryEntry {
                     lastNotifyTime = dateFormatter.parse(dateStr);
                 } catch(Exception e) {
                 }
+            }
+        }
+
+        if(fullbox(row, header_map.get("Last Updated"))) {
+            try {
+                String dateString = (String)row.get(header_map.get("Last Updated"));
+                modifiedDate = sdfDate.parse( dateString );
+            } catch(Exception e) {
             }
         }
 
@@ -345,6 +358,23 @@ public class DictionaryEntry {
             DictionaryAccessor.getCachedSheetProperties(tab).getProperties().getSheetId();
 
         return DictionaryAccessor.setStatusColor(this.row_index - 1, col, sheetId, color);
+    }
+
+    public boolean setModifiedDate(String dateString) {
+        try {
+            modifiedDate = sdfDate.parse(dateString);
+        } catch(Exception e) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public String getModifiedDate() {
+        if(modifiedDate == null) {
+            return null;
+        }
+        return sdfDate.format(modifiedDate);
     }
 
     //    public boolean validType() {

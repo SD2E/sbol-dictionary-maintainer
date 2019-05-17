@@ -37,8 +37,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +48,8 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.logging.Logger;
+
+import javax.xml.namespace.QName;
 
 import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.DriveScopes;
@@ -354,6 +358,7 @@ public class TestMaintainDictionary {
         // Find the CHEBI entries
         List<DictionaryEntry> CHEBIEntries = new ArrayList<>();
         DictionaryEntry mediaEntry = null;
+        DictionaryEntry solutionEntry = null;
         for(DictionaryEntry rEntry : reagentEntries) {
             if(rEntry.type.equals("CHEBI")) {
                 CHEBIEntries.add(rEntry);
@@ -361,6 +366,10 @@ public class TestMaintainDictionary {
 
             if(rEntry.type.equals("Media")) {
                 mediaEntry = rEntry;
+            }
+
+            if(rEntry.type.equals("Solution")) {
+                solutionEntry = rEntry;
             }
         }
 
@@ -438,6 +447,41 @@ public class TestMaintainDictionary {
         // Create an invalid type
         DictionaryAccessor.setCellData("Genetic Construct", "Type", 3, "Bad Type");
 
+        // Update an entry in SynBioHub
+        uri = solutionEntry.uri;
+        document = SynBioHubAccessor.retrieve(uri, false);
+
+        // Translate the URI
+        local_uri = SynBioHubAccessor.translateURI(uri);
+
+        // Fetch the SBOL Document from SynBioHub
+        entity = document.getTopLevel(local_uri);
+
+        // Update Name
+        entity.setName("New Name");
+
+        QName labQKey = new QName("http://sd2e.org#", "BioFAB_UID", "sd2");
+        entity.createAnnotation(labQKey, "newLabId");
+
+        // Add a definition URI
+        derivations = entity.getWasDerivedFroms();
+        try {
+            derivations.add(new URI("http://www.test.com"));
+        } catch(Exception exception) {
+        }
+        entity.setWasDerivedFroms(derivations);
+
+
+        // Update Last Modified Date
+        QName MODIFIED = new QName("http://purl.org/dc/terms/","modified","dcterms");
+        SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX");
+        String modifiedDate = sdfDate.format( new Date() );
+
+        entity.removeAnnotation(entity.getAnnotation(MODIFIED));
+        entity.createAnnotation(MODIFIED, modifiedDate);
+
+        SynBioHubAccessor.update(document);
+
         // Run the Dictionary
         DictionaryTestShared.initializeTestEnvironment(sheetId);
 
@@ -448,6 +492,10 @@ public class TestMaintainDictionary {
         // Fetch then entries from the Gentic Construct tab
         List<DictionaryEntry> geneticConstructEntries =
             DictionaryAccessor.snapshotCurrentDictionary("Genetic Construct");
+
+        // Fetch then entries from the Reagent tab
+        reagentEntries =
+            DictionaryAccessor.snapshotCurrentDictionary("Reagent");
 
         // Make sure the log message records that email notifications
         // were sent for the invalid entries.  The notification times
@@ -475,6 +523,14 @@ public class TestMaintainDictionary {
 
             assert(status1.equals(status2));
         }
+
+        // Verify that SynBioHub updates are reflected in the spreadsheet
+        DictionaryEntry reagentEntry = reagentEntries.get(9);
+        assert(reagentEntry.name.equals("New Name"));
+        Set<String> bioFABUIDs = reagentEntry.labUIDs.get("BioFAB_UID");
+        assert(bioFABUIDs.contains("newLabId"));
+        assert(reagentEntry.attributeDefinition.toString().equals("http://www.test.com/"));
+        assert(reagentEntry.getModifiedDate().equals(modifiedDate));
 
         Color red = MaintainDictionary.redColor();
         Color green = MaintainDictionary.greenColor();

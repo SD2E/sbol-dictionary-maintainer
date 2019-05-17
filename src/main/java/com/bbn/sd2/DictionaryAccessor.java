@@ -554,7 +554,7 @@ public class DictionaryAccessor {
         setTabData(writeRange, response);
     }
 
-    public static String getCellData(String tab, String colName, int row) throws Exception {
+    public static String getCellData(String tab, String colName, int row) throws IOException {
         char col = columnNameToIndex(tab, colName);
 
         String readRange = tab + "!" + col + row;
@@ -580,7 +580,7 @@ public class DictionaryAccessor {
         return (String)rowValues.get(0);
     }
 
-    public static void setCellData(String tab, String colName, int row, String value) throws Exception {
+    public static void setCellData(String tab, String colName, int row, String value) throws IOException {
         char col = columnNameToIndex(tab, colName);
 
         String writeRange = tab + "!" + col + row;
@@ -618,6 +618,37 @@ public class DictionaryAccessor {
     }
 
     /**
+     * Write the last updated time stamp
+     * @param e  entry to be written
+     * @param time stamp string
+     * @throws IOException
+     */
+    public static ValueRange writeLastUpdated(DictionaryEntry e, String timeStamp) throws IOException {
+        String location = getCellLocation(e, "Last Updated");
+
+        if(location == null) {
+            return null;
+        }
+
+        return writeLocationText(location, timeStamp);
+    }
+
+    /**
+     * Read the last updated time stamp
+     * @param e  entry to be written
+     * @throws IOException
+     */
+    public static String readLastUpdated(DictionaryEntry e) throws IOException {
+        String location = getCellLocation(e, "Last Updated");
+
+        if(location == null) {
+            return null;
+        }
+
+        return getCellData(e.tab, "Last Updated", e.row_index);
+    }
+
+    /**
      * Write the URI of the entry
      * @param e  entry to be written
      * @param uri definitive location for dictionary entry definition
@@ -637,6 +668,21 @@ public class DictionaryAccessor {
      */
     public static ValueRange writeEntryStub(DictionaryEntry e, StubStatus stub) throws IOException {
         return writeLocationText(getCellLocation(e, "Stub Object?"), e.stubString());
+    }
+
+    /**
+     * Queue an update of a cell
+     * @param e  entry to be written
+     * @param columnTitle the column to update
+     * @param cellData the new cell contents
+     * @return A ValueRange object that updates the specified cell
+     * @throws IOException
+     */
+    public static ValueRange writeCellData(DictionaryEntry e, String columnTitle,
+                                           String cellData) throws IOException {
+        String location = getCellLocation(e, columnTitle);
+
+        return writeLocationText(location, cellData);
     }
 
     /**
