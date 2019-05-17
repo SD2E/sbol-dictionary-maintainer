@@ -86,7 +86,7 @@ public final class MaintainDictionary {
     private static final Set<String> validHeaders = new HashSet<>(Arrays.asList("Common Name", "Type", "SynBioHub URI",
                                                                                 "Stub Object?", "Definition URI", "Status",
                                                                                 "Definition URI / CHEBI ID",
-                                                                                "Definition Import"));
+                                                                                "Definition Import", "Last Updated"));
 
     private static final Set<String> protectedColumns = new HashSet<>(Arrays.asList("SynBioHub URI",
                                                                                     "Stub Object?", "Status"));
@@ -150,6 +150,12 @@ public final class MaintainDictionary {
      * The maximum number of individual requests in a single Google request
      */
     private static int maxGoogleRequestCount = 50;
+
+    /**
+     * Standard XML date format for sbol objects
+     */
+    private static SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX");
+
 
     /**
      * @param tab String name of a spreadsheet tab
@@ -312,7 +318,10 @@ public final class MaintainDictionary {
      * @return
      * @throws Exception
      */
-    private static SBOLDocument createStubOfType(String name, String type) throws SBOLValidationException, SynBioHubException, SBOLConversionException {
+    private static SBOLDocument createStubOfType(String name, String type,
+                                                 String timeStamp) throws SBOLValidationException,
+                                                                          SynBioHubException,
+                                                                          SBOLConversionException {
         SBOLDocument document = SynBioHubAccessor.newBlankDocument();
         String displayId = SynBioHubAccessor.sanitizeNameToDisplayID(name);
         TopLevel tl = null;
@@ -341,15 +350,14 @@ public final class MaintainDictionary {
         }
         // annotate with stub and creation information
         tl.setName(name);
-        tl.createAnnotation(CREATED, xmlDateTimeStamp());
+        tl.createAnnotation(CREATED, timeStamp);
+        tl.createAnnotation(MODIFIED, timeStamp);
 
         return document;
     }
 
     /** Get current date/time in standard XML format */
     public static String xmlDateTimeStamp() {
-        // Standard XML date format
-        SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX");
         // return current date/time
         return sdfDate.format(new Date());
     }
@@ -389,6 +397,10 @@ public final class MaintainDictionary {
         DictionaryEntry originalEntry = null;
         String synBioHubAction = null;
 
+        // When reverseSync is true the spreadsheet is updated to
+        // match the state in SynBioHub.
+        boolean reverseSync = false;
+
         try {
             // If the URI is null and the name is not, attempt to resolve:
             if(e.uri==null && e.name!=null) {
@@ -401,10 +413,11 @@ public final class MaintainDictionary {
                 }
             }
 
+            Date now = new Date();
             // if the entry has no URI, create per type
             if(e.uri==null) {
                 synBioHubAction = "create document for " + e.name + " in SynBioHub";
-                e.document = createStubOfType(e.name, e.type);
+                e.document = createStubOfType(e.name, e.type, sdfDate.format(now));
                 if(e.document==null) {
                     e.report.failure("Could not make object "+e.name, true);
                     e.statusCode = StatusCode.SBH_CONNECTION_FAILED;
@@ -429,6 +442,7 @@ public final class MaintainDictionary {
                     e.statusCode = StatusCode.SBH_CONNECTION_FAILED;
                     return originalEntry;
                 }
+
                 originalEntry = new DictionaryEntry(e);
             }
 
@@ -446,6 +460,32 @@ public final class MaintainDictionary {
                 e.statusCode = StatusCode.SBH_CONNECTION_FAILED;
                 return originalEntry;
             }
+
+            String modifiedDateStr = entity.getAnnotation(MODIFIED).getStringValue();
+
+            do {
+                if(modifiedDateStr == null) {
+                    break;
+                }
+
+                Date sheetDate = e.modifiedDate;
+                if(sheetDate == null) {
+                    break;
+                }
+
+                if(!e.setModifiedDate(modifiedDateStr)) {
+                    e.report.failure("Failed to parse entity modified date", true);
+                    break;
+                }
+
+                Date synBioHubDate = e.modifiedDate;
+
+                if(synBioHubDate.after(sheetDate)) {
+                    // Item was modifed in SynBioHub since dictionary edit
+                    reverseSync = true;
+                    e.dictionaryEntryChanged = true;
+                }
+            } while( false );
 
             if(e.type.equalsIgnoreCase("CHEBI")) {
                 URI chebiURI = e.attributeDefinition;
@@ -493,8 +533,12 @@ public final class MaintainDictionary {
                     originalEntry.attributeDefinition = entityChebiURI;
                 }
                 if(!entityChebiURI.equals(chebiURI)) {
-                    setCHEBIURI(entity, chebiURI);
-                    e.changed = true;
+                    if(reverseSync) {
+                        chebiURI = entityChebiURI;
+                    } else {
+                        setCHEBIURI(entity, chebiURI);
+                        e.changed = true;
+                    }
                     updateSpreadsheetAttributeURI = true;
                     e.report.note("Updated CHEBI URI", true);
                 }
@@ -530,6 +574,7 @@ public final class MaintainDictionary {
                 if(e.stub != StubStatus.UNDEFINED) {
                     e.stub = StubStatus.UNDEFINED;
                     e.spreadsheetUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
+                    e.dictionaryEntryChanged = true;
                 }
             } else {
                 boolean entity_is_stub = (entity.getAnnotation(STUB_ANNOTATION) != null);
@@ -537,6 +582,7 @@ public final class MaintainDictionary {
                     e.stub = entity_is_stub ? StubStatus.YES : StubStatus.NO;
                     e.spreadsheetUpdates.add(DictionaryAccessor.writeEntryStub(e, e.stub));
                     e.report.note(entity_is_stub?"Stub object":"Linked with non-stub object", true);
+                    e.dictionaryEntryChanged = true;
                 }
             }
 
@@ -545,9 +591,17 @@ public final class MaintainDictionary {
                 if(originalEntry != null) {
                     originalEntry.name = entity.getName();
                 }
-                entity.setName(e.name);
-                e.changed = true;
-                e.report.success("Name changed to '"+e.name+"'",true);
+
+                if(reverseSync) {
+                    ValueRange update =
+                        DictionaryAccessor.writeCellData(e, "Common Name",
+                                                         entity.getName());
+                    e.spreadsheetUpdates.add(update);
+                } else {
+                    entity.setName(e.name);
+                    e.changed = true;
+                    e.report.success("Name changed to '"+e.name+"'",true);
+                }
             }
 
             // if the entry has lab entries, check if they match and (re)annotate if different
@@ -578,8 +632,32 @@ public final class MaintainDictionary {
                         originalEntry.labUIDs.put(labKey, synBioHubIds);
                     }
 
-                    replaceOldAnnotations(entity, labQKey, labIds);
-                    e.changed = true;
+                    if(reverseSync) {
+                        // Populate the spreadsheet with lab ids from SynBioHub
+                        String labIdStr = "";
+                        for(String labId : synBioHubIds) {
+                            if(labIdStr.length() > 0) {
+                                labIdStr += ", ";
+                            }
+
+                            labIdStr += labId;
+                        }
+
+                        String labUIDLabel =
+                            DictionaryMaintainerApp.reverseLabUIDMap.get(labKey);
+
+                        ValueRange update =
+                            DictionaryAccessor.writeCellData(e, labUIDLabel,
+                                                             labIdStr);
+
+                        e.spreadsheetUpdates.add(update);
+
+                    } else {
+                        // Populate SybBioHub with lab ids from the spreadsheet
+                        replaceOldAnnotations(entity, labQKey, labIds);
+                        e.changed = true;
+                    }
+
                     if(labIds.size() > 0)
                         e.report.success(labKey+" for " + e.name + " is "+String.join(", ", labIds),true);
                     else
@@ -603,27 +681,70 @@ public final class MaintainDictionary {
                     }
 
                     if(e.attributeDefinition == null) {
+                        // Spreadsheet Definition URI is empty
+
                         if(entityDerivation != null) {
-                            // SynBioHub has a Definition URI, but the
-                            // spreadsheet does not have one
-                            // Remove Definition URI from SynBioHub entity
-                            derivations.clear();
-                            entity.setWasDerivedFroms(derivations);
-                            e.changed = true;
-                            e.report.success("Definition for " + e.name + " was removed.", true);
+                            // SynBioHub Definition URI is set
+                            if(reverseSync) {
+                                try {
+                                    e.spreadsheetUpdates.add(DictionaryAccessor.
+                                                             writeDefinitionOrCHEBIURI(e, entityDerivation));
+                                } catch(Exception exception) {
+                                }
+
+                                try {
+                                    e.spreadsheetUpdates.add(DictionaryAccessor.
+                                                             writeEntryDefinition(e, entityDerivation));
+                                } catch(Exception exception) {
+                                }
+
+                            } else {
+                                // SynBioHub has a Definition URI, but the
+                                // spreadsheet does not have one
+                                // Remove Definition URI from SynBioHub entity
+                                derivations.clear();
+                                entity.setWasDerivedFroms(derivations);
+                                e.changed = true;
+                                e.report.success("Definition for " + e.name + " was removed.", true);
+                            }
                         }
 
                     } else {
                         // Spreadsheet has a Definition URI
                         if((entityDerivation == null) || !e.attributeDefinition.equals(entityDerivation)) {
-                            // Populate the derived from property in the
-                            // SynBioHub entry with the value of the
-                            // Definition URI entry in the spreadsheet.
-                            derivations.clear();
-                            derivations.add(e.attributeDefinition);
-                            entity.setWasDerivedFroms(derivations);
-                            e.changed = true;
-                            e.report.success("Definition for "+e.name+" is '"+e.attributeDefinition+"'",true);
+                            // SynBioHub Definitino URI does not match
+                            if(reverseSync) {
+                                URI definitionURI = null;
+                                if(entityDerivation == null) {
+                                    try {
+                                        definitionURI = new URI("");
+                                    } catch(Exception uriFormatException) {
+                                    }
+                                } else {
+                                    definitionURI = entityDerivation;
+                                }
+
+                                try {
+                                    e.spreadsheetUpdates.add(DictionaryAccessor.
+                                                             writeDefinitionOrCHEBIURI(e, definitionURI));
+                                } catch(Exception exception) {
+                                }
+
+                                try {
+                                    e.spreadsheetUpdates.add(DictionaryAccessor.
+                                                             writeEntryDefinition(e, definitionURI));
+                                } catch(Exception exception) {
+                                }
+                            } else {
+                                // Populate the derived from property in the
+                                // SynBioHub entry with the value of the
+                                // Definition URI entry in the spreadsheet.
+                                derivations.clear();
+                                derivations.add(e.attributeDefinition);
+                                entity.setWasDerivedFroms(derivations);
+                                e.changed = true;
+                                e.report.success("Definition for "+e.name+" is '"+e.attributeDefinition+"'",true);
+                            }
                         }
                     }
                 } else {
@@ -634,6 +755,24 @@ public final class MaintainDictionary {
 
                     if(update != null) {
                         e.spreadsheetUpdates.add(update);
+                    }
+                }
+            }
+
+            if(e.changed) {
+                e.modifiedDate = now;
+                replaceOldAnnotations(entity, MODIFIED, e.getModifiedDate());
+            }
+            String entryUpdateTime = e.getModifiedDate();
+
+            if(entryUpdateTime != null) {
+                String sheetUpdateTime = DictionaryAccessor.readLastUpdated(e);
+                if(!sheetUpdateTime.equals(entryUpdateTime)) {
+                    // Update the time stamp in the spreadsheet
+                    ValueRange update = DictionaryAccessor.writeLastUpdated(e, entryUpdateTime);
+                    if(update != null) {
+                        e.spreadsheetUpdates.add(update);
+                        e.dictionaryEntryChanged = true;
                     }
                 }
             }
@@ -1730,20 +1869,20 @@ public final class MaintainDictionary {
                     if(e.changed) {
                         // Commit changes to SynBioHub
                         try {
-                            URI local_uri = e.document.getTopLevels().iterator().next().getIdentity();
-                            TopLevel entity = e.document.getTopLevel(local_uri);
-                            replaceOldAnnotations(entity, MODIFIED,xmlDateTimeStamp());
                             SynBioHubAccessor.update(e.document);
                             e.report.success("Synchronized with SynBioHub");
                             ++mod_count;
+
                         } catch(Exception exception) {
                             e.report.failure("Failed to synchronize with SynBioBub");
                             e.statusColor = gray;
                             io_failure_count++;
                         }
+
                     } else if((e.statusCode == StatusCode.SBH_CONNECTION_FAILED) ||
                               (e.statusCode == StatusCode.GOOGLE_SHEETS_CONNECTION_FAILED)) {
                         io_failure_count++;
+
                     } else if(e.statusCode != StatusCode.VALID) {
                         bad_count++;
                     }
