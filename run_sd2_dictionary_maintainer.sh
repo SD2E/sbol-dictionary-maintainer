@@ -15,7 +15,7 @@ if [ -n "$SD2_DM_KILL_AFTER_TIMEOUT" ]; then
     TIMEOUT_CMD="timeout -k 5 --preserve-status ${TIMEOUT} "
 fi
 
-CMD="${TIMEOUT_CMD}java -jar SD2MaintainDictionary-all.jar -l ${SD2_DM_LOGIN} -p ${SD2_DM_PASSWORD} -s ${SD2_DM_SLEEP} -c ${SD2_DM_COLLECTION} -S ${SD2_DM_SYNBIOHUB_SERVER} -g ${SD2_DM_GSHEET_ID}${ONESHOT}"
+CMD="${TIMEOUT_CMD}java -jar SD2MaintainDictionary-all.jar -l ${SD2_DM_LOGIN} -p ${SD2_DM_PASSWORD} -s ${SD2_DM_SLEEP} -c ${SD2_DM_COLLECTION} -S ${SD2_DM_SYNBIOHUB_SERVER} -g ${SD2_DM_GSHEET_ID}${ONESHOT} -i sampleConfig.json"
 
 if [ -n "${ONESHOT}" ]; then
     while true;
