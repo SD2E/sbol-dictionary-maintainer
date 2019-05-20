@@ -276,7 +276,7 @@ public final class MaintainDictionary {
         }
     }
 
-    private static boolean validateEntityType(TopLevel entity, String type) {
+   private static boolean validateEntityType(TopLevel entity, String type) {
         if(componentTypes.containsKey(type)) {
             if(entity instanceof ComponentDefinition) {
                 ComponentDefinition cd = (ComponentDefinition)entity;
@@ -559,8 +559,7 @@ public final class MaintainDictionary {
                 if(chebiTypeIsInRole(entity, e.type)) {
                     e.statusCode = StatusCode.TYPE_IN_ROLE;
                 } else {
-                    e.report.failure("Type does not match '"+e.type+"'", true);
-                    e.statusCode = StatusCode.INVALID_TYPE;
+                    e.statusCode = StatusCode.MISMATCH_TYPE;
                 }
 
                 return originalEntry;
@@ -1716,6 +1715,11 @@ public final class MaintainDictionary {
                         case MISSING_TYPE:
                             log.info("Invalid entry for name "+e.name+", skipping");
                             e.report.failure("Type is missing");
+                            statusColor = red;
+                            break;
+                        case MISMATCH_TYPE:
+                            log.info("Entry type does not match SynBioHub");
+                            e.report.failure("Entry type does not match SynBioHub");
                             statusColor = red;
                             break;
                         case INVALID_TYPE:
