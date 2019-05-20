@@ -64,7 +64,7 @@
             "labName": "CalTech",
             "propertyName": "CalTech_UID",
             "mappingFailureEmail" : {
-                "To" [
+                "To": [
                     "mccardellr@caltech.edu"
                 ],
                 "CC": [
