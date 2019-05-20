@@ -435,9 +435,19 @@ public final class MaintainDictionary {
                 synBioHubAction = "translate local URI";
                 local_uri = SynBioHubAccessor.translateURI(e.uri);
 
-                try {
-                    e.document = SynBioHubAccessor.retrieve(e.uri, false);
-                } catch(Exception exception) {
+                e.document = null;
+                for(int i=0; i<5; ++i) {
+                    try {
+                        e.document = SynBioHubAccessor.retrieve(e.uri, false);
+                    } catch(Exception exception) {
+                        try {
+                            Thread.sleep(1000);
+                        } catch(InterruptedException interruptException) {
+                        }
+                    }
+                }
+
+                if(e.document == null) {
                     e.report.failure("Failed to retrieve linked object from SynBioHub");
                     e.statusCode = StatusCode.SBH_CONNECTION_FAILED;
                     return originalEntry;
