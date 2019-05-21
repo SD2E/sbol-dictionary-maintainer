@@ -118,6 +118,7 @@ public class DictionaryMaintainerApp {
                 long end = System.currentTimeMillis();
                 NumberFormat formatter = new DecimalFormat("#0.00000");
                 log.info("Dictionary update executed in " + formatter.format((end - start) / 1000d) + " seconds");
+
             } catch(Exception e) {
                 log.severe("Exception while maintaining dictionary:");
                 e.printStackTrace();
@@ -260,6 +261,20 @@ public class DictionaryMaintainerApp {
         JSONArray configEditors = configFile.getJSONArray("editors");
         for(int i=0; i<configEditors.length(); ++i) {
             editors.add(configEditors.getString(i));
+        }
+
+        if(configFile.has("config")) {
+            JSONObject config = configFile.getJSONObject("config");
+
+            if(config.has("synBioHubAccessRetryCount")) {
+                MaintainDictionary.synBioHubAccessRetryCount =
+                    (int)config.getLong("synBioHubAccessRetryCount");
+            }
+
+            if(config.has("synBioHubAccessRetryPauseMS")) {
+                MaintainDictionary.synBioHubAccessRetryPauseMS =
+                    (int)config.getLong("synBioHubAccessRetryPauseMS");
+            }
         }
     }
 
