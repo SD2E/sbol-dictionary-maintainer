@@ -461,20 +461,26 @@ public final class MaintainDictionary {
                 return originalEntry;
             }
 
-            String modifiedDateStr = entity.getAnnotation(MODIFIED).getStringValue();
-
             do {
+                Annotation modifiedDateAnnotation = entity.getAnnotation(MODIFIED);
+
+                if(modifiedDateAnnotation == null) {
+                    break;
+                }
+
+                String modifiedDateStr = modifiedDateAnnotation.getStringValue();
                 if(modifiedDateStr == null) {
                     break;
                 }
 
                 Date sheetDate = e.modifiedDate;
-                if(sheetDate == null) {
-                    break;
-                }
 
                 if(!e.setModifiedDate(modifiedDateStr)) {
                     e.report.failure("Failed to parse entity modified date", true);
+                    break;
+                }
+
+                if(sheetDate == null) {
                     break;
                 }
 
@@ -767,7 +773,8 @@ public final class MaintainDictionary {
 
             if(entryUpdateTime != null) {
                 String sheetUpdateTime = DictionaryAccessor.readLastUpdated(e);
-                if(!sheetUpdateTime.equals(entryUpdateTime)) {
+                if((sheetUpdateTime == null) ||
+                   !sheetUpdateTime.equals(entryUpdateTime)) {
                     // Update the time stamp in the spreadsheet
                     ValueRange update = DictionaryAccessor.writeLastUpdated(e, entryUpdateTime);
                     if(update != null) {
