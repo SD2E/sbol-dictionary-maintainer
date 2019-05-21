@@ -44,4 +44,5 @@ shadowJar {
 test {
     systemProperty "p", System.getProperty("p")
     systemProperty "c", System.getProperty("c")
+    systemProperty "config", System.getProperty("config")
 }
