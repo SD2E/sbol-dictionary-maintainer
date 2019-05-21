@@ -59,7 +59,21 @@
                     "weston@netrias.com"
                 ]
             }
+        },
+        {
+            "labName": "CalTech",
+            "propertyName": "CalTech_UID",
+            "mappingFailureEmail" : {
+                "To": [
+                    "mccardellr@caltech.edu"
+                ],
+                "CC": [
+                    "jakebeal@gmail.com",
+                    "weston@netrias.com"
+                ]
+            }
         }
+
     ],
     "entryFailureEmail": {
         "To" : [
