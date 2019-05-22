@@ -826,7 +826,7 @@ public class DictionaryAccessor {
         requestBody.setDestinationSpreadsheetId(dstSpreadsheetId);
 
         {
-            // Lookup the sheet properties on the destination spreadsheet
+            // Lookup the sheet properties on the source spreadsheet
             Sheets.Spreadsheets.Get get = sheetsService.spreadsheets().get(srcSpreadsheetId).setFields("sheets.properties");
             Spreadsheet s = execute(get);
             List<Sheet> srcSheets = s.getSheets();
@@ -856,10 +856,11 @@ public class DictionaryAccessor {
                 }
 
                 if(srcSheet == null) {
+                    // Tab is not in source spreadsheep
                     continue;
                 }
 
-                // List of requests to send to Google
+                // List of requests to delete tabs
                 List<Request> deleteRequests = new ArrayList<>();
 
                 // Find list of "Copy" destination tabs to delete
@@ -948,9 +949,10 @@ public class DictionaryAccessor {
                 renameRequests.add(req);
             }
 
-            // At this point the tabs should be copied, but their
-            // names begin with "Copy of".  Execute requets to remove
-            // the "Copy of" from the tab names
+            // At this point all tabs should be copied, but their
+            // names begin with "Copy of".  Previous tabs have had
+            // their names prepended with "previous ". Execute requets
+            // to remove the "Copy of" from the tab names
             if(!renameRequests.isEmpty()) {
                 BatchUpdateSpreadsheetRequest breq = new BatchUpdateSpreadsheetRequest();
                 breq.setRequests(renameRequests);
