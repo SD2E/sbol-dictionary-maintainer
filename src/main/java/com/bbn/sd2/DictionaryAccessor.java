@@ -72,6 +72,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.regex.Pattern;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -824,79 +825,141 @@ public class DictionaryAccessor {
         CopySheetToAnotherSpreadsheetRequest requestBody = new CopySheetToAnotherSpreadsheetRequest();
         requestBody.setDestinationSpreadsheetId(dstSpreadsheetId);
 
-        // List of requests to send to Google
-        ArrayList<Request> reqList = new ArrayList<Request>();
+        {
+            // Lookup the sheet properties on the destination spreadsheet
+            Sheets.Spreadsheets.Get get = sheetsService.spreadsheets().get(srcSpreadsheetId).setFields("sheets.properties");
+            Spreadsheet s = execute(get);
+            List<Sheet> srcSheets = s.getSheets();
 
-        // Lookup the sheet properties on the destination spreadsheet
-        Sheets.Spreadsheets.Get get = sheetsService.spreadsheets().get(dstSpreadsheetId).setFields("sheets.properties");
-        Spreadsheet s = execute(get);
-        List<Sheet> sheets = s.getSheets();
+            // Lookup the sheet properties on the destination spreadsheet
+            get = sheetsService.spreadsheets().get(dstSpreadsheetId).setFields("sheets.properties");
+            s = execute(get);
+            List<Sheet> dstSheets = s.getSheets();
 
-        // Loop the sheets on the source source spreadsheet
-        for(Sheet sheet: sheets) {
-            // Get the sheet properties
-            SheetProperties dstProperties = sheet.getProperties();
-
-            // Make sure the title is in the list to be copied
-            String dstSheetTitle = dstProperties.getTitle();
-            if(!tabList.contains(dstSheetTitle)) {
-                continue;
+            try {
+                Thread.sleep(2 * MaintainDictionary.msPerGoogleRequest);
+            } catch(Exception e) {
             }
 
-            // This sheet on the destination spreadsheet needs to be replaced, so
-            // create a request to delete it
-            DeleteSheetRequest deleteSheet = new DeleteSheetRequest();
-            deleteSheet.setSheetId(sheet.getProperties().getSheetId());
-            Request req = new Request().setDeleteSheet(deleteSheet);
-            reqList.add(req);
-        }
+            List<Request> renameRequests = new ArrayList<>();
 
-        // Lookup the sheet properties on the source spreadsheet
-        get = sheetsService.spreadsheets().get(srcSpreadsheetId).setFields("sheets.properties");
-        s = execute(get);
-        sheets = s.getSheets();
+            for(String tabName : tabList) {
+                // See if tab exists in source spreadsheet
+                Sheet srcSheet = null;
+                Request renameRequest = null;
 
-        // Loop the sheets on the source source spreadsheet
+                for(Sheet sheet : srcSheets) {
+                    if(sheet.getProperties().getTitle().equals(tabName)) {
+                        srcSheet = sheet;
+                        break;
+                    }
+                }
 
-        for(Sheet sheet: sheets) {
-            // Get the sheet properties
-            SheetProperties srcProperties = sheet.getProperties();
+                if(srcSheet == null) {
+                    continue;
+                }
 
-            // Make sure the title is in the list to be copied
-            String srcSheetTitle = srcProperties.getTitle();
-            if(!tabList.contains(srcSheetTitle)) {
-                continue;
+                // List of requests to send to Google
+                List<Request> deleteRequests = new ArrayList<>();
+
+                // Find list of "Copy" destination tabs to delete
+                Pattern pattern = Pattern.compile("Copy of " + tabName + " [0-9]*");
+                for(Sheet dstSheet : dstSheets) {
+                    String sheetTitle = dstSheet.getProperties().getTitle();
+                    String prevTitle = "previous " + tabName;
+
+                    if(sheetTitle.equals("Copy of " + tabName) ||
+                       sheetTitle.equals(prevTitle) ||
+                       pattern.matcher(sheetTitle).matches()) {
+                        // Create a request to delete the sheet
+                        DeleteSheetRequest deleteSheetRequest = new DeleteSheetRequest();
+                        deleteSheetRequest.setSheetId(dstSheet.getProperties().getSheetId());
+                        Request req = new Request().setDeleteSheet(deleteSheetRequest);
+                        deleteRequests.add(req);
+                    }
+
+                    if(sheetTitle.equals(tabName)) {
+                        // Rename existing tab to "previous" tab
+                        dstSheet.getProperties().setTitle(prevTitle);
+
+                        // Create a request object to update the sheet properties
+                        UpdateSheetPropertiesRequest changeTitle = new UpdateSheetPropertiesRequest();
+                        changeTitle.setProperties(dstSheet.getProperties());
+                        changeTitle.setFields("Title");
+
+                        // Create a higher level request object
+                        Request req = new Request().setUpdateSheetProperties(changeTitle);
+                        renameRequest = req;
+                    }
+                }
+
+                // Execute delete requests
+                if(!deleteRequests.isEmpty()) {
+                    BatchUpdateSpreadsheetRequest breq = new BatchUpdateSpreadsheetRequest();
+                    breq.setRequests(deleteRequests);
+                    execute(sheetsService.spreadsheets().batchUpdate(dstSpreadsheetId, breq));
+                    try {
+                        Thread.sleep(deleteRequests.size() * MaintainDictionary.msPerGoogleRequest);
+                    } catch(Exception e) {
+                    }
+                }
+                deleteRequests.clear();
+
+                // Execute rename request to prepend old tab's name
+                // with "previous "
+                if(renameRequest != null) {
+                    BatchUpdateSpreadsheetRequest breq = new BatchUpdateSpreadsheetRequest();
+                    List<Request> requestList = new ArrayList<>();
+                    requestList.add(renameRequest);
+                    breq.setRequests(requestList);
+                    execute(sheetsService.spreadsheets().batchUpdate(dstSpreadsheetId, breq));
+                    try {
+                        Thread.sleep(MaintainDictionary.msPerGoogleRequest);
+                    } catch(Exception e) {
+                    }
+                }
+
+                // Copy the sheet from the source spreadsheet to the destination spreadsheet
+                SheetProperties sp =
+                    execute(sheetsService.spreadsheets().sheets().copyTo(srcSpreadsheetId,
+                                                                         srcSheet.getProperties().getSheetId(),
+                                                                         requestBody));
+
+                try {
+                    Thread.sleep(MaintainDictionary.msPerGoogleRequest);
+                } catch(Exception e) {
+                }
+
+                // At this point the sheet as been copied, but the title is prepended with
+                // "Copy of ".  It needs to be restored to the original title
+
+                // Set the original title
+                sp.setTitle(tabName);
+
+                // Create a request object to update the sheet properties
+                UpdateSheetPropertiesRequest changeTitle = new UpdateSheetPropertiesRequest();
+                changeTitle.setProperties(sp);
+                changeTitle.setFields("Title");
+
+                // Create a higher level request object
+                Request req = new Request().setUpdateSheetProperties(changeTitle);
+
+                // Queue the lower level request object
+                renameRequests.add(req);
             }
 
-            // Copy the sheet from the source spreadsheet to the destination spreadsheet
-            SheetProperties sp =
-                execute(sheetsService.spreadsheets().sheets().copyTo(srcSpreadsheetId,
-                                                                     srcProperties.getSheetId(),
-                                                                     requestBody));
-
-            // At this point the sheet as been copied, but the title is prepended with
-            // "Copy of ".  It needs to be restored to the original title
-
-            // Set the original title
-            sp.setTitle(srcSheetTitle);
-
-            // Create a request object to update the sheet properties
-            UpdateSheetPropertiesRequest changeTitle = new UpdateSheetPropertiesRequest();
-            changeTitle.setProperties(sp);
-            changeTitle.setFields("Title");
-
-            // Create a higher level request object
-            Request req = new Request().setUpdateSheetProperties(changeTitle);
-
-            // Queue the lower level request object
-            reqList.add(req);
-        }
-
-        // Execute queued up sheet requests
-        if(!reqList.isEmpty()) {
-            BatchUpdateSpreadsheetRequest breq = new BatchUpdateSpreadsheetRequest();
-            breq.setRequests(reqList);
-            execute(sheetsService.spreadsheets().batchUpdate(dstSpreadsheetId, breq));
+            // At this point the tabs should be copied, but their
+            // names begin with "Copy of".  Execute requets to remove
+            // the "Copy of" from the tab names
+            if(!renameRequests.isEmpty()) {
+                BatchUpdateSpreadsheetRequest breq = new BatchUpdateSpreadsheetRequest();
+                breq.setRequests(renameRequests);
+                execute(sheetsService.spreadsheets().batchUpdate(dstSpreadsheetId, breq));
+                try {
+                    Thread.sleep(renameRequests.size() * MaintainDictionary.msPerGoogleRequest);
+                } catch(Exception e) {
+                }
+            }
         }
     }
 
