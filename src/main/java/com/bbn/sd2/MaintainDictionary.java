@@ -57,6 +57,9 @@ public final class MaintainDictionary {
     private static final double googleRequestsPerSecond = 0.5;
     private static final long msPerGoogleRequest = (long)(1000.0 / googleRequestsPerSecond);
 
+    public static int synBioHubAccessRetryCount = 5;
+    public static int synBioHubAccessRetryPauseMS = 1000;
+
     public static final String CHEBIPrefix = "http://identifiers.org/chebi/CHEBI:";
 
 
@@ -435,9 +438,19 @@ public final class MaintainDictionary {
                 synBioHubAction = "translate local URI";
                 local_uri = SynBioHubAccessor.translateURI(e.uri);
 
-                try {
-                    e.document = SynBioHubAccessor.retrieve(e.uri, false);
-                } catch(Exception exception) {
+                e.document = null;
+                for(int i=0; i<synBioHubAccessRetryCount; ++i) {
+                    try {
+                        e.document = SynBioHubAccessor.retrieve(e.uri, false);
+                    } catch(Exception exception) {
+                        try {
+                            Thread.sleep(synBioHubAccessRetryPauseMS);
+                        } catch(InterruptedException interruptException) {
+                        }
+                    }
+                }
+
+                if(e.document == null) {
                     e.report.failure("Failed to retrieve linked object from SynBioHub");
                     e.statusCode = StatusCode.SBH_CONNECTION_FAILED;
                     return originalEntry;

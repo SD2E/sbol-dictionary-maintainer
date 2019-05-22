@@ -58,5 +58,9 @@
         "weston@netrias.com",
         "vaughn@tacc.utexas.edu",
         "dsumorokraytheon@gmail.com"
-    ]
+    ],
+    "config": {
+        "synBioHubAccessRetryCount": 5,
+        "synBioHubAccessRetryPauseMS": 1000
+    }
 }
