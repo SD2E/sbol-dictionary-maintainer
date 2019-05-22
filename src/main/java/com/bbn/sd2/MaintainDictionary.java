@@ -901,6 +901,10 @@ public final class MaintainDictionary {
                     continue;
                 }
 
+                if(previousRowValue.length() == 0) {
+                        continue;
+                }
+
                 if(previousRowValue.equals(originalValue)) {
                     // The value has shifted up a row
                     Integer count = upShiftCounts.get(key);
