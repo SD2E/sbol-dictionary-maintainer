@@ -55,7 +55,7 @@ public final class MaintainDictionary {
     private static final String SD2E_DICTIONARY = STAGING_DICTIONARY;
 
     private static final double googleRequestsPerSecond = 0.5;
-    private static final long msPerGoogleRequest = (long)(1000.0 / googleRequestsPerSecond);
+    public static final long msPerGoogleRequest = (long)(1000.0 / googleRequestsPerSecond);
 
     public static int synBioHubAccessRetryCount = 5;
     public static int synBioHubAccessRetryPauseMS = 1000;
