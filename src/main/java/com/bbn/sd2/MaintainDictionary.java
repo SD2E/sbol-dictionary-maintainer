@@ -54,9 +54,6 @@ public final class MaintainDictionary {
     /** The ID for the default Dictionary Spreadsheet, currently the "staging instance" */
     private static final String SD2E_DICTIONARY = STAGING_DICTIONARY;
 
-    private static final double googleRequestsPerSecond = 0.5;
-    public static final long msPerGoogleRequest = (long)(1000.0 / googleRequestsPerSecond);
-
     public static int synBioHubAccessRetryCount = 5;
     public static int synBioHubAccessRetryPauseMS = 1000;
 
@@ -443,10 +440,6 @@ public final class MaintainDictionary {
                     try {
                         e.document = SynBioHubAccessor.retrieve(e.uri, false);
                     } catch(Exception exception) {
-                        try {
-                            Thread.sleep(synBioHubAccessRetryPauseMS);
-                        } catch(InterruptedException interruptException) {
-                        }
                     }
                 }
 
@@ -1053,13 +1046,6 @@ public final class MaintainDictionary {
 
             List<ValueRange> requests = values.subList(i, endIndex);
             DictionaryAccessor.batchUpdateValues(requests);
-
-            try {
-                long requestCount = (long)requests.size();
-                Thread.sleep(requestCount * msPerGoogleRequest);
-            } catch(InterruptedException e) {
-
-            }
         }
     }
 
@@ -1073,13 +1059,6 @@ public final class MaintainDictionary {
 
             List<Request> requests = requestList.subList(i, endIndex);
             DictionaryAccessor.batchUpdateRequests(requests);
-
-            try {
-                long requestCount = (long)requests.size();
-                Thread.sleep(requestCount * msPerGoogleRequest);
-            } catch(InterruptedException e) {
-
-            }
         }
     }
 
@@ -1320,13 +1299,6 @@ public final class MaintainDictionary {
         }
 
         batchUpdateRequests(deleteRequests);
-
-        try {
-            long requestCount = (long)deleteRequests.size();
-            Thread.sleep(requestCount * msPerGoogleRequest);
-        } catch(InterruptedException e) {
-
-        }
 
         MappingFailureEmailContent email = null;
         if(notification != null) {
@@ -1625,10 +1597,6 @@ public final class MaintainDictionary {
 
             DictionaryAccessor.cacheTabHeaders("Mapping Failures");
 
-            // Throttle Google requests
-            long requestCount = (long)MaintainDictionary.tabs().size() * 2
-                + 2;
-            Thread.sleep( requestCount * msPerGoogleRequest );
         } catch(Exception e) {
             UpdateReport report = new UpdateReport();
             e.printStackTrace();
@@ -1646,11 +1614,9 @@ public final class MaintainDictionary {
 
         try {
             log.info("Checking protections ...");
-            long requestCount = DictionaryAccessor.checkProtections();
+            DictionaryAccessor.checkProtections();
             log.info("Finished checking protections ...");
 
-            // Delay to throttle Google requests
-            Thread.sleep(requestCount * msPerGoogleRequest);
         } catch(Exception e) {
             e.printStackTrace();
         }
@@ -1960,9 +1926,6 @@ public final class MaintainDictionary {
                                                      + DictionaryMaintainerApp.VERSION
                                                      + ") "
                                                      + report.toString());
-
-                // Delay to throttle Google requests
-                Thread.sleep(5 * msPerGoogleRequest);
 
             } catch(Exception e2) {
                 e2.printStackTrace();
