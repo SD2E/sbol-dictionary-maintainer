@@ -136,6 +136,9 @@ public class DictionaryAccessor {
 
     private static final String CREDENTIALS_FILE_PATH = "/credentials.json";
 
+    private static final double googleRequestsPerSecond = 0.5;
+    public static final long msPerGoogleRequest = (long)(1000.0 / googleRequestsPerSecond);
+
     /**
      * Creates an authorized Credential object.
      * @param HTTP_TRANSPORT The network HTTP Transport.
@@ -836,11 +839,6 @@ public class DictionaryAccessor {
             s = execute(get);
             List<Sheet> dstSheets = s.getSheets();
 
-            try {
-                Thread.sleep(2 * MaintainDictionary.msPerGoogleRequest);
-            } catch(Exception e) {
-            }
-
             List<Request> renameRequests = new ArrayList<>();
 
             for(String tabName : tabList) {
@@ -899,10 +897,6 @@ public class DictionaryAccessor {
                     BatchUpdateSpreadsheetRequest breq = new BatchUpdateSpreadsheetRequest();
                     breq.setRequests(deleteRequests);
                     execute(sheetsService.spreadsheets().batchUpdate(dstSpreadsheetId, breq));
-                    try {
-                        Thread.sleep(deleteRequests.size() * MaintainDictionary.msPerGoogleRequest);
-                    } catch(Exception e) {
-                    }
                 }
                 deleteRequests.clear();
 
@@ -914,10 +908,6 @@ public class DictionaryAccessor {
                     requestList.add(renameRequest);
                     breq.setRequests(requestList);
                     execute(sheetsService.spreadsheets().batchUpdate(dstSpreadsheetId, breq));
-                    try {
-                        Thread.sleep(MaintainDictionary.msPerGoogleRequest);
-                    } catch(Exception e) {
-                    }
                 }
 
                 // Copy the sheet from the source spreadsheet to the destination spreadsheet
@@ -925,11 +915,6 @@ public class DictionaryAccessor {
                     execute(sheetsService.spreadsheets().sheets().copyTo(srcSpreadsheetId,
                                                                          srcSheet.getProperties().getSheetId(),
                                                                          requestBody));
-
-                try {
-                    Thread.sleep(MaintainDictionary.msPerGoogleRequest);
-                } catch(Exception e) {
-                }
 
                 // At this point the sheet as been copied, but the title is prepended with
                 // "Copy of ".  It needs to be restored to the original title
@@ -957,10 +942,6 @@ public class DictionaryAccessor {
                 BatchUpdateSpreadsheetRequest breq = new BatchUpdateSpreadsheetRequest();
                 breq.setRequests(renameRequests);
                 execute(sheetsService.spreadsheets().batchUpdate(dstSpreadsheetId, breq));
-                try {
-                    Thread.sleep(renameRequests.size() * MaintainDictionary.msPerGoogleRequest);
-                } catch(Exception e) {
-                }
             }
         }
     }
@@ -1449,10 +1430,30 @@ public class DictionaryAccessor {
         long delayExtraMS = 60000;
         long delayBaseMS = 60000;
         int retriesLeft = 4;
+        long requestCount = 1;
+
+        Object requestOb = request;
+        if(requestOb instanceof BatchUpdateValuesRequest) {
+            BatchUpdateValuesRequest req = (BatchUpdateValuesRequest)requestOb;
+            requestCount = (long)req.getData().size();
+
+        } else if(requestOb instanceof BatchUpdateSpreadsheetRequest) {
+            BatchUpdateSpreadsheetRequest req =
+                (BatchUpdateSpreadsheetRequest)requestOb;
+            requestCount = (long)req.getRequests().size();
+
+        } else if(requestOb instanceof Values.BatchGet) {
+            Values.BatchGet req = (Values.BatchGet)requestOb;
+            requestCount = req.getRanges().size();
+        }
 
         while(true) {
             try {
+                Thread.sleep(msPerGoogleRequest * requestCount);
                 return request.execute();
+            } catch(InterruptedException e) {
+                throw new IOException();
+
             } catch(GoogleJsonResponseException e) {
                 if(retriesLeft == 0) {
                     throw e;
