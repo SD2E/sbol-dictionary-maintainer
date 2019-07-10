@@ -27,6 +27,15 @@ To run, execute:
 java -jar sd2-dictionary-maintainer.jar -p {SynBioHub password}
 ````
 
+## Setting up a Dictionary
+To set up a new dictionary, you will need to perform the following steps:
+- Create a shared SynBioHub user linked to a Gmail account and a collection for the dictionary.
+- Set up a Google Sheet following the Dictionary template, and share it with the SynBioHub user's Gmail
+- Configure your sheet ID, your server, and your collection:
+  - The sheet ID is the big block of random characters in the Google Sheet URL: (template: https://docs.google.com/spreadsheets/d/[sheetID]/[otherstuff])
+  - The server is the SynBioHub instance that you are using
+  - For the collection, use the URL stem shared by all collection members, _not_ the URL (template: https://[server]/user/[shareduser]/[dictionarycollection])
+
 ## Standard SD2 Instances
 
 All work should be tested with the staging copy before being deployed live:
