@@ -1,4 +1,14 @@
-#!/bin/sh
+#!/bin/bash
+
+export SD2_DM_LOGIN=
+export SD2_DM_PASSWORD=
+export SD2_DM_SLEEP=60
+export SD2_DM_COLLECTION=
+export SD2_DM_SYNBIOHUB_SERVER=
+export SD2_DM_GSHEET_ID=
+export SD2_DM_ONESHOT=
+export SD2_DM_KILL_AFTER_TIMEOUT=
+export SD2_DM_TIMEOUT=
 
 ONESHOT=""
 if [ -n "$SD2_DM_ONESHOT" ]; then
