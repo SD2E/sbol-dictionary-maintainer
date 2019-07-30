@@ -12,6 +12,8 @@ WORKDIR /app
 COPY build/libs/*.jar /app/
 COPY tokens /app/tokens
 COPY run_sd2_dictionary_maintainer.sh /app/
+COPY .env /app/
+COPY sampleConfig.json /app/
 
 ENV PATH "${PATH}:/app"
 
