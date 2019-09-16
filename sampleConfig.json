@@ -72,6 +72,19 @@
                     "weston@netrias.com"
                 ]
             }
+        },
+        {
+            "labName": "PennState (Salis) UID",
+            "propertyName": "PennState_Salis",
+            "mappingFailureEmail" : {
+                "To": [
+                    "salis@psu.edu"
+                ],
+                "CC": [
+                    "jakebeal@gmail.com",
+                    "weston@netrias.com"
+                ]
+            }
         }
 
     ],
