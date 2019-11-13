@@ -240,14 +240,16 @@ public final class MaintainDictionary {
 
         ComponentDefinition cd = (ComponentDefinition)entity;
 
+        URI lastURI = null;
         for(URI cTypeURI : cd.getTypes()) {
             String cType = cTypeURI.toString();
             if(cType.startsWith(CHEBIPrefix)) {
                 return cTypeURI;
             }
+            lastURI = cTypeURI;
         }
 
-        return null;
+        return lastURI;
     }
 
     private static boolean setCHEBIURI(TopLevel entity, URI newURI) {
@@ -439,6 +441,7 @@ public final class MaintainDictionary {
                 for(int i=0; i<synBioHubAccessRetryCount; ++i) {
                     try {
                         e.document = SynBioHubAccessor.retrieve(e.uri, false);
+                        break;
                     } catch(Exception exception) {
                     }
                 }
@@ -527,9 +530,9 @@ public final class MaintainDictionary {
                     e.attributeDefinition = chebiURI;
                 }
 
-                if(!chebiURI.toString().startsWith(CHEBIPrefix)) {
+                if(!chebiURI.toString().startsWith("http")) {
                     // If the CHEBI URI in the spreadsheet does not
-                    // start with the prefix, prepend the prefix
+                    // start with "http", prepend the CHEBI prefix
                     try {
                         chebiURI = new URI(CHEBIPrefix + chebiURI.toString());
                         updateSpreadsheetAttributeURI = true;
@@ -544,6 +547,7 @@ public final class MaintainDictionary {
                 if(originalEntry != null) {
                     originalEntry.attributeDefinition = entityChebiURI;
                 }
+
                 if(!entityChebiURI.equals(chebiURI)) {
                     if(reverseSync) {
                         chebiURI = entityChebiURI;
