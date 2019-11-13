@@ -1,15 +1,5 @@
 #!/bin/bash
 
-export SD2_DM_LOGIN=
-export SD2_DM_PASSWORD=
-export SD2_DM_SLEEP=60
-export SD2_DM_COLLECTION=
-export SD2_DM_SYNBIOHUB_SERVER=
-export SD2_DM_GSHEET_ID=
-export SD2_DM_ONESHOT=
-export SD2_DM_KILL_AFTER_TIMEOUT=
-export SD2_DM_TIMEOUT=
-
 ONESHOT=""
 if [ -n "$SD2_DM_ONESHOT" ]; then
     ONESHOT=" -t"
@@ -25,7 +15,7 @@ if [ -n "$SD2_DM_KILL_AFTER_TIMEOUT" ]; then
     TIMEOUT_CMD="timeout -k 5 --preserve-status ${TIMEOUT} "
 fi
 
-CMD="${TIMEOUT_CMD}java -jar SD2MaintainDictionary-all.jar -l ${SD2_DM_LOGIN} -p ${SD2_DM_PASSWORD} -s ${SD2_DM_SLEEP} -c ${SD2_DM_COLLECTION} -S ${SD2_DM_SYNBIOHUB_SERVER} -g ${SD2_DM_GSHEET_ID}${ONESHOT} -i sampleConfig.json"
+CMD="${TIMEOUT_CMD}java -jar sbol-dictionary-maintainer-all.jar -l ${SD2_DM_LOGIN} -p ${SD2_DM_PASSWORD} -s ${SD2_DM_SLEEP} -c ${SD2_DM_COLLECTION} -S ${SD2_DM_SYNBIOHUB_SERVER} -g ${SD2_DM_GSHEET_ID}${ONESHOT} -i ${SD2_DM_CONFIGFILE}"
 
 if [ -n "${ONESHOT}" ]; then
     while true;
