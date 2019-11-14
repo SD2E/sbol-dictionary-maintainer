@@ -51,6 +51,7 @@ public class DictionaryEntry {
     private Map<String, String> labUIDMap = DictionaryMaintainerApp.labUIDMap;
     private Map<String, String> reverseLabUIDMap = DictionaryMaintainerApp.reverseLabUIDMap;
     private SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX");
+    private SimpleDateFormat sdfDate2 = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
 
     public List<ValueRange> spreadsheetUpdates = new ArrayList<ValueRange>();
 
@@ -364,7 +365,11 @@ public class DictionaryEntry {
         try {
             modifiedDate = sdfDate.parse(dateString);
         } catch(Exception e) {
-            return false;
+            try {
+                modifiedDate = sdfDate2.parse(dateString);
+            } catch(Exception e2) {
+                return false;
+            }
         }
 
         return true;
