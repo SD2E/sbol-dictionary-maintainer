@@ -1832,6 +1832,10 @@ public final class MaintainDictionary {
                         rowStr = rowStr.split(":")[0];
                         rowStr = rowStr.substring(1);
 
+                        if(valueRange.getValues() == null) {
+                            continue;
+                        }
+
                         // Create a dictionary entry what is currently
                         // in the spreadsheet
                         int row = (int)Integer.parseInt(rowStr);
