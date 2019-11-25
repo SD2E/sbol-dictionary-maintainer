@@ -62,13 +62,13 @@ public final class MaintainDictionary {
 
     /** Each spreadsheet tab is only allowed to contain objects of certain types, as determined by this mapping */
     private static Map<String, Set<String>> typeTabs = new HashMap<String,Set<String>>() {{
-            put("Attribute", new HashSet<>(Arrays.asList("Attribute")));
+//            put("Attribute", new HashSet<>(Arrays.asList("Attribute")));
             put("Reagent", new HashSet<>(Arrays.asList("Bead", "CHEBI", "DNA", "Protein", "RNA",
                                                        "Media", "Stain", "Buffer", "Solution")));
-            put("Genetic Construct", new HashSet<>(Arrays.asList("DNA", "RNA")));
-            put("Strain", new HashSet<>(Arrays.asList("Strain")));
-            put("Protein", new HashSet<>(Arrays.asList("Protein")));
-            put("Collections", new HashSet<>(Arrays.asList("Challenge Problem", "Collection")));
+//            put("Genetic Construct", new HashSet<>(Arrays.asList("DNA", "RNA")));
+//            put("Strain", new HashSet<>(Arrays.asList("Strain")));
+//            put("Protein", new HashSet<>(Arrays.asList("Protein")));
+//            put("Collections", new HashSet<>(Arrays.asList("Challenge Problem", "Collection")));
         }
             static final long serialVersionUID = 0;
         };
@@ -86,7 +86,7 @@ public final class MaintainDictionary {
     private static final Set<String> validHeaders = new HashSet<>(Arrays.asList("Common Name", "Type", "SynBioHub URI",
                                                                                 "Stub Object?", "Definition URI", "Status",
                                                                                 "Definition URI / CHEBI ID",
-                                                                                "Definition Import", "Last Updated"));
+                                                                                "Definition Import", "Last Updated", "Alias Names"));
 
     private static final Set<String> protectedColumns = new HashSet<>(Arrays.asList("SynBioHub URI",
                                                                                     "Stub Object?", "Status"));
