@@ -91,7 +91,7 @@
     "entryFailureEmail": {
         "To" : [
             "jakebeal@gmail.com",
-            "dan.sumorok@raytheon.com"
+            "tramy.nguy@gmail.com"
         ]
     },
     "editors": [
@@ -100,6 +100,6 @@
         "jakebeal@gmail.com",
         "weston@netrias.com",
         "vaughn@tacc.utexas.edu",
-        "dsumorokraytheon@gmail.com"
+        "tramy.nguy@gmail.com"
     ]
 }
