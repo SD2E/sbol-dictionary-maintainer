@@ -76,8 +76,6 @@ public class TestMaintainDictionary {
 
     @BeforeClass
     public static void setUpBeforeClass() throws Exception {
-    	DictionaryTestShared.initializeTestEnvironment("18LKKltDofXJchTv2BAAqBEiDhO466dmXVYOFnIY3gFk");
-    	
     	// Create scratch spreadsheet
         // Load credentials
         InputStream in = DictionaryAccessor.class.getResourceAsStream(CREDENTIALS_FILE_PATH);
