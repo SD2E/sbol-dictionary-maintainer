@@ -206,9 +206,20 @@ public class DictionaryEntry {
 		this.tab = tab;
 		row_index = row_number;
 
-		if (fullbox(row, header_map.get("Common Name")))
-			name = row.get(header_map.get("Common Name")).toString();
-		else
+		if (fullbox(row, header_map.get("Common Name"))) {
+			// If the name is a URI, and there is no URI, then move the name to the URI
+			URI name_as_uri = null;
+			boolean uri_exists = fullbox(row, header_map.get("SynBioHub URI"));
+			try {
+				name_as_uri = URI.create(row.get(header_map.get("SynBioHub URI")).toString());
+			} catch(IllegalArgumentException e) { /* malformed URL: ignore and leave as null */ }
+			if(uri_exists || name_as_uri==null) {
+				name = row.get(header_map.get("Common Name")).toString();
+			} else {
+				uri = name_as_uri;
+				statusCode = StatusCode.MISSING_NAME;
+			}
+		} else
 			statusCode = StatusCode.MISSING_NAME;
 		log.info("Scanning entry " + name);
 

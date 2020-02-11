@@ -1,7 +1,7 @@
 plugins {
   id "java"
   id "eclipse"
-  id "com.github.johnrengelman.shadow" version "1.2.4"
+  id "com.github.johnrengelman.shadow" version "5.2.0"
 }
 
 repositories {
@@ -13,7 +13,7 @@ repositories {
 }
 
 dependencies {
-	compile 'org.sbolstandard:libSBOLj:2.3.2-SNAPSHOT'
+	compile 'org.sbolstandard:libSBOLj:2.4.0'
     compile 'com.google.api-client:google-api-client:1.23.0'
     compile 'com.google.oauth-client:google-oauth-client-jetty:1.23.0'
     compile 'com.google.apis:google-api-services-sheets:v4-rev516-1.23.0'
@@ -40,6 +40,9 @@ shadowJar {
     from("tokens") {
         into('tokens')
     }
+    dependencies {
+    	exclude(dependency('xpp3:xpp3:1.1.4c'))
+   }
 }
 
 test {
@@ -47,3 +50,5 @@ test {
     systemProperty "c", System.getProperty("c")
     systemProperty "config", System.getProperty("config")
 }
+
+configurations { all*.exclude group: 'xml-apis' }
