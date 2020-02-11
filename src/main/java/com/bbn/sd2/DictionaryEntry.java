@@ -211,7 +211,7 @@ public class DictionaryEntry {
 			URI name_as_uri = null;
 			boolean uri_exists = fullbox(row, header_map.get("SynBioHub URI"));
 			try {
-				name_as_uri = URI.create(row.get(header_map.get("SynBioHub URI")).toString());
+				name_as_uri = URI.create(row.get(header_map.get("Common Name")).toString());
 			} catch(IllegalArgumentException e) { /* malformed URL: ignore and leave as null */ }
 			if(uri_exists || name_as_uri==null) {
 				name = row.get(header_map.get("Common Name")).toString();
