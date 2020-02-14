@@ -6,6 +6,7 @@ import org.junit.Test;
 import org.sbolstandard.core2.SBOLDocument;
 import org.sbolstandard.core2.TopLevel;
 
+import com.bbn.sd2.DictionaryEntry.StubStatus;
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
 import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
@@ -57,6 +58,7 @@ import com.google.api.services.drive.DriveScopes;
 public class TestMaintainDictionary {
 
     private static final String APPLICATION_NAME = "SD2 Scratch Dictionary";
+    private static final String EXISTING_ITEM_URL = "https://hub.sd2e.org/user/sd2e/scratch_test/thiamine0x20hydrochloride/1";
     private static final String CREDENTIALS_FILE_PATH = "/credentials.json";
     private static final String TOKENS_DIRECTORY_PATH = "tokens";
     private static final List<String> SCOPES = Arrays.asList(SheetsScopes.DRIVE);
@@ -335,6 +337,20 @@ public class TestMaintainDictionary {
                     }
                 }
             }
+            /* Add a reagent entry that can be copied out of SBH */
+            if(tab.equals("Reagent")) {
+            	String[] row_entries = new String[header_map.keySet().size()];
+                for (String header : header_map.keySet()) {
+                    String entry = "";
+                	if(header.equals("Common Name")) {
+                    	entry = EXISTING_ITEM_URL;
+                	} else  if (header.equals("Type")) {
+                        entry = "CHEBI";
+                	}
+                    row_entries[header_map.get(header)] = entry;
+                }
+            	values.add(new ArrayList<Object>(Arrays.asList(row_entries)));
+            }
 
             // Write entries to spreadsheet range
             String target_range = tab + "!A3";
@@ -374,8 +390,8 @@ public class TestMaintainDictionary {
         }
 
         assert(mediaEntry != null);
-        assert(CHEBIEntries.size() == 2);
-
+        assert(CHEBIEntries.size() == 3);
+        
         // Log into SynBioHub
         DictionaryTestShared.synBioHubLogin();
 
@@ -531,6 +547,13 @@ public class TestMaintainDictionary {
         assert(bioFABUIDs.contains("newLabId"));
         assert(reagentEntry.attributeDefinition.toString().equals("http://www.test.com/"));
         assert(reagentEntry.getModifiedDate().equals(modifiedDate));
+
+        // Verify that material from SynBioHub gets imported into the spreadsheet with a URL name import
+        DictionaryEntry existingItemEntry = reagentEntries.get(10);
+        assert(existingItemEntry.name == "thiamine hydrochloride");
+        assert(existingItemEntry.uri.toString() == EXISTING_ITEM_URL);
+        assert(existingItemEntry.attributeDefinition.toString() == "http://identifiers.org/chebi/CHEBI:49105");
+        
 
         Color red = MaintainDictionary.redColor();
         Color green = MaintainDictionary.greenColor();

@@ -1,10 +1,7 @@
 package com.bbn.sd2;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
 import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
 import java.security.GeneralSecurityException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -209,21 +206,9 @@ public class DictionaryEntry {
 		this.tab = tab;
 		row_index = row_number;
 
-		if (fullbox(row, header_map.get("Common Name"))) {
-			// If the name is a URI, and there is no URI, then move the name to the URI
-			URI name_as_uri = null;
-			boolean uri_exists = fullbox(row, header_map.get("SynBioHub URI"));
-			try {
-				name_as_uri = new URL(row.get(header_map.get("Common Name")).toString()).toURI();
-			} catch(URISyntaxException e) { /* Bad URL: ignore and leave as null */
-			} catch(MalformedURLException e) { /* Bad URL: ignore and leave as null */ }
-			if(uri_exists || name_as_uri==null) {
-				name = row.get(header_map.get("Common Name")).toString();
-			} else {
-				uri = name_as_uri;
-				statusCode = StatusCode.MISSING_NAME;
-			}
-		} else
+		if (fullbox(row, header_map.get("Common Name")))
+			name = row.get(header_map.get("Common Name")).toString();
+		else
 			statusCode = StatusCode.MISSING_NAME;
 		log.info("Scanning entry " + name);
 
