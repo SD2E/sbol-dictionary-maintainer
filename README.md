@@ -27,6 +27,10 @@ To run, execute:
 java -jar sd2-dictionary-maintainer.jar -p {SynBioHub password}
 ````
 
+Note that on the first run, the dictionary will need to log into its Google account and store credentials.
+These credentials will also occasionally expire (which will be indicated by an error 400 login failure), in which case you should delete the current credentials, allowing them to be replaced.
+
+
 ## Setting up a Dictionary
 To set up a new dictionary, you will need to perform the following steps:
 - Create a shared SynBioHub user linked to a Gmail account and a collection for the dictionary.
@@ -49,8 +53,13 @@ All work should be tested with the staging copy before being deployed live:
 
 ## Tests
 
-Tests are run in an isolated testing environment. A scratch Google spreadsheet will be constructed and a scratch SBOL Collection object will be created on the staging instance of SD2 SynBioHub. Running tests requires passing the password argument to the JUnit test runner through a Java VM command line variable. In Eclipse, these can be configured in Run > Run Configurations > JUnit > TestMaintainDictionary under Arguments tab and VM arguments field.
+Tests are run in an isolated testing environment. A scratch Google spreadsheet will be constructed and a scratch SBOL Collection object will be created on the staging instance of SD2 SynBioHub. Running tests requires passing the password argument to the JUnit test runner through a Java VM command line variable, as well as a pointer to the test config file. In Eclipse, these can be configured in Run > Run Configurations > JUnit > TestMaintainDictionary under Arguments tab and VM arguments field.
 ````
--ea -Dp=password -Dc=true
+-ea -Dp=password -Dc=true -Dconfig=testConfig.json
 ````
 The clean (c) argument will destroy the Google spreadsheet after tests complete. By default the spreadsheet is not destroyed so the developer can inspect its contents.
+
+## Development Notes
+
+Note that Java 1.8 is currently required, per https://github.com/SynBioHub/synbiohub/issues/594 : do not upgrade
+
