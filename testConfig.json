@@ -5,7 +5,7 @@
             "propertyName": "BioFAB_UID",
             "mappingFailureEmail" : {
                 "To": [
-                    "dan.sumorok@raytheon.com"
+                    "jakebeal@gmail.com"
                 ]
             }
         },
@@ -14,7 +14,7 @@
             "propertyName": "Ginkgo_UID",
             "mappingFailureEmail" : {
                 "To": [
-                    "dan.sumorok@raytheon.com"
+                    "jakebeal@gmail.com"
                 ]
             }
         },
@@ -23,7 +23,7 @@
             "propertyName": "Transcriptic_UID",
             "mappingFailureEmail" : {
                 "To": [
-                    "dan.sumorok@raytheon.com"
+                    "jakebeal@gmail.com"
                 ]
             }
         },
@@ -32,7 +32,7 @@
             "propertyName": "EmeraldCloud_UID",
             "mappingFailureEmail" : {
                 "To": [
-                    "dan.sumorok@raytheon.com"
+                    "jakebeal@gmail.com"
                 ]
             }
         },
@@ -41,14 +41,14 @@
             "propertyName": "LBNL_UID",
             "mappingFailureEmail" : {
                 "To": [
-                    "dan.sumorok@raytheon.com"
+                    "jakebeal@gmail.com"
                 ]
             }
         }
     ],
     "entryFailureEmail": {
         "To" : [
-            "dan.sumorok@raytheon.com"
+            "jakebeal@gmail.com"
         ]
     },
     "editors": [

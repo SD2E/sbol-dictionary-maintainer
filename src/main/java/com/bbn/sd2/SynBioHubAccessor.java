@@ -1,7 +1,9 @@
 package com.bbn.sd2;
 
+import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
@@ -155,6 +157,14 @@ public final class SynBioHubAccessor {
      */
     public static URI nameToURI(String name) throws SynBioHubException {
         ensureSynBioHubConnection();
+        
+        // If the name is itself a URI, just return it directly
+		try {
+			URI name_as_uri = new URL(name).toURI();
+			return name_as_uri;
+		} catch(URISyntaxException e) { /* Bad URL: ignore and leave as null */
+		} catch(MalformedURLException e) { /* Bad URL: ignore and leave as null */ }
+
         // Search by name
         SearchQuery query = new SearchQuery();
         SearchCriteria criterion = new SearchCriteria();

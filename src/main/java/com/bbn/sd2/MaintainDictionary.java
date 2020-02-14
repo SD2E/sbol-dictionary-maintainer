@@ -402,6 +402,7 @@ public final class MaintainDictionary {
 		// When reverseSync is true the spreadsheet is updated to
 		// match the state in SynBioHub.
 		boolean reverseSync = false;
+		boolean uri_imported_from_SBH = false;
 
 		try {
 			// If the URI is null and the name is not, attempt to resolve:
@@ -412,6 +413,7 @@ public final class MaintainDictionary {
 					// This is an update to the spreadsheet, but not to symBioHub,
 					// so "changed" is not updated
 					e.spreadsheetUpdates.add(DictionaryAccessor.writeEntryURI(e, e.uri));
+					uri_imported_from_SBH = true;
 				}
 			}
 
@@ -489,13 +491,13 @@ public final class MaintainDictionary {
 					break;
 				}
 
-				if(sheetDate == null) {
+				if(sheetDate == null && !uri_imported_from_SBH) {
 					break;
 				}
 
 				Date synBioHubDate = e.modifiedDate;
 
-				if(synBioHubDate.after(sheetDate)) {
+				if(sheetDate==null || synBioHubDate.after(sheetDate)) {
 					// Item was modifed in SynBioHub since dictionary edit
 					reverseSync = true;
 					e.dictionaryEntryChanged = true;
