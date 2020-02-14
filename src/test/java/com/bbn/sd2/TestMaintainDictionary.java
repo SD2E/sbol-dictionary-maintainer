@@ -550,9 +550,9 @@ public class TestMaintainDictionary {
 
         // Verify that material from SynBioHub gets imported into the spreadsheet with a URL name import
         DictionaryEntry existingItemEntry = reagentEntries.get(10);
-        assert(existingItemEntry.name == "thiamine hydrochloride");
-        assert(existingItemEntry.uri.toString() == EXISTING_ITEM_URL);
-        assert(existingItemEntry.attributeDefinition.toString() == "http://identifiers.org/chebi/CHEBI:49105");
+        assert(existingItemEntry.name.equals("thiamine hydrochloride"));
+        assert(existingItemEntry.uri.toString().equals(EXISTING_ITEM_URL));
+        assert(existingItemEntry.attributeDefinition.toString().equals("http://identifiers.org/chebi/CHEBI:49105"));
         
 
         Color red = MaintainDictionary.redColor();
