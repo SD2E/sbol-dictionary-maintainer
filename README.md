@@ -1,18 +1,18 @@
-# SD2 Dictionary Maintainer
+# SBOL Dictionary Maintainer
 
-The purpose of this utility is to simplify the definition and linking of names and metadata across different parts of the SD2 program.
+The purpose of this utility is to simplify the definition and linking of names and metadata across different parts of a complex synthetic biology project, such as the DARPA SD2 program.
 
 In particular, this application assists in maintaining a dictionary that links three classes of names:
 
 * "Common names" used colloqially by human researchers refer to particular substances, ideas, or constructs (e.g. "E. coli MG1655", "LB media", "Fluorescent bead control")
 * Shared formal definitions stored in SynBioHub or elsewhere (e.g., [https://hub.sd2e.org/user/sd2e/design/LB_Broth/1](), [https://hub.sd2e.org/user/sd2e/design/spherotech_rainbow_beads/1]())
-* Internal formal names used by specific tools or laboratories.
+* Internal names used by specific tools or laboratories.
 
-SD2 Dictionary Maintainer supports this curation activity by linking together a Google Sheet, with columns for each class of names, with a SynBioHub metadata store.  New entries are turned automatically into SynBioHub "stub" objects of the appropriate type, and annotated with names in order to allow any tool that needs to translate between name collections to do so.
+SBOL Dictionary Maintainer supports this curation activity by linking together a Google Sheet, with columns for each class of names, with a SynBioHub metadata store.  New entries are turned automatically into SynBioHub "stub" objects of the appropriate type, and annotated with names in order to allow any tool that needs to translate between name collections to do so.
 
-## Running SD2 Dictionary Maintainer
+## Running SBOL Dictionary Maintainer
 
-SD2 Dictionary Maintainer is a Java/Gradle project.
+SBOL Dictionary Maintainer is a Java/Gradle project.
 
 To build:
 
@@ -40,9 +40,9 @@ To set up a new dictionary, you will need to perform the following steps:
   - The server is the SynBioHub instance that you are using
   - For the collection, use the URL stem shared by all collection members, _not_ the URL (template: https://[server]/user/[shareduser]/[dictionarycollection])
 
-## Standard SD2 Instances
+## Standard Instances for DARPA SD2
 
-All work should be tested with the staging copy before being deployed live:
+In the SD2 project, all work should be tested with the staging copy before being deployed live:
 
 * Staging:
 	* Sheet ID: `1xyFH-QqYzoswvI3pPJRlBqw9PQdlp91ds3mZoPc3wCU`
